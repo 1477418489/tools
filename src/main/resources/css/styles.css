@@ -1,0 +1,35 @@
+/* 增强ListView的选中状态样式 */
+.enhanced-list-view .list-cell:filled:selected {
+    -fx-background-color: #3a7bd5;
+    -fx-text-fill: white;
+}
+
+.enhanced-list-view .list-cell:filled:selected:focused {
+    -fx-background-color: #3a7bd5;
+    -fx-text-fill: white;
+}
+
+/* 新增样式类 */
+.enhanced-list-view {
+    -fx-background-color: #f5f5f5;
+    -fx-border-color: #ddd;
+    -fx-border-width: 1px;
+}
+
+/* JAR启动器专用样式 */
+.jar-launcher .log-text-area {
+    -fx-font-family: "Consolas", "Courier New", monospace;
+    -fx-font-size: 13px;
+    -fx-text-fill: #333;
+}
+
+.jar-launcher .launcher-button {
+    -fx-background-color: #4a90e2;
+    -fx-text-fill: white;
+    -fx-padding: 8 16;
+    -fx-background-radius: 4;
+}
+
+.jar-launcher .launcher-button:hover {
+    -fx-background-color: #357ABD;
+}

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<GridPane xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1"
+          fx:controller="plugin.javafxtools.controller.WebSocketController"
+          hgap="10" vgap="10" prefWidth="1000" prefHeight="700">
+
+    <padding>
+        <Insets bottom="10" left="10" right="10" top="10"/>
+    </padding>
+
+    <!-- 第0行 - 服务器地址 -->
+    <Label text="WebSocket服务器:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="0">
+        <TextField fx:id="wsUrlField" HBox.hgrow="ALWAYS"/>
+        <Button fx:id="wsConnectButton" text="连接" onAction="#handleWsConnect"/>
+        <Button fx:id="wsDisconnectButton" text="断开" onAction="#handleWsDisconnect"/>
+    </HBox>
+
+    <!-- 第1行 - 消息记录 -->
+    <Label text="消息记录:" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
+    <TextArea fx:id="wsMessageArea" editable="false" GridPane.columnIndex="1" GridPane.rowIndex="1" GridPane.vgrow="ALWAYS"/>
+
+    <!-- 第2行 - 消息发送 -->
+    <Label text="发送消息:" GridPane.columnIndex="0" GridPane.rowIndex="2"/>
+    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="2">
+        <TextField fx:id="wsMessageField" HBox.hgrow="ALWAYS" onAction="#handleWsSend"/>
+        <Button fx:id="wsSendButton" text="发送" onAction="#handleWsSend"/>
+        <Button fx:id="wsClearButton" text="清除" onAction="#handleWsClear"/>
+    </HBox>
+</GridPane>

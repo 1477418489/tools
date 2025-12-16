@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<GridPane xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1"
+          fx:controller="plugin.javafxtools.controller.NetworkToolsController"
+          hgap="10" vgap="10" prefWidth="1000" prefHeight="700">
+
+    <padding>
+        <Insets bottom="10" left="10" right="10" top="10"/>
+    </padding>
+
+    <!-- 第0行 - 输入框和按钮 -->
+    <Label text="主机名/IP地址:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="0">
+        <TextField fx:id="hostField" HBox.hgrow="ALWAYS"/>
+        <Button fx:id="lookupButton" text="查询" onAction="#handleLookup"/>
+        <Button fx:id="clearButton" text="清除" onAction="#handleClear"/>
+    </HBox>
+
+    <!-- 第1行 - 查询结果 -->
+    <HBox spacing="10" alignment="CENTER_LEFT" GridPane.columnIndex="0" GridPane.rowIndex="1">
+        <Label text="执行日志/响应内容:"/>
+        <Button text="清空日志" onAction="#handleClearLog"/>
+    </HBox>
+    <TextArea fx:id="lookupResultArea" editable="false" GridPane.columnIndex="1" GridPane.rowIndex="1" GridPane.vgrow="ALWAYS"/>
+</GridPane>

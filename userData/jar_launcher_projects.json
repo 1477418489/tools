@@ -1,0 +1,14 @@
+[
+  {
+    "id": 1,
+    "name": "jza项目",
+    "sourceJar": "D:\\qnIdea\\zhian-fire-monitor\\zhian-admin\\target\\jza.jar",
+    "targetJar": "D:\\test\\jar\\jza.jar",
+    "sourceLib": "D:\\qnIdea\\zhian-fire-monitor\\zhian-admin\\target\\lib",
+    "libTarget": "D:\\test\\jar\\lib",
+    "defaultPort": 9101,
+    "defaultProfile": "local",
+    "jvmOpts": "-Xms512m -Xmx1024m -Dfile.encoding\u003dUTF-8",
+    "otherOpts": "--zhian.basic.path\u003dD:\\qnIdea\\zhstatic"
+  }
+]

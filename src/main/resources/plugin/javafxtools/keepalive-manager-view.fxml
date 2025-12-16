@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="plugin.javafxtools.controller.KeepAliveManagerController"
+      spacing="10"
+      style="-fx-background-color: linear-gradient(to bottom, #f8f9fa 0%, #e9ecef 100%);">
+
+    <padding>
+        <Insets bottom="10" left="10" right="10" top="10"/>
+    </padding>
+
+    <!-- 标题区域 -->
+    <HBox alignment="CENTER_LEFT" spacing="8" style="-fx-padding: 0 0 8 0;">
+        <Label text="🌐" style="-fx-font-size: 20px;"/>
+        <VBox spacing="2">
+            <Label text="域名保活管理器" style="-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #2c3e50;"/>
+            <Label text="定时访问域名，防止服务休眠" style="-fx-font-size: 11px; -fx-text-fill: #6c757d;"/>
+        </VBox>
+    </HBox>
+
+    <Separator style="-fx-background-color: #dee2e6;"/>
+
+    <!-- 主内容区域 -->
+    <HBox spacing="15" VBox.vgrow="ALWAYS">
+        <!-- 左侧：配置表格 -->
+        <VBox spacing="8" prefWidth="480" maxWidth="480">
+            <HBox alignment="CENTER_LEFT" spacing="5">
+                <Label text="📋" style="-fx-font-size: 14px;"/>
+                <Label text="域名配置列表" style="-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #495057;"/>
+                <Pane HBox.hgrow="ALWAYS"/>
+                <Label fx:id="configCountLabel" text="0 条配置"
+                       style="-fx-font-size: 11px; -fx-text-fill: #6c757d; -fx-font-weight: bold;"/>
+            </HBox>
+
+            <TableView fx:id="configTableView" VBox.vgrow="ALWAYS"
+                       style="-fx-background-color: white; -fx-border-color: #dee2e6; -fx-border-radius: 4; -fx-background-radius: 4;">
+                <columns>
+                    <!-- 解决方案1：移除text属性，只使用graphic -->
+                    <TableColumn fx:id="domainColumn" prefWidth="200">
+                        <graphic>
+                            <HBox spacing="4" alignment="CENTER_LEFT">
+                                <Label text="🔗" style="-fx-font-size: 11px;"/>
+                                <Label text="域名" style="-fx-font-size: 12px;"/>
+                            </HBox>
+                        </graphic>
+                    </TableColumn>
+                    <TableColumn fx:id="enabledColumn" prefWidth="70">
+                        <graphic>
+                            <HBox spacing="4" alignment="CENTER_LEFT">
+                                <Label text="⚡" style="-fx-font-size: 11px;"/>
+                                <Label text="状态" style="-fx-font-size: 12px;"/>
+                            </HBox>
+                        </graphic>
+                    </TableColumn>
+                    <TableColumn fx:id="intervalColumn" prefWidth="120">
+                        <graphic>
+                            <HBox spacing="4" alignment="CENTER_LEFT">
+                                <Label text="⏰" style="-fx-font-size: 11px;"/>
+                                <Label text="间隔" style="-fx-font-size: 12px;"/>
+                            </HBox>
+                        </graphic>
+                    </TableColumn>
+                    <TableColumn fx:id="unitColumn" prefWidth="70">
+                        <graphic>
+                            <HBox spacing="4" alignment="CENTER_LEFT">
+                                <Label text="📏" style="-fx-font-size: 11px;"/>
+                                <Label text="单位" style="-fx-font-size: 12px;"/>
+                            </HBox>
+                        </graphic>
+                    </TableColumn>
+                </columns>
+                <placeholder>
+                    <VBox alignment="CENTER" spacing="8">
+                        <Label text="📭" style="-fx-font-size: 32px; -fx-text-fill: #adb5bd;"/>
+                        <Label text="暂无配置" style="-fx-font-size: 14px; -fx-text-fill: #6c757d;"/>
+                        <Label text="点击下方按钮添加第一个域名配置" style="-fx-font-size: 11px; -fx-text-fill: #adb5bd;"/>
+                    </VBox>
+                </placeholder>
+            </TableView>
+        </VBox>
+
+        <!-- 右侧：编辑区域 -->
+        <VBox spacing="12" prefWidth="380" maxWidth="380">
+            <HBox alignment="CENTER_LEFT" spacing="4">
+                <Label text="⚙️" style="-fx-font-size: 14px;"/>
+                <Label text="配置编辑器" style="-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #495057;"/>
+            </HBox>
+
+            <!-- 配置编辑表单 -->
+            <VBox spacing="12" style="-fx-background-color: white; -fx-background-radius: 6; -fx-border-color: #dee2e6; -fx-border-radius: 6; -fx-padding: 16;">
+                <VBox spacing="10">
+                    <!-- 域名 -->
+                    <VBox spacing="4">
+                        <HBox spacing="4" alignment="CENTER_LEFT">
+                            <Label text="🌍" style="-fx-font-size: 12px;"/>
+                            <Label text="域名地址" style="-fx-font-size: 12px; -fx-font-weight: bold;"/>
+                        </HBox>
+                        <TextField fx:id="domainField" promptText="https://example.com"
+                                   style="-fx-background-color: #f8f9fa; -fx-background-radius: 4; -fx-border-color: #ced4da; -fx-border-radius: 4; -fx-padding: 6;"/>
+                    </VBox>
+
+                    <!-- 启用状态 -->
+                    <HBox spacing="8" alignment="CENTER_LEFT">
+                        <CheckBox fx:id="enabledCheckBox" text="启用保活服务"
+                                  style="-fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: #495057;"/>
+                    </HBox>
+
+                    <!-- 时间间隔设置 -->
+                    <VBox spacing="4">
+                        <HBox spacing="4" alignment="CENTER_LEFT">
+                            <Label text="⏱️" style="-fx-font-size: 12px;"/>
+                            <Label text="访问间隔" style="-fx-font-size: 12px; -fx-font-weight: bold;"/>
+                        </HBox>
+                        <HBox spacing="6" alignment="CENTER_LEFT">
+                            <Spinner fx:id="minIntervalSpinner" prefWidth="70"
+                                     style="-fx-background-color: #f8f9fa; -fx-background-radius: 4;">
+                                <tooltip>
+                                    <Tooltip text="最小间隔时间"/>
+                                </tooltip>
+                            </Spinner>
+                            <Label text="至" style="-fx-font-size: 12px; -fx-text-fill: #6c757d; -fx-padding: 0 4;"/>
+                            <Spinner fx:id="maxIntervalSpinner" prefWidth="70"
+                                     style="-fx-background-color: #f8f9fa; -fx-background-radius: 4;">
+                                <tooltip>
+                                    <Tooltip text="最大间隔时间"/>
+                                </tooltip>
+                            </Spinner>
+                            <ComboBox fx:id="unitComboBox" prefWidth="90"
+                                      style="-fx-background-color: #f8f9fa; -fx-background-radius: 4;">
+                                <tooltip>
+                                    <Tooltip text="选择时间单位"/>
+                                </tooltip>
+                            </ComboBox>
+                        </HBox>
+                        <Label text="系统会在设定的时间范围内随机访问，模拟真实用户行为"
+                               style="-fx-font-size: 10px; -fx-text-fill: #6c757d; -fx-wrap-text: true;"/>
+                    </VBox>
+                </VBox>
+
+                <!-- 操作按钮 -->
+                <HBox spacing="8" alignment="CENTER">
+                    <Button fx:id="addButton" text="添加" onAction="#handleAdd"
+                            style="-fx-background-color: #28a745; -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 12px; -fx-background-radius: 4; -fx-padding: 6 12;">
+                        <tooltip>
+                            <Tooltip text="添加新的域名保活配置"/>
+                        </tooltip>
+                    </Button>
+                    <Button fx:id="updateButton" text="更新" onAction="#handleUpdate"
+                            style="-fx-background-color: #007bff; -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 12px; -fx-background-radius: 4; -fx-padding: 6 12;">
+                        <tooltip>
+                            <Tooltip text="更新选中的配置"/>
+                        </tooltip>
+                    </Button>
+                    <Button fx:id="removeButton" text="删除" onAction="#handleRemove"
+                            style="-fx-background-color: #dc3545; -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 12px; -fx-background-radius: 4; -fx-padding: 6 12;">
+                        <tooltip>
+                            <Tooltip text="删除选中的配置"/>
+                        </tooltip>
+                    </Button>
+                </HBox>
+
+                <!-- 保存按钮 -->
+                <Button fx:id="saveButton" text="保存配置" onAction="#handleSave"
+                        style="-fx-background-color: #6f42c1; -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 12px; -fx-background-radius: 4; -fx-padding: 8 0;">
+                    <tooltip>
+                        <Tooltip text="保存所有配置到文件"/>
+                    </tooltip>
+                </Button>
+            </VBox>
+        </VBox>
+    </HBox>
+
+    <Separator style="-fx-background-color: #dee2e6;"/>
+
+    <!-- 日志区域 -->
+    <VBox spacing="8">
+        <HBox alignment="CENTER_LEFT" spacing="4">
+            <Label text="📝" style="-fx-font-size: 14px;"/>
+            <Label text="系统日志" style="-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #495057;"/>
+            <Pane HBox.hgrow="ALWAYS"/>
+            <Button text="清空" onAction="#handleClearLogs"
+                    style="-fx-background-color: transparent; -fx-font-size: 11px; -fx-text-fill: #6c757d; -fx-border-color: #dee2e6; -fx-border-radius: 4; -fx-padding: 4 8;">
+                <tooltip>
+                    <Tooltip text="清空日志"/>
+                </tooltip>
+            </Button>
+        </HBox>
+
+        <TextArea fx:id="logArea"
+                  promptText="等待操作..."
+                  wrapText="true"
+                  editable="false"
+                  prefHeight="180"
+                  style="-fx-background-color: #ffffff; -fx-text-fill: #212529; -fx-font-family: '微软雅黑', 'Microsoft YaHei', sans-serif; -fx-font-size: 12px; -fx-background-radius: 4; -fx-border-color: #ced4da; -fx-border-radius: 4;">
+            <tooltip>
+                <Tooltip text="显示系统操作和域名访问日志"/>
+            </tooltip>
+        </TextArea>
+
+        <!-- 状态栏 -->
+        <HBox spacing="12" alignment="CENTER_LEFT" style="-fx-background-color: #f8f9fa; -fx-background-radius: 4; -fx-padding: 6 12;">
+            <HBox spacing="4" alignment="CENTER_LEFT">
+                <Label text="📊" style="-fx-font-size: 12px;"/>
+                <Label fx:id="statusLabel" text="就绪"
+                       style="-fx-font-size: 11px; -fx-text-fill: #495057;"/>
+            </HBox>
+            <Separator orientation="VERTICAL" style="-fx-background-color: #dee2e6; -fx-padding: 0 4;"/>
+            <HBox spacing="4" alignment="CENTER_LEFT">
+                <Label text="🟢" style="-fx-font-size: 12px;"/>
+                <Label fx:id="activeCountLabel" text="活跃: 0"
+                       style="-fx-font-size: 11px; -fx-text-fill: #28a745;"/>
+            </HBox>
+            <Separator orientation="VERTICAL" style="-fx-background-color: #dee2e6; -fx-padding: 0 4;"/>
+            <HBox spacing="4" alignment="CENTER_LEFT">
+                <Label text="🕐" style="-fx-font-size: 12px;"/>
+                <Label fx:id="lastUpdateLabel" text="最后更新: --"
+                       style="-fx-font-size: 11px; -fx-text-fill: #6c757d;"/>
+            </HBox>
+            <Pane HBox.hgrow="ALWAYS"/>
+            <ProgressIndicator fx:id="progressIndicator" visible="false" managed="false"
+                               prefWidth="14" prefHeight="14"/>
+        </HBox>
+    </VBox>
+</VBox>

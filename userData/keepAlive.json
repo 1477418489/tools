@@ -1,0 +1,25 @@
+[ {
+  "domain" : "https://daboyou.de5.net",
+  "enabled" : true,
+  "minInterval" : 1,
+  "maxInterval" : 3,
+  "unit" : "HOURS"
+}, {
+  "domain" : "https://bytebyte.de5.net",
+  "enabled" : true,
+  "minInterval" : 1,
+  "maxInterval" : 11,
+  "unit" : "HOURS"
+}, {
+  "domain" : "https://xiaoxiao666.de5.net",
+  "enabled" : true,
+  "minInterval" : 1,
+  "maxInterval" : 16,
+  "unit" : "HOURS"
+}, {
+  "domain" : "https://xiaoxiao888.de5.net",
+  "enabled" : true,
+  "minInterval" : 1,
+  "maxInterval" : 17,
+  "unit" : "HOURS"
+} ]

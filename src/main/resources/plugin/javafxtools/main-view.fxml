@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="plugin.javafxtools.controller.MainController"
+      spacing="10" prefWidth="1000" prefHeight="700">
+
+    <padding>
+        <Insets bottom="10" left="10" right="10" top="10"/>
+    </padding>
+
+    <!-- 主选项卡 -->
+    <TabPane fx:id="tabPane" VBox.vgrow="ALWAYS">
+        <tabs>
+            <!-- 启动项工具 -->
+            <Tab text="启动项工具">
+                <fx:include fx:id="appLauncherTab" source="app-launcher-view.fxml" />
+            </Tab>
+            <!-- HTTP请求调度器  对应的控制器字段命名规则是：<fx:include> 的 fx:id + "Controller" = 控制器字段名-->
+            <Tab text="HTTP请求">
+                <fx:include fx:id="httpRequestTab" source="http-request-view.fxml" />
+            </Tab>
+
+            <!-- WebSocket客户端 -->
+            <Tab text="WebSocket">
+                <fx:include fx:id="webSocketTab" source="websocket-view.fxml" />
+            </Tab>
+
+            <!-- 网络工具 -->
+            <Tab text="网络工具">
+                <fx:include fx:id="networkToolsTab" source="network-tools-view.fxml" />
+            </Tab>
+
+            <!-- 数据格式化 -->
+            <Tab text="数据格式化">
+                <fx:include fx:id="dataFormatTab" source="data-format-view.fxml" />
+            </Tab>
+
+            <!-- 字符串工具 -->
+            <Tab text="字符串工具">
+                <fx:include fx:id="strDataFormatTab" source="strData-format-view.fxml" />
+            </Tab>
+            <!-- 在TabPane中新增一个Tab -->
+            <Tab text="JAR应用启动器">
+                <fx:include fx:id="jarLauncherTab" source="jar-launcher-view.fxml" />
+            </Tab>
+            <!-- 域名保活 -->
+            <Tab text="域名保活">
+                <fx:include fx:id="keepAliveTab" source="keepalive-manager-view.fxml" />
+            </Tab>
+        </tabs>
+    </TabPane>
+
+    <!-- 中央日志区域 -->
+    <Label text="系统日志:"/>
+    <TextArea fx:id="centralLogArea" editable="false" prefRowCount="15" VBox.vgrow="NEVER"/>
+</VBox>
