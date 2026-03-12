@@ -63,8 +63,8 @@
 
     <!-- 第9行 - 日志/响应内容 -->
     <HBox spacing="10" alignment="CENTER_LEFT" GridPane.columnIndex="0" GridPane.rowIndex="9" GridPane.columnSpan="4">
-        <Label text="执行日志/响应内容:"/>
-        <Button text="清空日志" onAction="#handleClearLog"/>
+        <Label text="执行日志/响应内容:" styleClass="section-title"/>
+        <Button text="清空日志" onAction="#handleClearLog" styleClass="secondary-button"/>
     </HBox>
-    <TextArea fx:id="logArea" editable="false" prefRowCount="10" GridPane.columnIndex="1" GridPane.rowIndex="9" GridPane.columnSpan="3"/>
+    <TextArea fx:id="logArea" editable="false" prefRowCount="10" GridPane.columnIndex="1" GridPane.rowIndex="9" GridPane.columnSpan="3" styleClass="log-area"/>
 </GridPane>

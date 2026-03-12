@@ -9,20 +9,19 @@ import javafx.stage.Stage;
 import plugin.javafxtools.controller.MainController;
 
 import java.net.URL;
+import java.util.Objects;
 
 public class ToolsApplication extends Application {
+    private static final String MAIN_VIEW_PATH = "/plugin/javafxtools/main-view.fxml";
+    private static final String ICON_PATH = "/favicon.png";
+    private static final String GLOBAL_STYLE_PATH = "/css/styles.css";
+
     private MainController mainController;
 
     @Override
     public void start(Stage primaryStage) {
         try {
-            // 使用更可靠的资源加载方式
-            URL mainFxmlUrl = getClass().getResource("/plugin/javafxtools/main-view.fxml");
-            System.out.println("main-view.fxml路径: " + mainFxmlUrl);
-
-            if (mainFxmlUrl == null) {
-                throw new RuntimeException("无法找到main-view.fxml文件。请确认文件位于: /plugin/javafxtools/ 目录下");
-            }
+            URL mainFxmlUrl = requireResource(MAIN_VIEW_PATH, "main-view.fxml");
 
             // 加载主界面FXML文件
             FXMLLoader loader = new FXMLLoader(mainFxmlUrl);
@@ -32,6 +31,10 @@ public class ToolsApplication extends Application {
             // 配置主舞台
             primaryStage.setTitle("JavaFX工具集 v1.0");
             Scene scene = new Scene(root, 1000, 700);
+            URL styleUrl = getClass().getResource(GLOBAL_STYLE_PATH);
+            if (styleUrl != null) {
+                scene.getStylesheets().add(styleUrl.toExternalForm());
+            }
             primaryStage.setScene(scene);
             primaryStage.setResizable(false);
 
@@ -45,9 +48,9 @@ public class ToolsApplication extends Application {
                 System.exit(0);
             });
             // 加载并设置应用图标（支持PNG/ICO等格式）
-            URL iconUrl = getClass().getResource("/favicon.png");
+            URL iconUrl = getClass().getResource(ICON_PATH);
             if (iconUrl != null) {
-                primaryStage.getIcons().add(new Image(iconUrl.toString()));
+                primaryStage.getIcons().add(new Image(iconUrl.toExternalForm()));
             }
             primaryStage.show();
 
@@ -64,6 +67,14 @@ public class ToolsApplication extends Application {
         }
         // 可以添加其他全局资源清理逻辑
         System.out.println("应用程序资源已清理");
+    }
+
+    private URL requireResource(String path, String resourceName) {
+        URL resource = getClass().getResource(path);
+        if (Objects.isNull(resource)) {
+            throw new IllegalStateException("无法找到" + resourceName + "文件，请确认资源路径: " + path);
+        }
+        return resource;
     }
 
     public static void main(String[] args) {

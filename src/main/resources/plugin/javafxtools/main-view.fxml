@@ -6,14 +6,14 @@
 
 <VBox xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="plugin.javafxtools.controller.MainController"
-      spacing="10" prefWidth="1000" prefHeight="700">
+      spacing="10" prefWidth="1000" prefHeight="700" styleClass="toolbox-container">
 
     <padding>
         <Insets bottom="10" left="10" right="10" top="10"/>
     </padding>
 
     <!-- 主选项卡 -->
-    <TabPane fx:id="tabPane" VBox.vgrow="ALWAYS">
+    <TabPane fx:id="tabPane" VBox.vgrow="ALWAYS" styleClass="toolbox-tab-pane">
         <tabs>
             <!-- 启动项工具 -->
             <Tab text="启动项工具">
@@ -55,6 +55,6 @@
     </TabPane>
 
     <!-- 中央日志区域 -->
-    <Label text="系统日志:"/>
-    <TextArea fx:id="centralLogArea" editable="false" prefRowCount="15" VBox.vgrow="NEVER"/>
+    <Label text="系统日志:" styleClass="section-title"/>
+    <TextArea fx:id="centralLogArea" editable="false" prefRowCount="15" VBox.vgrow="NEVER" styleClass="log-area"/>
 </VBox>
