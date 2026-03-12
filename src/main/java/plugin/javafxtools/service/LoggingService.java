@@ -4,29 +4,34 @@ import javafx.application.Platform;
 import javafx.scene.control.TextArea;
 import plugin.javafxtools.util.TimeUtils;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
 
 public class LoggingService {
-    private final List<TextArea> globalLogAreas = new ArrayList<>(); // 中央日志（所有模块可见）
+    private static final int MAX_LOG_LINES = 800;
+    private final List<WeakReference<TextArea>> globalLogAreas = new ArrayList<>();
 
     // 添加全局日志区域（如中央日志）
-    public void addGlobalLogArea(TextArea logArea) {
-        if (logArea != null && !globalLogAreas.contains(logArea)) {
-            globalLogAreas.add(logArea);
+    public synchronized void addGlobalLogArea(TextArea logArea) {
+        if (logArea == null) {
+            return;
+        }
+        cleanupReleasedAreas();
+        boolean exists = globalLogAreas.stream()
+                .map(WeakReference::get)
+                .anyMatch(area -> area == logArea);
+        if (!exists) {
+            globalLogAreas.add(new WeakReference<>(logArea));
         }
     }
-
-
-
 
     // 记录全局日志（中央）
     public void info(String message) {
         log("INFO", message, true);
     }
-
-
 
     // 记录错误日志（中央）
     public void error(String message) {
@@ -38,21 +43,58 @@ public class LoggingService {
                 TimeUtils.formatDateTime(new Date()), level, message);
 
         Platform.runLater(() -> {
-            // 输出到全局区域（如中央日志）
             if (isGlobal) {
-                for (TextArea area : globalLogAreas) {
-                    safeAppend(area, formattedMessage);
+                synchronized (this) {
+                    cleanupReleasedAreas();
+                    for (WeakReference<TextArea> areaRef : globalLogAreas) {
+                        safeAppend(areaRef.get(), formattedMessage);
+                    }
                 }
             }
-
         });
+    }
+
+    private synchronized void cleanupReleasedAreas() {
+        Iterator<WeakReference<TextArea>> iterator = globalLogAreas.iterator();
+        while (iterator.hasNext()) {
+            if (iterator.next().get() == null) {
+                iterator.remove();
+            }
+        }
     }
 
     // 安全追加日志（避免NPE）
     private void safeAppend(TextArea area, String message) {
         if (area != null && area.getScene() != null) {
+            trimLogLines(area);
             area.appendText(message + "\n");
             area.setScrollTop(Double.MAX_VALUE); // 自动滚动到底部
+        }
+    }
+
+    private void trimLogLines(TextArea area) {
+        String text = area.getText();
+        if (text == null || text.isEmpty()) {
+            return;
+        }
+        int lineCount = area.getParagraphs().size();
+        if (lineCount < MAX_LOG_LINES) {
+            return;
+        }
+
+        int removeLines = Math.max(100, lineCount - MAX_LOG_LINES + 1);
+        int index = 0;
+        while (removeLines > 0) {
+            int newlineIndex = text.indexOf('\n', index);
+            if (newlineIndex < 0) {
+                break;
+            }
+            index = newlineIndex + 1;
+            removeLines--;
+        }
+
+        if (index > 0) {
+            area.deleteText(0, index);
         }
     }
 
@@ -61,10 +103,13 @@ public class LoggingService {
      */
     public void clearAll() {
         Platform.runLater(() -> {
-            // 清空全局日志区域
-            for (TextArea area : globalLogAreas) {
-                if (area != null) {
-                    area.clear();
+            synchronized (this) {
+                cleanupReleasedAreas();
+                for (WeakReference<TextArea> areaRef : globalLogAreas) {
+                    TextArea area = areaRef.get();
+                    if (area != null) {
+                        area.clear();
+                    }
                 }
             }
         });
@@ -76,10 +121,15 @@ public class LoggingService {
      */
     public void clearGlobalLogs() {
         Platform.runLater(() -> {
-            for (TextArea area : globalLogAreas) {
-                if (area != null) area.clear();
+            synchronized (this) {
+                cleanupReleasedAreas();
+                for (WeakReference<TextArea> areaRef : globalLogAreas) {
+                    TextArea area = areaRef.get();
+                    if (area != null) {
+                        area.clear();
+                    }
+                }
             }
         });
     }
-
 }
