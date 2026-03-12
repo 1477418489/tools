@@ -31,7 +31,7 @@
         <Label text="单位:" GridPane.rowIndex="0" GridPane.columnIndex="4"/>
         <ComboBox fx:id="intervalUnitBox" GridPane.rowIndex="0" GridPane.columnIndex="5"/>
 
-        <Label text="提醒次数(<=0无限):" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+        <Label text="提醒次数(&lt;=0无限):" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
         <TextField fx:id="timesField" text="1" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
 
         <HBox spacing="8" GridPane.rowIndex="1" GridPane.columnIndex="3" GridPane.columnSpan="3">
