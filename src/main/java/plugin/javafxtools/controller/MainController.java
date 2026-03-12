@@ -10,55 +10,52 @@ import plugin.javafxtools.service.LoggingService;
 import plugin.javafxtools.util.TimeUtils;
 
 import java.io.File;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * 主控制器 - 协调各功能模块和共享服务
  */
 public class MainController {
     @FXML
-    private TabPane tabPane; // 主TabPane容器
+    private TabPane tabPane;
 
     @FXML
-    private HttpRequestController httpRequestTabController;  // 对应 httpRequestTab
+    private HttpRequestController httpRequestTabController;
     @FXML
-    private WebSocketController webSocketTabController;      // 对应 webSocketTab
+    private WebSocketController webSocketTabController;
     @FXML
-    private NetworkToolsController networkToolsTabController; // 对应 networkToolsTab
+    private NetworkToolsController networkToolsTabController;
     @FXML
-    private DataFormatController dataFormatTabController;    // 对应 dataFormatTab
+    private DataFormatController dataFormatTabController;
     @FXML
-    private StrDataFormatController strDataFormatTabController;    // 对应 strDataFormatTab
+    private StrDataFormatController strDataFormatTabController;
     @FXML
-    private AppLauncherController appLauncherTabController;    // 对应 strDataFormatTab
+    private AppLauncherController appLauncherTabController;
     @FXML
-    private KeepAliveManagerController keepAliveTabController;    // 对应 keepAliveTab
-
+    private KeepAliveManagerController keepAliveTabController;
 
     // 共享服务
     private final LoggingService loggingService = new LoggingService();
 
-    // 添加获取方法
-    public AppLauncherController getAppLauncherController() {
-        return appLauncherTabController;
-    }
-
     // 中央日志区域（可选）
     @FXML
     private TextArea centralLogArea;
+
+    public AppLauncherController getAppLauncherController() {
+        return appLauncherTabController;
+    }
 
     /**
      * 初始化方法 - 由JavaFX在FXML加载完成后自动调用
      */
     @FXML
     public void initialize() {
-        // 确保userData目录存在
         ensureUserDataDirectoryExists();
         try {
-            // 注册全局日志区域（中央日志）
             if (centralLogArea != null) {
                 loggingService.addGlobalLogArea(centralLogArea);
             }
-            // 配置子控制器
             setupControllers();
             loggingService.info("主控制器初始化完成");
         } catch (Exception e) {
@@ -67,17 +64,13 @@ public class MainController {
         }
     }
 
-    // 确保userData目录存在
     private void ensureUserDataDirectoryExists() {
         try {
             File userDataDir = new File("userData");
-            if (!userDataDir.exists()) {
-                if (userDataDir.mkdirs()) {
-                    loggingService.info("已创建userData目录: " + userDataDir.getAbsolutePath());
-                } else {
-                    loggingService.info("警告: 无法创建userData目录");
-                }
-            } else if (!userDataDir.isDirectory()) {
+            if (!userDataDir.exists() && !userDataDir.mkdirs()) {
+                loggingService.info("警告: 无法创建userData目录");
+            }
+            if (userDataDir.exists() && !userDataDir.isDirectory()) {
                 loggingService.info("错误: userData存在但不是一个目录");
             }
             loggingService.info("已检查/创建userData目录");
@@ -85,51 +78,27 @@ public class MainController {
             loggingService.info("检查/创建userData目录时出错: " + e.getMessage());
         }
     }
+
     /**
      * 配置各子控制器的日志服务并绑定日志区域
      */
     private void setupControllers() {
         checkControllerInjection();
-        if (httpRequestTabController != null) {
-            loggingService.info("HTTP请求控制器初始化成功");
-        } else {
-            loggingService.info("HTTP请求Tab或控制器为空");
-        }
 
-        if (webSocketTabController != null) {
-            loggingService.info("WebSocket控制器初始化成功");
-        } else {
-            loggingService.info("WebSocket Tab或控制器为空");
-        }
+        Map<String, Object> controllers = new LinkedHashMap<>();
+        controllers.put("HTTP请求", httpRequestTabController);
+        controllers.put("WebSocket", webSocketTabController);
+        controllers.put("网络工具", networkToolsTabController);
+        controllers.put("数据格式化", dataFormatTabController);
+        controllers.put("字符串工具", strDataFormatTabController);
+        controllers.put("启动项", appLauncherTabController);
+        controllers.put("域名保活", keepAliveTabController);
 
-        if (networkToolsTabController != null) {
-            loggingService.info("网络工具控制器初始化成功");
-        } else {
-            loggingService.info("网络工具 Tab或控制器为空");
-        }
-
-        if (dataFormatTabController != null) {
-            loggingService.info("数据格式化控制器初始化成功");
-        } else {
-            loggingService.info("数据格式化 Tab或控制器为空");
-        }
-        if (strDataFormatTabController != null) {
-            loggingService.info("字符串控制器初始化成功");
-        } else {
-            loggingService.info("字符串控制器 Tab或控制器为空");
-        }
-        if (appLauncherTabController != null) {
-            loggingService.info("启动项控制器初始化成功");
-        } else {
-            loggingService.info("启动项控制器 Tab或控制器为空");
-        }
-        if (keepAliveTabController != null) {
-            loggingService.info("启动项控制器初始化成功");
-        } else {
-            loggingService.info("启动项控制器 Tab或控制器为空");
-        }
+        controllers.forEach((name, controller) -> loggingService.info(
+                controller != null
+                        ? String.format("%s控制器初始化成功", name)
+                        : String.format("%s控制器注入为空", name)));
     }
-
 
     /**
      * 检查控制器注入状态
@@ -164,12 +133,6 @@ public class MainController {
         }
     }
 
-
-    /**
-     * 获取主TabPane
-     *
-     * @return 主TabPane实例
-     */
     public TabPane getTabPane() {
         return tabPane;
     }
@@ -180,8 +143,8 @@ public class MainController {
     private TextArea getLogAreaByTab(Tab tab) {
         if (tab.getContent() != null && tab.getContent().getUserData() != null) {
             Object controller = tab.getContent().getUserData();
-            if (controller instanceof ModuleLogger) {
-                return ((ModuleLogger) controller).getLogArea();
+            if (controller instanceof ModuleLogger moduleLogger) {
+                return moduleLogger.getLogArea();
             }
         }
         return null;
@@ -207,7 +170,6 @@ public class MainController {
      */
     public void cleanup() {
         try {
-            // 清理子控制器资源
             if (httpRequestTabController != null) {
                 httpRequestTabController.cleanup();
             }
@@ -229,12 +191,10 @@ public class MainController {
             if (appLauncherTabController != null) {
                 appLauncherTabController.cleanup();
             }
-            // 清理日志区域
             if (centralLogArea != null) {
                 centralLogArea.clear();
             }
             logToGlobal("INFO", "应用程序资源已清理");
-
             System.out.println("MainController 资源已清理");
         } catch (Exception e) {
             System.err.println("资源清理出错: " + e.getMessage());

@@ -1,22 +1,74 @@
-/* 增强ListView的选中状态样式 */
-.enhanced-list-view .list-cell:filled:selected {
-    -fx-background-color: #3a7bd5;
-    -fx-text-fill: white;
+.root {
+    -fx-font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+    -fx-font-size: 13px;
 }
 
+.toolbox-container {
+    -fx-background-color: #f5f7fb;
+}
+
+.toolbox-tab-pane {
+    -fx-tab-min-height: 32px;
+}
+
+.toolbox-tab-pane .tab-header-background {
+    -fx-background-color: #ffffff;
+}
+
+.section-title {
+    -fx-font-weight: bold;
+    -fx-text-fill: #1f2d3d;
+}
+
+.text-input,
+.combo-box,
+.text-area {
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-border-color: #d9e1ec;
+}
+
+.text-area {
+    -fx-padding: 4;
+}
+
+.button {
+    -fx-background-color: #2f80ed;
+    -fx-text-fill: #ffffff;
+    -fx-background-radius: 6;
+    -fx-cursor: hand;
+}
+
+.button:hover {
+    -fx-background-color: #1766cc;
+}
+
+.secondary-button {
+    -fx-background-color: #6b7280;
+}
+
+.secondary-button:hover {
+    -fx-background-color: #4b5563;
+}
+
+.log-area {
+    -fx-font-family: "Consolas", "Courier New", monospace;
+    -fx-font-size: 12px;
+}
+
+/* 兼容已有 ListView 样式 */
+.enhanced-list-view .list-cell:filled:selected,
 .enhanced-list-view .list-cell:filled:selected:focused {
     -fx-background-color: #3a7bd5;
     -fx-text-fill: white;
 }
 
-/* 新增样式类 */
 .enhanced-list-view {
     -fx-background-color: #f5f5f5;
     -fx-border-color: #ddd;
     -fx-border-width: 1px;
 }
 
-/* JAR启动器专用样式 */
 .jar-launcher .log-text-area {
     -fx-font-family: "Consolas", "Courier New", monospace;
     -fx-font-size: 13px;
