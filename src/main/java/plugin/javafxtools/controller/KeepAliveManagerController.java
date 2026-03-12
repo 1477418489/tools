@@ -24,11 +24,18 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public class KeepAliveManagerController {
+    private static final String CONFIG_FILE = "userData/keepAlive.json";
+    private static final TypeReference<List<KeepAliveConfig>> KEEP_ALIVE_CONFIG_LIST_TYPE = new TypeReference<>() {};
+    private static final ObjectMapper CONFIG_MAPPER = new ObjectMapper()
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+            .configure(SerializationFeature.INDENT_OUTPUT, true);
+
     @FXML
     private TableView<KeepAliveConfig> configTableView;
     @FXML
@@ -66,7 +73,6 @@ public class KeepAliveManagerController {
     private Label lastUpdateLabel;
 
     private ObservableList<KeepAliveConfig> configList = FXCollections.observableArrayList();
-    private static final String CONFIG_FILE = "userData/keepAlive.json";
     private EnhancedKeepAliveService keepAliveService;
 
     // 使用线程池处理后台任务
@@ -79,7 +85,7 @@ public class KeepAliveManagerController {
     });
 
     // 防重复提交标志
-    private volatile boolean isUpdating = false;
+    private final AtomicBoolean isUpdating = new AtomicBoolean(false);
 
     @FXML
     public void initialize() {
@@ -217,7 +223,7 @@ public class KeepAliveManagerController {
     private void showConfigDetails(KeepAliveConfig config) {
         if (config != null) {
             // 批量更新UI，减少单独更新
-            Platform.runLater(() -> {
+            runOnFxThread(() -> {
                 domainField.setText(config.getDomain());
                 enabledCheckBox.setSelected(config.isEnabled());
                 minIntervalSpinner.getValueFactory().setValue(config.getMinInterval());
@@ -229,11 +235,6 @@ public class KeepAliveManagerController {
 
     @FXML
     private void handleAdd() {
-        if (isUpdating) {
-            showAlert("请等待当前操作完成");
-            return;
-        }
-
         String domain = domainField.getText().trim();
         if (domain.isEmpty()) {
             showAlert("请输入域名");
@@ -261,25 +262,29 @@ public class KeepAliveManagerController {
                 unitComboBox.getValue()
         );
 
+        if (!beginUpdate()) {
+            return;
+        }
+
         // 添加配置到列表（UI线程）
         configList.add(config);
 
         // 异步更新服务（后台线程）
         backgroundExecutor.submit(() -> {
-            isUpdating = true;
             try {
                 if (config.isEnabled()) {
                     keepAliveService.startDomain(domain);
                 }
-                // 异步保存到文件
-                saveConfigsToFileAsync();
+                saveConfigsToFileBackground();
 
-                Platform.runLater(() -> {
+                runOnFxThread(() -> {
                     clearInputFields();
                     logInfo("已添加配置: " + domain);
                 });
+            } catch (Exception e) {
+                runOnFxThread(() -> logError("添加配置失败: " + e.getMessage()));
             } finally {
-                isUpdating = false;
+                isUpdating.set(false);
             }
         });
         afterOperation("添加");
@@ -287,11 +292,6 @@ public class KeepAliveManagerController {
 
     @FXML
     private void handleUpdate() {
-        if (isUpdating) {
-            showAlert("请等待当前操作完成");
-            return;
-        }
-
         KeepAliveConfig selectedConfig = configTableView.getSelectionModel().getSelectedItem();
         if (selectedConfig == null) {
             showAlert("请选择要更新的配置");
@@ -318,6 +318,10 @@ public class KeepAliveManagerController {
             return;
         }
 
+        if (!beginUpdate()) {
+            return;
+        }
+
         // 在UI线程中更新表格数据
         selectedConfig.setDomain(domain);
         selectedConfig.setEnabled(enabledCheckBox.isSelected());
@@ -333,19 +337,19 @@ public class KeepAliveManagerController {
 
         // 异步更新服务和保存文件
         backgroundExecutor.submit(() -> {
-            isUpdating = true;
             try {
                 // 通知服务更新
                 keepAliveService.updateConfigs(new ArrayList<>(configList));
 
-                // 异步保存到文件
-                saveConfigsToFileAsync();
+                saveConfigsToFileBackground();
 
-                Platform.runLater(() -> {
+                runOnFxThread(() -> {
                     logInfo("已更新配置: " + domain);
                 });
+            } catch (Exception e) {
+                runOnFxThread(() -> logError("更新配置失败: " + e.getMessage()));
             } finally {
-                isUpdating = false;
+                isUpdating.set(false);
             }
         });
         afterOperation("修改");
@@ -353,34 +357,33 @@ public class KeepAliveManagerController {
 
     @FXML
     private void handleRemove() {
-        if (isUpdating) {
-            showAlert("请等待当前操作完成");
-            return;
-        }
-
         KeepAliveConfig selectedConfig = configTableView.getSelectionModel().getSelectedItem();
         if (selectedConfig != null) {
             String domain = selectedConfig.getDomain();
+
+            if (!beginUpdate()) {
+                return;
+            }
 
             // 从列表中移除（UI线程）
             configList.remove(selectedConfig);
 
             // 异步处理服务更新和文件保存
             backgroundExecutor.submit(() -> {
-                isUpdating = true;
                 try {
                     // 通知服务更新（会自动停止对应的任务）
                     keepAliveService.updateConfigs(new ArrayList<>(configList));
 
-                    // 异步保存到文件
-                    saveConfigsToFileAsync();
+                    saveConfigsToFileBackground();
 
-                    Platform.runLater(() -> {
+                    runOnFxThread(() -> {
                         logInfo("已删除配置: " + domain);
                         clearInputFields();
                     });
+                } catch (Exception e) {
+                    runOnFxThread(() -> logError("删除配置失败: " + e.getMessage()));
                 } finally {
-                    isUpdating = false;
+                    isUpdating.set(false);
                 }
             });
         } else {
@@ -391,35 +394,33 @@ public class KeepAliveManagerController {
 
     @FXML
     private void handleSave() {
-        if (isUpdating) {
-            showAlert("请等待当前操作完成");
+        if (!beginUpdate()) {
             return;
         }
 
         showProgress(true);
 
         backgroundExecutor.submit(() -> {
-            isUpdating = true;
             try {
                 keepAliveService.updateConfigs(new ArrayList<>(configList));
-                saveConfigsToFileAsync();
+                saveConfigsToFileBackground();
 
-                Platform.runLater(() -> {
+                runOnFxThread(() -> {
                     showProgress(false);
                     logInfo("已保存所有配置");
                     showInfoAlert("保存成功", "配置已成功保存到文件");
                 });
             } catch (Exception e) {
-                Platform.runLater(() -> {
+                runOnFxThread(() -> {
                     showProgress(false);
                     logError("保存失败: " + e.getMessage());
                     showAlert("保存失败: " + e.getMessage());
                 });
             } finally {
-                isUpdating = false;
+                isUpdating.set(false);
             }
         });
-        afterOperation("添加");
+        afterOperation("保存");
     }
 
     private void loadConfigsAsync() {
@@ -440,24 +441,20 @@ public class KeepAliveManagerController {
                         keepAliveService.updateConfigs(new ArrayList<>(configList));
                     });
 
-                    Platform.runLater(() -> {
-                        logInfo("成功加载 " + configList.size() + " 条配置");
-                        setButtonsDisabled(false);
-                    });
+                    logInfo("成功加载 " + configList.size() + " 条配置");
+                    setButtonsDisabled(false);
                 }
             }
 
             @Override
             protected void failed() {
-                Platform.runLater(() -> {
-                    logError("加载配置文件失败: " + getException().getMessage());
-                    setButtonsDisabled(false);
-                });
+                logError("加载配置文件失败: " + getException().getMessage());
+                setButtonsDisabled(false);
             }
         };
 
         // 在后台线程执行加载
-        new Thread(loadTask).start();
+        backgroundExecutor.submit(loadTask);
     }
 
     private List<KeepAliveConfig> loadConfigsFromFileBackground() {
@@ -473,10 +470,7 @@ public class KeepAliveManagerController {
                 return new ArrayList<>();
             }
 
-            ObjectMapper mapper = new ObjectMapper();
-            mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-
-            return mapper.readValue(configFile, new TypeReference<List<KeepAliveConfig>>() {});
+            return CONFIG_MAPPER.readValue(configFile, KEEP_ALIVE_CONFIG_LIST_TYPE);
 
         } catch (Exception e) {
             // 在后台线程中恢复文件，不阻塞UI
@@ -496,39 +490,31 @@ public class KeepAliveManagerController {
         }
     }
 
-    private void saveConfigsToFileAsync() {
-        backgroundExecutor.submit(() -> {
-            try {
-                saveConfigsToFileBackground();
-            } catch (Exception e) {
-                Platform.runLater(() -> {
-                    logError("异步保存失败: " + e.getMessage());
-                });
-            }
-        });
-    }
-
     private void saveConfigsToFileBackground() throws IOException {
-        File configFile = new File(CONFIG_FILE);
-        configFile.getParentFile().mkdirs();
-
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.configure(SerializationFeature.INDENT_OUTPUT, true);
+        File configFile = ensureConfigDirectoryExists();
 
         List<KeepAliveConfig> listToSave = new ArrayList<>(configList);
-        mapper.writeValue(configFile, listToSave);
+        CONFIG_MAPPER.writeValue(configFile, listToSave);
     }
 
     private void saveEmptyConfigFile() {
         try {
-            ObjectMapper mapper = new ObjectMapper();
-            mapper.configure(SerializationFeature.INDENT_OUTPUT, true);
+            File configFile = ensureConfigDirectoryExists();
 
             List<KeepAliveConfig> emptyList = new ArrayList<>();
-            mapper.writeValue(new File(CONFIG_FILE), emptyList);
+            CONFIG_MAPPER.writeValue(configFile, emptyList);
         } catch (IOException e) {
             // 静默处理
         }
+    }
+
+    private File ensureConfigDirectoryExists() {
+        File configFile = new File(CONFIG_FILE);
+        File parent = configFile.getParentFile();
+        if (parent != null) {
+            parent.mkdirs();
+        }
+        return configFile;
     }
 
     private void showProgress(boolean show) {
@@ -539,7 +525,7 @@ public class KeepAliveManagerController {
     }
 
     private void logInfo(String message) {
-        Platform.runLater(() -> {
+        runOnFxThread(() -> {
             if (logArea != null) {
                 // 简化日志追加，避免频繁滚动
                 logArea.appendText("[INFO] " + message + "\n");
@@ -553,7 +539,7 @@ public class KeepAliveManagerController {
     }
 
     private void logError(String message) {
-        Platform.runLater(() -> {
+        runOnFxThread(() -> {
             if (logArea != null) {
                 logArea.appendText("[ERROR] " + message + "\n");
                 logArea.setScrollTop(Double.MAX_VALUE);
@@ -562,7 +548,7 @@ public class KeepAliveManagerController {
     }
 
     private void showAlert(String message) {
-        Platform.runLater(() -> {
+        runOnFxThread(() -> {
             Alert alert = new Alert(Alert.AlertType.WARNING);
             alert.setTitle("警告");
             alert.setHeaderText(null);
@@ -572,7 +558,7 @@ public class KeepAliveManagerController {
     }
 
     private void showInfoAlert(String title, String message) {
-        Platform.runLater(() -> {
+        runOnFxThread(() -> {
             Alert alert = new Alert(Alert.AlertType.INFORMATION);
             alert.setTitle(title);
             alert.setHeaderText(null);
@@ -591,6 +577,22 @@ public class KeepAliveManagerController {
 
     private boolean isValidUrl(String url) {
         return url != null && (url.startsWith("http://") || url.startsWith("https://"));
+    }
+
+    private boolean beginUpdate() {
+        if (isUpdating.compareAndSet(false, true)) {
+            return true;
+        }
+        showAlert("请等待当前操作完成");
+        return false;
+    }
+
+    private void runOnFxThread(Runnable runnable) {
+        if (Platform.isFxApplicationThread()) {
+            runnable.run();
+        } else {
+            Platform.runLater(runnable);
+        }
     }
 
     public void setKeepAliveService(EnhancedKeepAliveService service) {
@@ -628,7 +630,7 @@ public class KeepAliveManagerController {
         configList.clear();
 
         // 4. 清空UI引用
-        Platform.runLater(() -> {
+        runOnFxThread(() -> {
             if (configTableView != null) {
                 configTableView.getItems().clear();
             }
