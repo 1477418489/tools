@@ -47,6 +47,10 @@
             <Tab text="JAR应用启动器">
                 <fx:include fx:id="jarLauncherTab" source="jar-launcher-view.fxml" />
             </Tab>
+            <!-- 备忘提醒 -->
+            <Tab text="备忘提醒">
+                <fx:include fx:id="memoReminderTab" source="memo-reminder-view.fxml" />
+            </Tab>
             <!-- 域名保活 -->
             <Tab text="域名保活">
                 <fx:include fx:id="keepAliveTab" source="keepalive-manager-view.fxml" />

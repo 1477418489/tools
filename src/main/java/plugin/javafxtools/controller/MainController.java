@@ -34,6 +34,8 @@ public class MainController {
     private AppLauncherController appLauncherTabController;
     @FXML
     private KeepAliveManagerController keepAliveTabController;
+    @FXML
+    private MemoReminderController memoReminderTabController;
 
     // 共享服务
     private final LoggingService loggingService = new LoggingService();
@@ -93,6 +95,7 @@ public class MainController {
         controllers.put("字符串工具", strDataFormatTabController);
         controllers.put("启动项", appLauncherTabController);
         controllers.put("域名保活", keepAliveTabController);
+        controllers.put("备忘提醒", memoReminderTabController);
 
         controllers.forEach((name, controller) -> loggingService.info(
                 controller != null
@@ -126,6 +129,9 @@ public class MainController {
         }
         if (appLauncherTabController == null) {
             errorMsg.append("启动项控制器注入失败\n");
+        }
+        if (memoReminderTabController == null) {
+            errorMsg.append("备忘提醒控制器注入失败\n");
         }
 
         if (!errorMsg.isEmpty()) {
@@ -190,6 +196,9 @@ public class MainController {
             }
             if (appLauncherTabController != null) {
                 appLauncherTabController.cleanup();
+            }
+            if (memoReminderTabController != null) {
+                memoReminderTabController.cleanup();
             }
             if (centralLogArea != null) {
                 centralLogArea.clear();
