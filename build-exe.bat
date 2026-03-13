@@ -19,19 +19,12 @@ set "DEST_DIR=dist"
 set "WIN_MENU=true"
 set "WIN_SHORTCUT=true"
 set "CONSOLE=false"
+set "JPACKAGE_PATH=D:\tools\jdk\jdk-23.0.2\bin\jpackage.exe"
 
-REM ==== 自动定位 jpackage（优先 JAVA_HOME）====
-set "JPACKAGE="
-if defined JAVA_HOME (
-    if exist "%JAVA_HOME%\bin\jpackage.exe" set "JPACKAGE=%JAVA_HOME%\bin\jpackage.exe"
-)
-if not defined JPACKAGE (
-    where jpackage >nul 2>nul
-    if not errorlevel 1 set "JPACKAGE=jpackage"
-)
-
-if not defined JPACKAGE (
-    echo [ERROR] 未找到 jpackage，请安装 JDK 14+ 并配置 JAVA_HOME 或 PATH。
+REM ==== 固定 jpackage 路径（多 JDK 环境建议显式指定）====
+if not exist "%JPACKAGE_PATH%" (
+    echo [ERROR] jpackage 不存在：%JPACKAGE_PATH%
+    echo [HINT] 请确认 JDK 路径，或修改 build-exe.bat 中 JPACKAGE_PATH。
     pause
     exit /b 1
 )
@@ -52,17 +45,24 @@ if not exist "%ICON_PATH%" (
 
 if not exist "%DEST_DIR%" mkdir "%DEST_DIR%"
 
-echo [INFO] 使用 jpackage: %JPACKAGE%
+echo [INFO] 使用 jpackage: %JPACKAGE_PATH%
 echo [INFO] 开始生成 EXE 安装包...
 
-set "CMD=%JPACKAGE% --type exe --name \"%APP_NAME%\" --app-version \"%APP_VERSION%\" --vendor \"%VENDOR%\" --runtime-image \"%RUNTIME_IMAGE%\" --module %MAIN_MODULE%/%MAIN_CLASS% --dest \"%DEST_DIR%\""
+set "EXTRA_ARGS="
+if /I "%WIN_MENU%"=="true" set "EXTRA_ARGS=!EXTRA_ARGS! --win-menu"
+if /I "%WIN_SHORTCUT%"=="true" set "EXTRA_ARGS=!EXTRA_ARGS! --win-shortcut"
+if /I "%CONSOLE%"=="true" set "EXTRA_ARGS=!EXTRA_ARGS! --win-console"
+if defined ICON_ARG set "EXTRA_ARGS=!EXTRA_ARGS! !ICON_ARG!"
 
-if /I "%WIN_MENU%"=="true" set "CMD=!CMD! --win-menu"
-if /I "%WIN_SHORTCUT%"=="true" set "CMD=!CMD! --win-shortcut"
-if /I "%CONSOLE%"=="true" set "CMD=!CMD! --win-console"
-if defined ICON_ARG set "CMD=!CMD! !ICON_ARG!"
-
-call !CMD!
+call "%JPACKAGE_PATH%" ^
+  --type exe ^
+  --name "%APP_NAME%" ^
+  --app-version "%APP_VERSION%" ^
+  --vendor "%VENDOR%" ^
+  --runtime-image "%RUNTIME_IMAGE%" ^
+  --module %MAIN_MODULE%/%MAIN_CLASS% ^
+  --dest "%DEST_DIR%" ^
+  !EXTRA_ARGS!
 if errorlevel 1 (
     echo [ERROR] EXE 安装包打包失败。
     pause

@@ -93,7 +93,8 @@
 1. 点击 maven -> 插件 -> javafx -> `javafx:jlink`（或执行 `mvn clean javafx:jlink`）。
 2. 运行 `src/main/resources/run.bat` 可生成 app-image 目录结构（包含可执行文件）。
 3. 运行仓库根目录 `build-exe.bat` 可进一步打包 Windows `.exe` 安装程序。
-4. 打包前请按需修改 bat 中的参数（应用名、版本号、图标、输出目录等）。
+
+4. 打包前请按需修改 bat 中的参数（应用名、版本号、图标、输出目录等），并确认 `JPACKAGE_PATH`（默认 `D:\tools\jdk\jdk-23.0.2\bin\jpackage.exe`）。
 
 ## 性能优化说明
 - 中央日志区域增加了行数上限与批量裁剪策略，避免长时间运行导致内存持续增长。
