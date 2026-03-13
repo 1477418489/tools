@@ -7,8 +7,8 @@ set JPACKAGE_PATH=D:\tools\jdk\jdk-23.0.2\bin\jpackage.exe
 set APP_NAME=FxTools
 set MAIN_MODULE=plugin.javafxtools
 set MAIN_CLASS=plugin.javafxtools.ToolsApplication
-set RUNTIME_IMAGE=D:\github\javaFxTools\target\app
-set ICON_PATH=D:\github\javaFxTools\target\classes\favicon.ico
+set RUNTIME_IMAGE=D:\github\tools\target\app
+set ICON_PATH=D:\github\tools\target\classes\favicon.ico
 set OUTPUT_DIR=dist
 
 REM 检查jpackage路径

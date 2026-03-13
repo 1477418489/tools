@@ -1,105 +1,103 @@
 @echo off
-chcp 65001 >nul
 setlocal enabledelayedexpansion
 
-REM ============================================================
-REM  用途: 一键打包 Windows EXE 安装程序（jpackage --type exe）
-REM  前置: 先执行 `mvn clean javafx:jlink` 生成 runtime image
-REM ============================================================
+echo =====================================
+echo        JavaFX JPackage Builder
+echo =====================================
 
-REM ==== 可配置参数（按需修改）====
-set "APP_NAME=FxTools"
-set "APP_VERSION=1.0.0"
-set "VENDOR=JavaFxTools"
-set "MAIN_MODULE=plugin.javafxtools"
-set "MAIN_CLASS=plugin.javafxtools.ToolsApplication"
-set "RUNTIME_IMAGE=target\app"
-set "ICON_PATH=src\main\resources\favicon.ico"
-set "DEST_DIR=dist"
-set "WIN_MENU=true"
-set "WIN_SHORTCUT=true"
-set "CONSOLE=false"
-set "FALLBACK_TO_APP_IMAGE=true"
-set "JPACKAGE_PATH=D:\tools\jdk\jdk-23.0.2\bin\jpackage.exe"
+REM ==== config ====
+set JPACKAGE_PATH=D:\tools\jdk\jdk-23.0.2\bin\jpackage.exe
+set APP_NAME=FxTools
+set MAIN_MODULE=plugin.javafxtools
+set MAIN_CLASS=plugin.javafxtools.ToolsApplication
+set RUNTIME_IMAGE=D:\github\tools\target\app
+set ICON_PATH=D:\github\tools\target\classes\favicon.ico
+set OUTPUT_DIR=dist
 
-REM ==== 固定 jpackage 路径（多 JDK 环境建议显式指定）====
+REM ==== check jpackage ====
 if not exist "%JPACKAGE_PATH%" (
-    echo [ERROR] jpackage 不存在：%JPACKAGE_PATH%
-    echo [HINT] 请确认 JDK 路径，或修改 build-exe.bat 中 JPACKAGE_PATH。
-    pause
-    exit /b 1
+ echo [ERROR] jpackage not found:
+ echo %JPACKAGE_PATH%
+ pause
+ exit /b 1
 )
 
+REM ==== check runtime ====
 if not exist "%RUNTIME_IMAGE%" (
-    echo [ERROR] 运行时镜像目录不存在：%RUNTIME_IMAGE%
-    echo [HINT] 请先执行: mvn clean javafx:jlink
-    pause
-    exit /b 2
+ echo [ERROR] runtime-image not found:
+ echo %RUNTIME_IMAGE%
+ echo Run: mvn javafx:jlink
+ pause
+ exit /b 1
 )
 
-if not exist "%ICON_PATH%" (
-    echo [WARN] 图标不存在，将使用默认图标：%ICON_PATH%
-    set "ICON_ARG="
-) else (
-    set "ICON_ARG=--icon ""%ICON_PATH%"""
-)
+REM ==== create output dir ====
+if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%"
 
-if not exist "%DEST_DIR%" mkdir "%DEST_DIR%"
+REM ==== detect WiX ====
+set PACKAGE_TYPE=app-image
 
-echo [INFO] 使用 jpackage: %JPACKAGE_PATH%
-echo [INFO] 开始生成 Windows 安装包...
-
-set "PACKAGE_TYPE=exe"
 where candle.exe >nul 2>nul
+if not errorlevel 1 (
+ where light.exe >nul 2>nul
+ if not errorlevel 1 (
+  set PACKAGE_TYPE=exe
+ )
+)
+
+echo [INFO] package type: %PACKAGE_TYPE%
+
+REM ==== build command ====
+set CMD="%JPACKAGE_PATH%" ^
+ --name "%APP_NAME%" ^
+ --type %PACKAGE_TYPE% ^
+ -m "%MAIN_MODULE%/%MAIN_CLASS%" ^
+ --runtime-image "%RUNTIME_IMAGE%" ^
+ --dest "%OUTPUT_DIR%"
+
+if exist "%ICON_PATH%" (
+ set CMD=!CMD! --icon "%ICON_PATH%"
+)
+
+if "%PACKAGE_TYPE%"=="exe" (
+ set CMD=!CMD! ^
+  --win-dir-chooser ^
+  --win-menu ^
+  --win-shortcut
+)
+
+echo.
+echo [INFO] running jpackage...
+echo.
+
+%CMD%
+
 if errorlevel 1 (
-    where light.exe >nul 2>nul
-    if errorlevel 1 (
-        if /I "%FALLBACK_TO_APP_IMAGE%"=="true" (
-            set "PACKAGE_TYPE=app-image"
-            echo [WARN] 未检测到 WiX（candle.exe / light.exe），自动回退为 app-image 打包。
-            echo [HINT] 若需 EXE 安装包，请安装 WiX 3.x 并添加到 PATH 后重试。
-        ) else (
-            echo [ERROR] 找不到 WiX 工具 (light.exe, candle.exe)
-            echo [HINT] 从 https://wixtoolset.org 下载 WiX 3.0 或更高版本，然后将其添加到 PATH。
-            pause
-            exit /b 4
-        )
-    )
+ echo [ERROR] jpackage failed
+ pause
+ exit /b 2
 )
 
-echo [INFO] 当前打包类型: !PACKAGE_TYPE!
+REM ==== MD5 ====
+set OUT_EXE=%OUTPUT_DIR%\%APP_NAME%\%APP_NAME%.exe
 
-set "EXTRA_ARGS="
-if /I "%WIN_MENU%"=="true" set "EXTRA_ARGS=!EXTRA_ARGS! --win-menu"
-if /I "%WIN_SHORTCUT%"=="true" set "EXTRA_ARGS=!EXTRA_ARGS! --win-shortcut"
-if /I "%CONSOLE%"=="true" set "EXTRA_ARGS=!EXTRA_ARGS! --win-console"
-if defined ICON_ARG set "EXTRA_ARGS=!EXTRA_ARGS! !ICON_ARG!"
-
-call "%JPACKAGE_PATH%" ^
-  --type !PACKAGE_TYPE! ^
-  --name "%APP_NAME%" ^
-  --app-version "%APP_VERSION%" ^
-  --vendor "%VENDOR%" ^
-  --runtime-image "%RUNTIME_IMAGE%" ^
-  --module %MAIN_MODULE%/%MAIN_CLASS% ^
-  --dest "%DEST_DIR%" ^
-  !EXTRA_ARGS!
-if errorlevel 1 (
-    echo [ERROR] 安装包打包失败（类型: !PACKAGE_TYPE!）。
-    pause
-    exit /b 3
+if exist "%OUT_EXE%" (
+ for /f "skip=1 tokens=1" %%i in ('certutil -hashfile "%OUT_EXE%" MD5') do (
+  echo %%i > "%OUT_EXE%.md5.txt"
+  echo [INFO] MD5 saved: %OUT_EXE%.md5.txt
+  goto done
+ )
 )
 
-echo [INFO] 打包完成，输出目录：%DEST_DIR%
-if /I "!PACKAGE_TYPE!"=="exe" (
-    for %%f in ("%DEST_DIR%\*.exe") do (
-        echo [INFO] 生成文件：%%~nxf
-    )
-) else (
-    if exist "%DEST_DIR%\%APP_NAME%" (
-        echo [INFO] 生成目录：%DEST_DIR%\%APP_NAME%
-    )
-)
+echo [WARN] exe not found for MD5
+
+:done
+
+echo.
+echo =====================================
+echo Build finished
+echo Output: %OUTPUT_DIR%
+echo =====================================
 
 pause
 endlocal
