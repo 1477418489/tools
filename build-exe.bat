@@ -19,6 +19,7 @@ set "DEST_DIR=dist"
 set "WIN_MENU=true"
 set "WIN_SHORTCUT=true"
 set "CONSOLE=false"
+set "FALLBACK_TO_APP_IMAGE=true"
 set "JPACKAGE_PATH=D:\tools\jdk\jdk-23.0.2\bin\jpackage.exe"
 
 REM ==== 固定 jpackage 路径（多 JDK 环境建议显式指定）====
@@ -46,7 +47,27 @@ if not exist "%ICON_PATH%" (
 if not exist "%DEST_DIR%" mkdir "%DEST_DIR%"
 
 echo [INFO] 使用 jpackage: %JPACKAGE_PATH%
-echo [INFO] 开始生成 EXE 安装包...
+echo [INFO] 开始生成 Windows 安装包...
+
+set "PACKAGE_TYPE=exe"
+where candle.exe >nul 2>nul
+if errorlevel 1 (
+    where light.exe >nul 2>nul
+    if errorlevel 1 (
+        if /I "%FALLBACK_TO_APP_IMAGE%"=="true" (
+            set "PACKAGE_TYPE=app-image"
+            echo [WARN] 未检测到 WiX（candle.exe / light.exe），自动回退为 app-image 打包。
+            echo [HINT] 若需 EXE 安装包，请安装 WiX 3.x 并添加到 PATH 后重试。
+        ) else (
+            echo [ERROR] 找不到 WiX 工具 (light.exe, candle.exe)
+            echo [HINT] 从 https://wixtoolset.org 下载 WiX 3.0 或更高版本，然后将其添加到 PATH。
+            pause
+            exit /b 4
+        )
+    )
+)
+
+echo [INFO] 当前打包类型: !PACKAGE_TYPE!
 
 set "EXTRA_ARGS="
 if /I "%WIN_MENU%"=="true" set "EXTRA_ARGS=!EXTRA_ARGS! --win-menu"
@@ -55,7 +76,7 @@ if /I "%CONSOLE%"=="true" set "EXTRA_ARGS=!EXTRA_ARGS! --win-console"
 if defined ICON_ARG set "EXTRA_ARGS=!EXTRA_ARGS! !ICON_ARG!"
 
 call "%JPACKAGE_PATH%" ^
-  --type exe ^
+  --type !PACKAGE_TYPE! ^
   --name "%APP_NAME%" ^
   --app-version "%APP_VERSION%" ^
   --vendor "%VENDOR%" ^
@@ -64,14 +85,20 @@ call "%JPACKAGE_PATH%" ^
   --dest "%DEST_DIR%" ^
   !EXTRA_ARGS!
 if errorlevel 1 (
-    echo [ERROR] EXE 安装包打包失败。
+    echo [ERROR] 安装包打包失败（类型: !PACKAGE_TYPE!）。
     pause
     exit /b 3
 )
 
 echo [INFO] 打包完成，输出目录：%DEST_DIR%
-for %%f in ("%DEST_DIR%\*.exe") do (
-    echo [INFO] 生成文件：%%~nxf
+if /I "!PACKAGE_TYPE!"=="exe" (
+    for %%f in ("%DEST_DIR%\*.exe") do (
+        echo [INFO] 生成文件：%%~nxf
+    )
+) else (
+    if exist "%DEST_DIR%\%APP_NAME%" (
+        echo [INFO] 生成目录：%DEST_DIR%\%APP_NAME%
+    )
 )
 
 pause
