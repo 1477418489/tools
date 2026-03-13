@@ -40,7 +40,7 @@ if not exist "%ICON_PATH%" (
     echo [WARN] 图标不存在，将使用默认图标：%ICON_PATH%
     set "ICON_ARG="
 ) else (
-    set "ICON_ARG=--icon \"%ICON_PATH%\""
+    set "ICON_ARG=--icon ""%ICON_PATH%"""
 )
 
 if not exist "%DEST_DIR%" mkdir "%DEST_DIR%"
