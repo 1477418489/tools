@@ -6,7 +6,7 @@
 
 <BorderPane xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="plugin.javafxtools.controller.JarLauncherController"
-            styleClass="jar-launcher"
+            styleClass="tool-page"
             prefWidth="1000" prefHeight="700">
 
     <padding>
@@ -15,7 +15,7 @@
 
     <!-- 顶部配置区域 -->
     <top>
-        <VBox spacing="15" BorderPane.alignment="TOP_CENTER">
+        <VBox spacing="12" BorderPane.alignment="TOP_CENTER" styleClass="toolbar-card">
             <HBox spacing="20">
                 <!-- 项目选择 -->
                 <VBox spacing="5">
@@ -38,18 +38,18 @@
 
             <!-- 操作按钮 -->
             <HBox spacing="15" alignment="CENTER">
-                <Button text="添加项目" fx:id="addProjectButton" onAction="#handleAddProject" styleClass="launcher-button" />
-                <Button text="复制文件" fx:id="copyButton" onAction="#handleCopyAction" styleClass="launcher-button" />
-                <Button text="编辑项目" onAction="#handleEditProject"/>
-                <Button text="启动应用" fx:id="launchButton" onAction="#handleLaunchAction" styleClass="launcher-button" />
-                <Button text="停止应用" fx:id="stopButton" onAction="#handleStopAction" styleClass="launcher-button" />
-                <Button text="删除应用"  onAction="#handleDeleteProject" styleClass="launcher-button" />
+                <Button text="添加项目" fx:id="addProjectButton" onAction="#handleAddProject" styleClass="success-button" />
+                <Button text="复制文件" fx:id="copyButton" onAction="#handleCopyAction" styleClass="secondary-button" />
+                <Button text="编辑项目" onAction="#handleEditProject" styleClass="secondary-button"/>
+                <Button text="启动应用" fx:id="launchButton" onAction="#handleLaunchAction" styleClass="success-button" />
+                <Button text="停止应用" fx:id="stopButton" onAction="#handleStopAction" styleClass="danger-button" />
+                <Button text="删除应用"  onAction="#handleDeleteProject" styleClass="danger-button" />
                 <ProgressBar fx:id="progressBar" visible="false" prefWidth="200"/>
             </HBox>
             <!-- 操作按钮 -->
             <HBox spacing="15" alignment="CENTER">
                 <TextField fx:id="portNumField" prefWidth="100" promptText="端口"/>
-                <Button text="查询端口" fx:id="queryPortButton" onAction="#queryPort" styleClass="launcher-button" />
+                <Button text="查询端口" fx:id="queryPortButton" onAction="#queryPort" styleClass="secondary-button" />
             </HBox>
         </VBox>
     </top>
@@ -57,12 +57,12 @@
     <!-- 日志区域 -->
     <center>
         <SplitPane orientation="VERTICAL" BorderPane.alignment="CENTER" VBox.vgrow="ALWAYS">
-            <VBox>
-                <Label text="执行日志:" />
+            <VBox spacing="8" styleClass="log-panel">
+                <Label text="执行日志" styleClass="section-title"/>
                 <TextArea fx:id="logArea" editable="false" styleClass="log-text-area" VBox.vgrow="ALWAYS" prefHeight="200"/>
             </VBox>
-            <VBox>
-                <Label text="进程输出:" />
+            <VBox spacing="8" styleClass="log-panel">
+                <Label text="进程输出" styleClass="section-title"/>
                 <TextArea fx:id="processOutputArea" editable="false" styleClass="log-text-area" VBox.vgrow="ALWAYS" prefHeight="200"/>
             </VBox>
         </SplitPane>

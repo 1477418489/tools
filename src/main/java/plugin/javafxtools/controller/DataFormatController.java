@@ -3,15 +3,13 @@ package plugin.javafxtools.controller;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.TextArea;
 import org.w3c.dom.Document;
 import org.xml.sax.InputSource;
-import plugin.javafxtools.base.ModuleLogger;
-import plugin.javafxtools.util.TimeUtils;
+import plugin.javafxtools.base.BaseController;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -26,40 +24,51 @@ import java.io.StringWriter;
 /**
  * 数据格式化工具控制器 - 提供JSON/XML格式化功能
  */
-public class DataFormatController implements ModuleLogger {
-
-    @FXML
-    private ComboBox<String> formatTypeComboBox; // 格式化类型选择框
-    @FXML
-    private TextArea rawDataArea;               // 原始数据输入区
-    @FXML
-    private TextArea formattedDataArea;         // 格式化结果区
-    @FXML
-    private Button formatButton;                // 格式化按钮
-    @FXML
-    private Button clearButton;                 // 清除按钮
-
-    private final ObjectMapper jsonMapper = new ObjectMapper(); // JSON处理器
-
-
-    public TextArea getLogArea() {
-        return formattedDataArea;
-    }
+public class DataFormatController extends BaseController {
 
     /**
-     * 自定义日志方法 - 只输出到本模块日志区
+     * 格式化类型选择框。
+     */
+    @FXML
+    private ComboBox<String> formatTypeComboBox;
+
+    /**
+     * 原始数据输入区。
+     */
+    @FXML
+    private TextArea rawDataArea;
+
+    /**
+     * 格式化结果和模块日志输出区。
+     */
+    @FXML
+    private TextArea formattedDataArea;
+
+    /**
+     * 执行格式化的按钮。
+     */
+    @FXML
+    private Button formatButton;
+
+    /**
+     * 清空输入和结果的按钮。
+     */
+    @FXML
+    private Button clearButton;
+
+    /**
+     * JSON 解析和格式化处理器。
+     */
+    private final ObjectMapper jsonMapper = new ObjectMapper();
+
+    /**
+     * 获取当前模块日志输出区域。
+     *
+     * @return 格式化结果文本区域
      */
     @Override
-    public void log(String level, String message) {
-        String formattedMessage = String.format("\n"+"[%s][%s] %s",
-                TimeUtils.getCurrentDateTime(), level, message);
-
-        Platform.runLater(() -> {
-            if (formattedDataArea != null && formattedDataArea.getScene() != null) {
-                formattedDataArea.appendText(formattedMessage );
-                formattedDataArea.setScrollTop(Double.MAX_VALUE); // 自动滚动到底部
-            }
-        });
+    public TextArea getLogArea() {
+        return formattedDataArea;
     }
 
     /**
@@ -165,21 +174,5 @@ public class DataFormatController implements ModuleLogger {
         rawDataArea.clear();
         formattedDataArea.clear();
         info("已清除输入和格式化结果");
-    }
-    /**
-     * 清空日志按钮
-     */
-    @FXML
-    private void handleClearLog() {
-        Platform.runLater(() -> {
-            if (formattedDataArea != null) {
-                formattedDataArea.clear();
-            }
-        });
-    }
-    /**
-     * 清理资源
-     */
-    public void cleanup() {
     }
 }

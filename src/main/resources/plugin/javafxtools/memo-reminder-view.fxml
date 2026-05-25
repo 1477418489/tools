@@ -6,13 +6,13 @@
 
 <VBox xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="plugin.javafxtools.controller.MemoReminderController"
-      spacing="10" styleClass="toolbox-container">
+      spacing="12" styleClass="tool-page">
     <padding>
         <Insets top="10" right="10" bottom="10" left="10"/>
     </padding>
 
-    <Label text="备忘提醒配置" styleClass="section-title"/>
-    <GridPane hgap="8" vgap="8">
+    <Label text="备忘提醒配置" styleClass="page-title"/>
+    <GridPane hgap="10" vgap="10" styleClass="toolbar-card">
         <columnConstraints>
             <ColumnConstraints percentWidth="12"/>
             <ColumnConstraints percentWidth="38"/>
@@ -35,14 +35,14 @@
         <TextField fx:id="timesField" text="1" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
 
         <HBox spacing="8" GridPane.rowIndex="1" GridPane.columnIndex="3" GridPane.columnSpan="3">
-            <Button text="新增提醒" onAction="#addReminder"/>
-            <Button text="暂停选中" onAction="#pauseSelected"/>
-            <Button text="恢复选中" onAction="#resumeSelected"/>
-            <Button text="删除选中" onAction="#removeSelected" styleClass="secondary-button"/>
+            <Button text="新增提醒" onAction="#addReminder" styleClass="success-button"/>
+            <Button text="暂停选中" onAction="#pauseSelected" styleClass="secondary-button"/>
+            <Button text="恢复选中" onAction="#resumeSelected" styleClass="secondary-button"/>
+            <Button text="删除选中" onAction="#removeSelected" styleClass="danger-button"/>
         </HBox>
     </GridPane>
 
-    <TableView fx:id="reminderTable" VBox.vgrow="ALWAYS">
+    <TableView fx:id="reminderTable" VBox.vgrow="ALWAYS" styleClass="content-card">
         <columns>
             <TableColumn fx:id="contentCol" text="内容" prefWidth="320"/>
             <TableColumn fx:id="intervalCol" text="周期" prefWidth="120"/>
@@ -52,6 +52,8 @@
         </columns>
     </TableView>
 
-    <Label text="模块日志" styleClass="section-title"/>
-    <TextArea fx:id="logArea" prefRowCount="8" editable="false" styleClass="log-area"/>
+    <VBox spacing="8" styleClass="log-panel">
+        <Label text="模块日志" styleClass="section-title"/>
+        <TextArea fx:id="logArea" prefRowCount="8" editable="false" styleClass="log-area"/>
+    </VBox>
 </VBox>

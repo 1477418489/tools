@@ -6,7 +6,7 @@
 
 <GridPane xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1"
           fx:controller="plugin.javafxtools.controller.DataFormatController"
-          hgap="10" vgap="10" prefWidth="1000" prefHeight="700">
+          hgap="12" vgap="12" prefWidth="1000" prefHeight="700" styleClass="tool-page">
 
     <padding>
         <Insets bottom="10" left="10" right="10" top="10"/>
@@ -14,10 +14,10 @@
 
     <!-- 第0行 - 格式化类型选择 -->
     <Label text="格式化类型:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
-    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="0">
+    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="0" styleClass="toolbar-card">
         <ComboBox fx:id="formatTypeComboBox" prefWidth="150"/>
-        <Button fx:id="formatButton" text="格式化" onAction="#handleFormat"/>
-        <Button fx:id="clearButton" text="清除" onAction="#handleClear"/>
+        <Button fx:id="formatButton" text="格式化" onAction="#handleFormat" styleClass="success-button"/>
+        <Button fx:id="clearButton" text="清除" onAction="#handleClear" styleClass="secondary-button"/>
     </HBox>
 
     <!-- 第1行 - 原始数据输入 -->
@@ -26,8 +26,8 @@
 
     <!-- 第2行 - 格式化结果 -->
     <HBox spacing="10" alignment="CENTER_LEFT" GridPane.columnIndex="0" GridPane.rowIndex="2">
-        <Label text="执行日志/响应内容:"/>
-        <Button text="清空日志" onAction="#handleClearLog"/>
+        <Label text="执行日志/响应内容:" styleClass="section-title"/>
+        <Button text="清空日志" onAction="#handleClearLog" styleClass="secondary-button"/>
     </HBox>
-    <TextArea fx:id="formattedDataArea" editable="false" GridPane.columnIndex="1" GridPane.rowIndex="2" GridPane.vgrow="ALWAYS"/>
+    <TextArea fx:id="formattedDataArea" editable="false" GridPane.columnIndex="1" GridPane.rowIndex="2" GridPane.vgrow="ALWAYS" styleClass="log-area"/>
 </GridPane>

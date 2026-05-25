@@ -14,44 +14,114 @@ import plugin.javafxtools.model.ProjectConfig;
 
 import java.io.*;
 import java.net.InetSocketAddress;
-import java.nio.channels.SocketChannel;
+import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.text.SimpleDateFormat;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.function.Consumer;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
+/**
+ * JAR 启动器控制器，负责项目配置维护、文件复制、端口检查和 Java 进程启动停止。
+ */
 public class JarLauncherController {
-    // FXML注入组件
+    /**
+     * 项目配置选择框。
+     */
     @FXML
     private ComboBox<ProjectConfig> projectComboBox;
+
+    /**
+     * 启动端口输入框。
+     */
     @FXML
     private TextField portField;
+
+    /**
+     * 端口占用查询输入框。
+     */
     @FXML
     private TextField portNumField;
+
+    /**
+     * Spring profile 输入框。
+     */
     @FXML
     private TextField profileField;
+
+    /**
+     * 操作日志输出区域。
+     */
     @FXML
     private TextArea logArea;
+
+    /**
+     * 进程输出展示区域。
+     */
     @FXML
     private TextArea processOutputArea;
+
+    /**
+     * 文件复制或启动过程进度条。
+     */
     @FXML
     private ProgressBar progressBar;
+
+    /**
+     * 启动项目按钮。
+     */
     @FXML
     private Button launchButton;
+
+    /**
+     * 停止项目按钮。
+     */
     @FXML
     private Button stopButton;
 
-    // 项目配置集合
+    /**
+     * 以项目 ID 为键保存的项目配置集合。
+     */
     private final Map<Integer, ProjectConfig> projects = new HashMap<>();
-    private ProjectConfig selectedProject;
-    private Process currentProcess;
 
-    // 配置文件路径
+    /**
+     * 当前选中的项目配置。
+     */
+    private ProjectConfig selectedProject;
+
+    /**
+     * 当前运行中的端口，-1 表示无运行实例。
+     */
+    private volatile int runningPort = -1;
+
+    /**
+     * 项目配置持久化文件路径。
+     */
     private static final String PROJECTS_CONFIG_FILE = "userData/jar_launcher_projects.json";
 
+    /**
+     * JAR 启动器日志最大保留行数。
+     */
+    private static final int MAX_LOG_LINES = 800;
+
+    /**
+     * 端口查询、文件复制、启动停止等耗时操作的共享后台线程池。
+     */
+    private final ExecutorService backgroundExecutor = Executors.newFixedThreadPool(2, r -> {
+        Thread t = new Thread(r, "JarLauncher-Worker");
+        t.setDaemon(true);
+        return t;
+    });
+
+    /**
+     * 初始化 JAR 启动器页签。
+     */
     @FXML
     public void initialize() {
 
@@ -65,6 +135,7 @@ public class JarLauncherController {
                         selectedProject = newVal;
                         portField.setText(String.valueOf(newVal.getDefaultPort()));
                         profileField.setText(newVal.getDefaultProfile());
+                        updateButtonStates(newVal);
                     }
                 });
     }
@@ -92,28 +163,36 @@ public class JarLauncherController {
         }
     }
 
-    // 处理添加项目操作
+    // 查询端口占用
     @FXML
     private void queryPort() {
         String port = portNumField.getText().trim();
         if (port.isEmpty()) {
-            Alert alert = new Alert(Alert.AlertType.ERROR);
-            alert.setTitle("端口为空");
-            alert.setHeaderText("端口为空,请输入端口");
-            Optional<ButtonType> result = alert.showAndWait();
-            if (result.isEmpty() || result.get() == ButtonType.OK) {
-                return;
+            showError("端口为空,请输入端口");
+            return;
+        }
+        int portNum;
+        try {
+            portNum = Integer.parseInt(port);
+        } catch (NumberFormatException e) {
+            showError("端口必须是数字");
+            return;
+        }
+        final int targetPort = portNum;
+        backgroundExecutor.submit(() -> {
+            boolean inUse = checkPortInUse(targetPort);
+            if (inUse) {
+                String processInfo = getProcessUsingPort(targetPort);
+                Platform.runLater(() -> {
+                    appendLog("端口:" + targetPort + " 被占用，" + processInfo);
+                    if (confirmKillProcessOnPort(targetPort)) {
+                        backgroundExecutor.submit(() -> killProcessOnPort(targetPort));
+                    }
+                });
+            } else {
+                Platform.runLater(() -> appendLog("端口:" + targetPort + " 未被占用"));
             }
-        }
-        // 检查端口占用
-        int portNum = Integer.parseInt(port);
-        String processInfo = getProcessUsingPort(portNum);
-        appendLog("端口:"+ processInfo + " 占用");
-        if (checkPortInUse(portNum)) {
-            if (!handlePortConflict(portNum)) return;
-        }else{
-            appendLog("端口:"+ port + " 未被占用");
-        }
+        });
     }
 
     // 处理编辑项目操作
@@ -293,34 +372,40 @@ public class JarLauncherController {
 
     // 处理复制文件操作
     @FXML
-    private void handleCopyAction(ActionEvent event) { // 修改为JavaFX的ActionEvent
+    private void handleCopyAction(ActionEvent event) {
         if (selectedProject == null) {
             showError("请先选择项目");
             return;
         }
+        // 捕获当前选中项目，避免后台线程中 selectedProject 被切换
+        ProjectConfig projectSnapshot = selectedProject;
 
         Task<Void> copyTask = new Task<>() {
+            /**
+             * 后台执行文件复制，避免阻塞 JavaFX 线程。
+             *
+             * @return 无返回值
+             * @throws Exception 文件复制异常
+             */
             @Override
             protected Void call() throws Exception {
                 Platform.runLater(() -> {
                     progressBar.setVisible(true);
                     logArea.clear();
-                    appendLog("开始执行文件操作...");
                 });
+                appendLog("开始执行文件操作...");
 
                 try {
-                    // 复制JAR文件
-                    copyJarFile(selectedProject);
+                    copyJarFile(projectSnapshot);
 
-                    // 复制lib目录（如果存在）
-                    if (Files.exists(Paths.get(selectedProject.getSourceLib()))) {
-                        copyLibDirectory(selectedProject);
+                    if (Files.exists(Paths.get(projectSnapshot.getSourceLib()))) {
+                        copyLibDirectory(projectSnapshot);
                     }
 
                     Platform.runLater(() -> {
                         progressBar.setVisible(false);
                         appendLog("文件操作完成");
-                        launchButton.setDisable(false);
+                        updateButtonStates(projectSnapshot, runningPort > 0 ? runningPort : projectSnapshot.getDefaultPort());
                     });
                 } catch (IOException e) {
                     Platform.runLater(() -> {
@@ -333,7 +418,7 @@ public class JarLauncherController {
             }
         };
 
-        new Thread(copyTask).start();
+        backgroundExecutor.submit(copyTask);
     }
 
     // 处理启动操作
@@ -344,42 +429,122 @@ public class JarLauncherController {
             return;
         }
 
-        // 获取用户输入
-        int port = portField.getText().isEmpty() ?
-                selectedProject.getDefaultPort() : Integer.parseInt(portField.getText());
+        int port;
+        try {
+            port = portField.getText().isEmpty() ?
+                    selectedProject.getDefaultPort() : Integer.parseInt(portField.getText());
+        } catch (NumberFormatException e) {
+            showError("端口必须是数字");
+            return;
+        }
         String profile = profileField.getText().isEmpty() ?
                 selectedProject.getDefaultProfile() : profileField.getText();
 
-        // 检查端口占用
-        if (checkPortInUse(port)) {
-            if (!handlePortConflict(port)) return;
-        }
-
-        // 禁用启动按钮
-        launchButton.setDisable(false);
-        stopButton.setDisable(false);
-
         // 启动应用
+        final int launchPort = port;
+        final String launchProfile = profile;
+        final ProjectConfig launchProject = selectedProject;
+        launchButton.setDisable(true);
+
         Task<Void> launchTask = new Task<>() {
+            /**
+             * 后台检查端口占用并触发启动流程。
+             *
+             * @return 无返回值
+             * @throws Exception 启动前检查异常
+             */
             @Override
             protected Void call() throws Exception {
-                // 启动独立进程
-                Process process = startJavaApplication(selectedProject, port, profile);
+                // 后台检查端口占用
+                if (checkPortInUse(launchPort)) {
+                    Platform.runLater(() -> {
+                        if (!confirmKillProcessOnPort(launchPort)) {
+                            launchButton.setDisable(false);
+                            return;
+                        }
+                        // 用户确认杀进程后，后台终止进程并继续启动。
+                        backgroundExecutor.submit(() -> {
+                            killProcessOnPort(launchPort);
+                            startLaunchProcess(launchProject, launchPort, launchProfile);
+                        });
+                    });
+                    return null;
+                }
+                startLaunchProcess(launchProject, launchPort, launchProfile);
+                return null;
+            }
+        };
+        launchTask.setOnFailed(e -> {
+            Throwable ex = launchTask.getException();
+            Platform.runLater(() -> {
+                launchButton.setDisable(false);
+                showError("启动失败: " + (ex != null ? ex.getMessage() : "未知错误"));
+            });
+        });
 
-                // 不再监控进程输出，因为进程是完全独立的
+        backgroundExecutor.submit(launchTask);
+    }
+
+    /**
+     * 创建后台任务启动指定项目。
+     *
+     * @param launchProject 要启动的项目配置
+     * @param launchPort 启动端口
+     * @param launchProfile 启动 profile
+     */
+    private void startLaunchProcess(ProjectConfig launchProject, int launchPort, String launchProfile) {
+        Task<Void> innerTask = new Task<>() {
+            /**
+             * 后台启动 Java 进程并等待端口就绪。
+             *
+             * @return 无返回值
+             * @throws Exception 启动或端口等待异常
+             */
+            @Override
+            protected Void call() throws Exception {
+                Process process = startJavaApplication(launchProject, launchPort, launchProfile);
+
                 Platform.runLater(() -> {
                     appendLog("应用程序已作为独立进程启动");
-                    appendLog("进程ID: " + (process != null ? process.pid() : "unknown"));
+                    appendLog("进程ID: " + process.pid());
                     appendLog("即使关闭此工具，应用程序也将继续运行");
-
-                    // 启用停止按钮（虽然实际上无法通过工具停止独立进程）
+                    runningPort = launchPort;
+                    // 立即设置按钮为运行中状态
+                    launchButton.setDisable(true);
                     stopButton.setDisable(false);
+                });
+
+                // 轮询等待端口就绪（最多等30秒）
+                boolean portReady = false;
+                for (int i = 0; i < 60; i++) {
+                    Thread.sleep(500);
+                    if (checkPortInUse(launchPort)) {
+                        portReady = true;
+                        break;
+                    }
+                }
+
+                final boolean ready = portReady;
+                Platform.runLater(() -> {
+                    if (ready) {
+                        appendLog("端口 " + launchPort + " 已就绪");
+                    } else {
+                        appendLog("等待端口就绪超时，应用可能仍在启动中");
+                    }
+                    updateButtonStates(launchProject, launchPort);
                 });
                 return null;
             }
         };
+        innerTask.setOnFailed(e -> {
+            Throwable ex = innerTask.getException();
+            Platform.runLater(() -> {
+                launchButton.setDisable(false);
+                showError("启动失败: " + (ex != null ? ex.getMessage() : "未知错误"));
+            });
+        });
 
-        new Thread(launchTask).start();
+        backgroundExecutor.submit(innerTask);
     }
 
     // 处理停止操作
@@ -389,16 +554,85 @@ public class JarLauncherController {
             showError("请先选择项目");
             return;
         }
-        // 获取用户输入
-        int port = portField.getText().isEmpty() ?
-                selectedProject.getDefaultPort() : Integer.parseInt(portField.getText());
-        // 检查端口占用
-        if (checkPortInUse(port)) {
-            if (!handlePortConflict(port)) return;
+        // 停止时优先使用已记录的运行端口
+        int port;
+        if (runningPort > 0) {
+            port = runningPort;
+        } else {
+            String portText = portField.getText();
+            if (portText != null && !portText.trim().isEmpty()) {
+                try {
+                    port = Integer.parseInt(portText.trim());
+                } catch (NumberFormatException e) {
+                    port = selectedProject.getDefaultPort();
+                }
+            } else {
+                port = selectedProject.getDefaultPort();
+            }
         }
-        // 重置按钮状态
-        launchButton.setDisable(false);
+        final ProjectConfig stopProject = selectedProject;
+        final int stopPort = port;
         stopButton.setDisable(true);
+
+        backgroundExecutor.submit(() -> {
+            if (checkPortInUse(stopPort)) {
+                // 端口被占用，弹框确认（需切回FX线程）
+                Platform.runLater(() -> {
+                    if (confirmKillProcessOnPort(stopPort)) {
+                        // 用户确认杀进程后，在后台终止进程并等待端口释放。
+                        backgroundExecutor.submit(() -> {
+                            killProcessOnPort(stopPort);
+                            for (int i = 0; i < 10; i++) {
+                                try {
+                                    Thread.sleep(300);
+                                } catch (InterruptedException e) {
+                                    Thread.currentThread().interrupt();
+                                    break;
+                                }
+                                if (!checkPortInUse(stopPort)) break;
+                            }
+                            if (!checkPortInUse(stopPort)) {
+                                runningPort = -1;
+                            }
+                            Platform.runLater(() -> updateButtonStates(stopProject, stopPort));
+                        });
+                    } else {
+                        // 用户取消，恢复按钮状态
+                        updateButtonStates(stopProject, stopPort);
+                    }
+                });
+            } else {
+                // 端口未被占用，直接清除状态
+                runningPort = -1;
+                Platform.runLater(() -> updateButtonStates(stopProject, stopPort));
+            }
+        });
+    }
+
+    /**
+     * 根据项目运行状态更新按钮启用/禁用（使用默认端口）
+     */
+    private void updateButtonStates(ProjectConfig project) {
+        if (project == null) {
+            launchButton.setDisable(true);
+            stopButton.setDisable(true);
+            return;
+        }
+        updateButtonStates(project, project.getDefaultPort());
+    }
+
+    /**
+     * 根据项目运行状态更新按钮启用/禁用（指定端口）
+     */
+    private void updateButtonStates(ProjectConfig project, int port) {
+        if (project == null) {
+            launchButton.setDisable(true);
+            stopButton.setDisable(true);
+            return;
+        }
+        boolean running = isProjectRunning(project, port);
+        launchButton.setDisable(running);
+        stopButton.setDisable(!running);
     }
 
     // 处理删除项目操作
@@ -410,7 +644,7 @@ public class JarLauncherController {
         }
 
         // 检查项目是否正在运行
-        if (isProjectRunning(selectedProject)) {
+        if (isProjectRunning(selectedProject, runningPort > 0 ? runningPort : selectedProject.getDefaultPort())) {
             Alert runningAlert = new Alert(Alert.AlertType.WARNING);
             runningAlert.setTitle("项目正在运行");
             runningAlert.setHeaderText("项目 \"" + selectedProject.getName() + "\" 正在运行");
@@ -442,6 +676,7 @@ public class JarLauncherController {
             // 清空选择
             projectComboBox.getSelectionModel().clearSelection();
             selectedProject = null;
+            runningPort = -1;
 
             // 清空端口和环境字段
             portField.clear();
@@ -454,110 +689,62 @@ public class JarLauncherController {
         }
     }
 
-    // 检查特定项目的进程是否正在运行
-    private boolean isProjectProcessRunning(ProjectConfig project) {
-        try {
-            // 获取目标JAR文件名
-            String jarFileName = Paths.get(project.getTargetJar()).getFileName().toString();
-            String processName = jarFileName.replace(".jar", "");
-
-            // 根据操作系统选择不同的检查方式
-            String os = System.getProperty("os.name").toLowerCase();
-            ProcessBuilder pb;
-
-            if (os.contains("win")) {
-                // Windows: 使用 tasklist 命令
-                pb = new ProcessBuilder("tasklist", "/FI", "IMAGENAME eq java.exe", "/FO", "CSV", "/NH");
-            } else {
-                // Unix/Linux/macOS: 使用 ps 命令
-                pb = new ProcessBuilder("ps", "aux");
-            }
-
-            Process process = pb.start();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-
-            String line;
-            while ((line = reader.readLine()) != null) {
-                // 检查进程命令行是否包含目标JAR文件名
-                if (line.contains(jarFileName) || line.contains(project.getTargetJar())) {
-                    // 进一步检查是否包含项目特定的端口
-                    if (line.contains("--server.port=" + project.getDefaultPort())) {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
-        } catch (Exception e) {
-            appendLog("检查进程状态时出错: " + e.getMessage());
-            return false;
-        }
+    // 检查项目是否正在运行（使用默认端口）
+    private boolean isProjectRunning(ProjectConfig project) {
+        return isProjectRunning(project, project.getDefaultPort());
     }
 
-    // 检查项目是否正在运行
-    private boolean isProjectRunning(ProjectConfig project) {
-        // 首先检查默认端口是否被占用
-        if (checkPortInUse(project.getDefaultPort())) {
-            return true;
-        }
-        // 然后检查是否有对应的Java进程在运行
-        return isProjectProcessRunning(project);
+    // 检查项目是否在指定端口上运行（仅依赖端口检测，最可靠）
+    private boolean isProjectRunning(ProjectConfig project, int port) {
+        return checkPortInUse(port);
     }
 
     // 端口检查实现
     private boolean checkPortInUse(int port) {
-        try (SocketChannel socketChannel = SocketChannel.open()) {
-            return socketChannel.connect(new InetSocketAddress("localhost", port));
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress("127.0.0.1", port), 200);
+            return true;
         } catch (IOException e) {
             return false;
         }
     }
 
-    // 新增方法：获取占用端口的进程信息
+    // 获取占用端口的进程信息
     private String getProcessUsingPort(int port) {
         try {
-            String os = System.getProperty("os.name").toLowerCase();
-            if (os.contains("win")) {
-                // Windows系统使用netstat命令
-                ProcessBuilder pb = new ProcessBuilder("cmd.exe", "/c",
-                        "netstat -ano | findstr :" + port);
-                Process process = pb.start();
-                BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(process.getInputStream()));
+            // 使用 netstat 获取端口对应的 PID
+            ProcessBuilder pb = new ProcessBuilder("cmd.exe", "/c", "netstat -ano");
+            Process process = pb.start();
+            String pid = null;
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream()))) {
                 String line;
-                String targetLine = null;
-                // 查找匹配的端口行
+                String portSuffix = ":" + port + " ";
                 while ((line = reader.readLine()) != null) {
-                    if (line.contains(":" + port) && (line.contains("LISTENING") || line.contains("ESTABLISHED"))) {
-                        targetLine = line;
+                    if (line.contains(portSuffix) && line.contains("LISTENING")) {
+                        String[] parts = line.trim().split("\\s+");
+                        pid = parts[parts.length - 1];
                         break;
                     }
                 }
-                if (targetLine != null) {
-                    // 提取PID
-                    String[] parts = targetLine.trim().split("\\s+");
-                    if (parts.length >= 5) {
-                        String pid = parts[parts.length - 1];
-                        // 根据PID获取进程信息
-                        ProcessBuilder namePb = new ProcessBuilder("cmd.exe", "/c",
-                                "wmic process where processid=" + pid + " get name,processid,commandline");
-                        Process nameProcess = namePb.start();
-                        BufferedReader nameReader = new BufferedReader(
-                                new InputStreamReader(nameProcess.getInputStream(), "GBK"));
-                        StringBuilder processInfo = new StringBuilder();
-                        String nameLine;
-                        while ((nameLine = nameReader.readLine()) != null) {
-                            if (!nameLine.trim().isEmpty() && !nameLine.contains("CommandLine")) {
-                                processInfo.append(nameLine.trim()).append("\n");
-                            }
-                        }
-                        if (!processInfo.isEmpty()) {
-                            return processInfo.toString();
-                        } else {
-                            return "PID: " + pid;
+            }
+            if (pid != null) {
+                ProcessBuilder namePb = new ProcessBuilder("cmd.exe", "/c",
+                        "wmic process where processid=" + pid + " get name,commandline /FORMAT:LIST");
+                Process nameProcess = namePb.start();
+                StringBuilder processInfo = new StringBuilder();
+                try (BufferedReader nameReader = new BufferedReader(
+                        new InputStreamReader(nameProcess.getInputStream(), "GBK"))) {
+                    String nameLine;
+                    while ((nameLine = nameReader.readLine()) != null) {
+                        String trimmed = nameLine.trim();
+                        if (!trimmed.isEmpty() && !trimmed.startsWith("CommandLine")
+                                && !trimmed.startsWith("Name")) {
+                            processInfo.append(trimmed).append(" ");
                         }
                     }
                 }
+                return processInfo.length() > 0 ? "PID:" + pid + " " + processInfo : "PID:" + pid;
             }
         } catch (Exception e) {
             appendLog("获取进程信息时出错: " + e.getMessage());
@@ -565,50 +752,53 @@ public class JarLauncherController {
         return "未知进程";
     }
 
-    // 处理端口冲突
-    private boolean handlePortConflict(int port) {
+    // 确认是否终止端口占用进程，只在 JavaFX 线程中弹出确认框。
+    private boolean confirmKillProcessOnPort(int port) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("端口冲突");
         alert.setHeaderText("检测到端口 " + port + " 被占用");
         alert.setContentText("是否终止占用进程？");
 
         Optional<ButtonType> result = alert.showAndWait();
-        if (result.isPresent() && result.get() == ButtonType.OK) {
-            killProcessOnPort(port);
-            return true;
-        }
-        return false;
+        return result.isPresent() && result.get() == ButtonType.OK;
     }
 
-    // 终止占用进程（Windows）
+    // 终止占用进程
     private void killProcessOnPort(int port) {
         try {
-            // 先获取占用端口的进程PID
-            ProcessBuilder getPidPb = new ProcessBuilder(
-                    "cmd.exe", "/c",
-                    "for /f \"tokens=5\" %i in ('netstat -ano ^| findstr :" + port + "') do @echo %i"
-            );
+            ProcessBuilder getPidPb = new ProcessBuilder("cmd.exe", "/c", "netstat -ano");
             Process getPidProcess = getPidPb.start();
-
-            BufferedReader reader = new BufferedReader(new InputStreamReader(getPidProcess.getInputStream()));
-            String pidLine = reader.readLine();
-
-            if (pidLine != null && !pidLine.trim().isEmpty()) {
-                // 终止进程
+            String pid = null;
+            String portSuffix = ":" + port + " ";
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(getPidProcess.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.contains(portSuffix) && line.contains("LISTENING")) {
+                        String[] parts = line.trim().split("\\s+");
+                        pid = parts[parts.length - 1];
+                        break;
+                    }
+                }
+            }
+            if (pid != null) {
                 ProcessBuilder killPb = new ProcessBuilder(
-                        "cmd.exe", "/c",
-                        "taskkill /PID " + pidLine.trim() + " /F"
-                );
+                        "cmd.exe", "/c", "taskkill /PID " + pid + " /F");
                 Process killProcess = killPb.start();
-                int result = killProcess.waitFor();
-
+                boolean finished = killProcess.waitFor(5, TimeUnit.SECONDS);
+                if (!finished) {
+                    killProcess.destroyForcibly();
+                    appendLog("终止进程超时 (PID: " + pid + ")");
+                    return;
+                }
+                int result = killProcess.exitValue();
                 if (result == 0) {
-                    appendLog("成功终止占用端口 " + port + " 的进程 (PID: " + pidLine.trim() + ")");
+                    appendLog("成功终止占用端口 " + port + " 的进程 (PID: " + pid + ")");
                 } else {
-                    appendLog("终止进程失败 (PID: " + pidLine.trim() + ")");
+                    appendLog("终止进程失败 (PID: " + pid + ")");
                 }
             } else {
-                appendLog("未找到占用端口 " + port + " 的进程");
+                appendLog("未找到占用端口 " + port + " 的 LISTENING 进程");
             }
         } catch (Exception e) {
             showError("终止进程失败: " + e.getMessage());
@@ -635,139 +825,67 @@ public class JarLauncherController {
 
         if (Files.exists(target)) {
             // 清空目标目录
-            Files.walk(target)
-                    .sorted(Comparator.reverseOrder())
-                    .forEach(path -> {
-                        try {
-                            Files.delete(path);
-                        } catch (IOException e) { /* Ignore */ }
-                    });
+            try (Stream<Path> walk = Files.walk(target)) {
+                walk.sorted(Comparator.reverseOrder())
+                        .forEach(path -> {
+                            try {
+                                Files.delete(path);
+                            } catch (IOException e) { /* Ignore */ }
+                        });
+            }
         }
 
         if (Files.exists(source)) {
-            Files.walk(source)
-                    .forEach(sourcePath -> {
-                        Path targetPath = target.resolve(source.relativize(sourcePath));
-                        try {
-                            if (Files.isDirectory(sourcePath)) {
-                                Files.createDirectories(targetPath);
-                            } else {
-                                Files.copy(sourcePath, targetPath);
-                            }
-                        } catch (IOException e) {
-                            appendLog("复制失败: " + sourcePath + " -> " + targetPath);
+            try (Stream<Path> walk = Files.walk(source)) {
+                walk.forEach(sourcePath -> {
+                    Path targetPath = target.resolve(source.relativize(sourcePath));
+                    try {
+                        if (Files.isDirectory(sourcePath)) {
+                            Files.createDirectories(targetPath);
+                        } else {
+                            Files.copy(sourcePath, targetPath);
                         }
-                    });
+                    } catch (IOException e) {
+                        appendLog("复制失败: " + sourcePath + " -> " + targetPath);
+                    }
+                });
+            }
             appendLog("已复制lib目录到: " + target);
         }
     }
 
     // 启动Java应用
     private Process startJavaApplication(ProjectConfig project, int port, String profile) throws IOException {
-        // 根据操作系统选择不同的启动方式
-        String os = System.getProperty("os.name").toLowerCase();
-        ProcessBuilder pb;
+        List<String> command = new ArrayList<>();
+        command.add("cmd.exe");
+        command.add("/c");
 
-        if (os.contains("win")) {
-            // Windows: 使用 cmd /c start 命令确保完全独立运行
-            List<String> command = new ArrayList<>();
-            command.add("cmd.exe");
-            command.add("/c");
-            // 使用单条命令行，正确设置代码页并启动Java应用
-            StringBuilder fullCommand = new StringBuilder();
-            fullCommand.append("chcp 65001 >nul && "); // 设置UTF-8代码页
+        StringBuilder fullCommand = new StringBuilder();
+        fullCommand.append("chcp 65001 >nul && ");
+        fullCommand.append("java");
+        fullCommand.append(" -Dfile.encoding=UTF-8");
+        fullCommand.append(" -Dsun.stdout.encoding=UTF-8");
+        fullCommand.append(" -Dsun.stderr.encoding=UTF-8");
 
-            // 构建实际的Java命令
-            fullCommand.append("java");
-
-            // 添加字符编码设置到JVM选项开头
-            fullCommand.append(" -Dfile.encoding=UTF-8");
-            fullCommand.append(" -Dsun.stdout.encoding=UTF-8");
-            fullCommand.append(" -Dsun.stderr.encoding=UTF-8");
-
-            // 添加用户定义的JVM选项
-            if (project.getJvmOpts() != null && !project.getJvmOpts().isEmpty()) {
-                fullCommand.append(" ").append(project.getJvmOpts());
-            }
-
-            fullCommand.append(" -jar \"").append(project.getTargetJar()).append("\"");
-            fullCommand.append(" --server.port=").append(port);
-            fullCommand.append(" --spring.profiles.active=").append(profile);
-            fullCommand.append(" ").append(project.getOtherOpts()).append("\"");
-
-            // 使用start命令启动独立进程
-            command.add("start");
-            command.add("\"JAR_" + port + "\""); // 窗口标题
-//            command.add("/B"); // 后台运行
-            command.add("cmd.exe");
-            command.add("/c");
-            command.add(fullCommand.toString());
-
-            pb = new ProcessBuilder(command);
-        } else if (os.contains("nix") || os.contains("nux") || os.contains("aix")) {
-            // Linux/Unix: 使用 nohup 命令确保完全独立运行
-            List<String> command = new ArrayList<>();
-            command.add("nohup");
-            command.add("java");
-            command.add("-Dfile.encoding=UTF-8");
-            command.add("-Dsun.stdout.encoding=UTF-8");
-            command.add("-Dsun.stderr.encoding=UTF-8");
-
-            if (project.getJvmOpts() != null && !project.getJvmOpts().isEmpty()) {
-                String[] jvmOptsArray = project.getJvmOpts().trim().split("\\s+");
-                Collections.addAll(command, jvmOptsArray);
-            }
-
-            command.add("-jar");
-            command.add(project.getTargetJar());
-            command.add("--server.port=" + port);
-            command.add("--spring.profiles.active=" + profile);
-            command.add(" " + project.getOtherOpts());
-            command.add("&");
-
-            pb = new ProcessBuilder(command);
-        } else if (os.contains("mac")) {
-            // macOS: 使用类似Linux的方式
-            List<String> command = new ArrayList<>();
-            command.add("nohup");
-            command.add("java");
-            command.add("-Dfile.encoding=UTF-8");
-            command.add("-Dsun.stdout.encoding=UTF-8");
-            command.add("-Dsun.stderr.encoding=UTF-8");
-
-            if (project.getJvmOpts() != null && !project.getJvmOpts().isEmpty()) {
-                String[] jvmOptsArray = project.getJvmOpts().trim().split("\\s+");
-                Collections.addAll(command, jvmOptsArray);
-            }
-
-            command.add("-jar");
-            command.add(project.getTargetJar());
-            command.add("--server.port=" + port);
-            command.add("--spring.profiles.active=" + profile);
-            command.add(" " + project.getOtherOpts());
-            command.add("&");
-
-            pb = new ProcessBuilder(command);
-        } else {
-            // 其他系统使用标准方式，但确保独立运行
-            List<String> command = new ArrayList<>();
-            command.add("java");
-            command.add("-Dfile.encoding=UTF-8");
-            command.add("-Dsun.stdout.encoding=UTF-8");
-            command.add("-Dsun.stderr.encoding=UTF-8");
-
-            if (project.getJvmOpts() != null && !project.getJvmOpts().isEmpty()) {
-                String[] jvmOptsArray = project.getJvmOpts().trim().split("\\s+");
-                Collections.addAll(command, jvmOptsArray);
-            }
-
-            command.add("-jar");
-            command.add(project.getTargetJar());
-            command.add("--server.port=" + port);
-            command.add("--spring.profiles.active=" + profile);
-            command.add(" " + project.getOtherOpts());
-            pb = new ProcessBuilder(command);
+        if (project.getJvmOpts() != null && !project.getJvmOpts().isEmpty()) {
+            fullCommand.append(" ").append(project.getJvmOpts());
         }
+
+        fullCommand.append(" -jar \"").append(project.getTargetJar()).append("\"");
+        fullCommand.append(" --server.port=").append(port);
+        fullCommand.append(" --spring.profiles.active=").append(profile);
+        String otherOpts = project.getOtherOpts();
+        if (otherOpts != null && !otherOpts.trim().isEmpty()) {
+            fullCommand.append(" ").append(otherOpts.trim());
+        }
+
+        command.add("start");
+        command.add("\"JAR_" + port + "\"");
+        command.add("cmd.exe");
+        command.add("/c");
+        command.add(fullCommand.toString());
+
+        ProcessBuilder pb = new ProcessBuilder(command);
 
         // 设置工作目录
         Path jarPath = Paths.get(project.getTargetJar());
@@ -783,65 +901,105 @@ public class JarLauncherController {
         // 设置环境变量确保独立性
         Map<String, String> env = pb.environment();
         env.put("JAVA_TOOL_OPTIONS", ""); // 清除可能影响独立性的工具选项
-        // 设置字符编码环境变量
-        env.put("LANG", "zh_CN.UTF-8");
-        env.put("LC_ALL", "zh_CN.UTF-8");
 
         // 启动进程
         Process process = pb.start();
 
-        // 对于Windows系统，立即断开与进程的连接以确保独立性
-        if (os.contains("win")) {
-            try {
-                // 短暂等待确认命令已发送
-                Thread.sleep(100);
-                // 关闭流以断开连接
-                process.getOutputStream().close();
-                process.getInputStream().close();
-                process.getErrorStream().close();
-            } catch (Exception e) {
-                // 忽略关闭流时的异常
-            }
+        try {
+            Thread.sleep(100);
+            process.getOutputStream().close();
+            process.getInputStream().close();
+            process.getErrorStream().close();
+        } catch (Exception e) {
+            // 忽略关闭流时的异常
         }
-        appendLog("已启动独立进程，PID: " + (process != null ? process.pid() : "unknown") + "启动指令:" + pb.command());
+        appendLog("已启动独立进程，PID: " + process.pid() + "，启动指令: " + pb.command());
         return process;
     }
 
-    // 日志输出辅助方法
+    // 日志输出辅助方法（线程安全）
+    private static final DateTimeFormatter LOG_TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss");
+
+    /**
+     * 线程安全地追加 JAR 启动器日志。
+     *
+     * @param message 日志内容
+     */
     private void appendLog(String message) {
-        String timestamp = new SimpleDateFormat("HH:mm:ss").format(new Date());
-        logArea.appendText("[" + timestamp + "] " + message + "\n");
+        String timestamp = LocalTime.now().format(LOG_TIME_FMT);
+        String line = "[" + timestamp + "] " + message + "\n";
+        if (Platform.isFxApplicationThread()) {
+            appendLogOnFxThread(line);
+        } else {
+            Platform.runLater(() -> appendLogOnFxThread(line));
+        }
     }
 
-    // 进程输出辅助方法
-    private void appendProcessOutput(String message) {
-        Platform.runLater(() -> {
-            String timestamp = new SimpleDateFormat("HH:mm:ss").format(new Date());
-            processOutputArea.appendText("[" + timestamp + "] " + message + "\n");
-        });
+    /**
+     * 在 JavaFX 线程中追加日志并裁剪旧内容。
+     *
+     * @param line 已格式化的日志行
+     */
+    private void appendLogOnFxThread(String line) {
+        if (logArea == null) {
+            return;
+        }
+        trimLogs();
+        logArea.appendText(line);
+        logArea.setScrollTop(Double.MAX_VALUE);
+    }
+
+    /**
+     * 裁剪旧日志，避免 TextArea 长时间运行后占用过多内存。
+     */
+    private void trimLogs() {
+        int lineCount = logArea.getParagraphs().size();
+        if (lineCount < MAX_LOG_LINES) {
+            return;
+        }
+
+        String text = logArea.getText();
+        int linesToRemove = Math.max(100, lineCount - MAX_LOG_LINES + 1);
+        int deleteIndex = 0;
+        while (linesToRemove > 0) {
+            int nextNewline = text.indexOf('\n', deleteIndex);
+            if (nextNewline < 0) {
+                break;
+            }
+            deleteIndex = nextNewline + 1;
+            linesToRemove--;
+        }
+        if (deleteIndex > 0) {
+            logArea.deleteText(0, deleteIndex);
+        }
     }
 
     // 错误提示
     private void showError(String message) {
-        Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setTitle("错误");
-        alert.setContentText(message);
-        alert.showAndWait();
+        Runnable showAlert = () -> {
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("错误");
+            alert.setContentText(message);
+            alert.showAndWait();
+        };
+        if (Platform.isFxApplicationThread()) {
+            showAlert.run();
+        } else {
+            Platform.runLater(showAlert);
+        }
     }
 
-    // 流读取器（用于捕获进程输出）
-    private static class StreamGobbler implements Runnable {
-        private final InputStream inputStream;
-        private final Consumer<String> consumer;
-
-        public StreamGobbler(InputStream inputStream, Consumer<String> consumer) {
-            this.inputStream = inputStream;
-            this.consumer = consumer;
-        }
-
-        @Override
-        public void run() {
-            new BufferedReader(new InputStreamReader(inputStream)).lines().forEach(consumer);
+    /**
+     * 清理 JAR 启动器后台资源。
+     */
+    public void cleanup() {
+        backgroundExecutor.shutdownNow();
+        try {
+            if (!backgroundExecutor.awaitTermination(2, TimeUnit.SECONDS)) {
+                appendLog("JAR启动器后台任务未在超时时间内完全停止");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 }

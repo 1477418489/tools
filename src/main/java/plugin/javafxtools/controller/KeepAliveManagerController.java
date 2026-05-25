@@ -15,67 +15,172 @@ import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import plugin.javafxtools.model.KeepAliveConfig;
+import plugin.javafxtools.model.KeepAliveMethod;
 import plugin.javafxtools.service.EnhancedKeepAliveService;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.text.SimpleDateFormat;
+
 import java.util.ArrayList;
-import java.util.Date;
+
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import plugin.javafxtools.model.IntervalUnit;
 import java.util.concurrent.TimeUnit;
 
-public class KeepAliveManagerController {
+import plugin.javafxtools.base.BaseController;
+
+/**
+ * 域名保活管理页签控制器，负责配置维护、持久化和保活服务联动。
+ */
+public class KeepAliveManagerController extends BaseController {
+    /**
+     * 域名保活配置文件路径。
+     */
     private static final String CONFIG_FILE = "userData/keepAlive.json";
+
+    /**
+     * 域名保活配置列表反序列化类型。
+     */
     private static final TypeReference<List<KeepAliveConfig>> KEEP_ALIVE_CONFIG_LIST_TYPE = new TypeReference<>() {};
+
+    /**
+     * 保活配置 JSON 读写器。
+     */
     private static final ObjectMapper CONFIG_MAPPER = new ObjectMapper()
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
             .configure(SerializationFeature.INDENT_OUTPUT, true);
 
+    /**
+     * 保活配置表格。
+     */
     @FXML
     private TableView<KeepAliveConfig> configTableView;
+
+    /**
+     * 域名列。
+     */
     @FXML
     private TableColumn<KeepAliveConfig, String> domainColumn;
+
+    /**
+     * 启用状态列。
+     */
     @FXML
     private TableColumn<KeepAliveConfig, Boolean> enabledColumn;
+
+    /**
+     * 保活方式列。
+     */
+    @FXML
+    private TableColumn<KeepAliveConfig, KeepAliveMethod> methodColumn;
+
+    /**
+     * 间隔范围列。
+     */
     @FXML
     private TableColumn<KeepAliveConfig, String> intervalColumn;
-    @FXML
-    private TableColumn<KeepAliveConfig, KeepAliveConfig.TimeUnit> unitColumn;
 
+    /**
+     * 间隔单位列。
+     */
+    @FXML
+    private TableColumn<KeepAliveConfig, IntervalUnit> unitColumn;
+
+    /**
+     * 域名或 URL 输入框。
+     */
     @FXML
     private TextField domainField;
+
+    /**
+     * 启用状态复选框。
+     */
     @FXML
     private CheckBox enabledCheckBox;
+
+    /**
+     * 保活方式选择框。
+     */
+    @FXML
+    private ComboBox<KeepAliveMethod> methodComboBox;
+
+    /**
+     * 最小保活间隔输入器。
+     */
     @FXML
     private Spinner<Integer> minIntervalSpinner;
+
+    /**
+     * 最大保活间隔输入器。
+     */
     @FXML
     private Spinner<Integer> maxIntervalSpinner;
+
+    /**
+     * 间隔单位选择框。
+     */
     @FXML
-    private ComboBox<KeepAliveConfig.TimeUnit> unitComboBox;
+    private ComboBox<IntervalUnit> unitComboBox;
+
+    /**
+     * 配置增删改保存按钮。
+     */
     @FXML
     private Button addButton, updateButton, removeButton, saveButton;
+
+    /**
+     * 域名保活模块日志输出区。
+     */
     @FXML
     private TextArea logArea;
+
+    /**
+     * 后台操作进度指示器。
+     */
     @FXML
     private ProgressIndicator progressIndicator;
+
+    /**
+     * 配置数量标签。
+     */
     @FXML
     private Label configCountLabel;
+
+    /**
+     * 服务运行状态标签。
+     */
     @FXML
     private Label statusLabel;
+
+    /**
+     * 当前活跃域名数量标签。
+     */
     @FXML
     private Label activeCountLabel;
+
+    /**
+     * 最后更新时间标签。
+     */
     @FXML
     private Label lastUpdateLabel;
 
+    /**
+     * 当前页面展示的保活配置列表。
+     */
     private ObservableList<KeepAliveConfig> configList = FXCollections.observableArrayList();
+
+    /**
+     * 域名保活执行服务。
+     */
     private EnhancedKeepAliveService keepAliveService;
 
-    // 使用线程池处理后台任务
+    /**
+     * 后台文件读写和服务更新执行器。
+     */
     private final ExecutorService backgroundExecutor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r);
         t.setDaemon(true);
@@ -84,9 +189,14 @@ public class KeepAliveManagerController {
         return t;
     });
 
-    // 防重复提交标志
+    /**
+     * 防止重复提交增删改保存操作的标志。
+     */
     private final AtomicBoolean isUpdating = new AtomicBoolean(false);
 
+    /**
+     * 初始化域名保活管理页签。
+     */
     @FXML
     public void initialize() {
         keepAliveService = new EnhancedKeepAliveService(logArea);
@@ -96,6 +206,7 @@ public class KeepAliveManagerController {
 
         setupTableView();
         setupUnitComboBox();
+        setupMethodComboBox();
         setupIntervalSpinners();
         setupSelectionListener();
         // 异步加载配置（避免阻塞UI）
@@ -106,6 +217,10 @@ public class KeepAliveManagerController {
         });
         afterOperation("初始化");
     }
+
+    /**
+     * 更新状态栏中的配置数量、活跃数量和最近更新时间。
+     */
     private void updateUIStatus() {
         if (configCountLabel != null) {
             configCountLabel.setText(configList.size() + " 条配置");
@@ -131,10 +246,14 @@ public class KeepAliveManagerController {
         }
 
         if (lastUpdateLabel != null) {
-            SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss");
-            lastUpdateLabel.setText("最后更新: " + sdf.format(new Date()));
+            lastUpdateLabel.setText("最后更新: " + java.time.LocalTime.now().format(
+                    java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")));
         }
     }
+
+    /**
+     * 初始化按钮、进度条和日志区域状态。
+     */
     private void setupInitialUI() {
         // 隐藏进度指示器
         if (progressIndicator != null) {
@@ -149,6 +268,11 @@ public class KeepAliveManagerController {
         }
     }
 
+    /**
+     * 批量设置配置操作按钮可用状态。
+     *
+     * @param disabled 是否禁用
+     */
     private void setButtonsDisabled(boolean disabled) {
         if (addButton != null) {
             addButton.setDisable(disabled);
@@ -164,12 +288,18 @@ public class KeepAliveManagerController {
         }
     }
 
+    /**
+     * 初始化保活配置表格列绑定和选择模式。
+     */
     private void setupTableView() {
         domainColumn.setCellValueFactory(cellData ->
                 new SimpleStringProperty(cellData.getValue().getDomain()));
 
         enabledColumn.setCellValueFactory(cellData ->
                 new SimpleBooleanProperty(cellData.getValue().isEnabled()));
+
+        methodColumn.setCellValueFactory(cellData ->
+                new SimpleObjectProperty<>(cellData.getValue().getMethod()));
 
         intervalColumn.setCellValueFactory(cellData -> {
             KeepAliveConfig config = cellData.getValue();
@@ -190,15 +320,32 @@ public class KeepAliveManagerController {
         configTableView.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
     }
 
+    /**
+     * 初始化间隔单位选择框。
+     */
     private void setupUnitComboBox() {
         unitComboBox.setItems(FXCollections.observableArrayList(
-                KeepAliveConfig.TimeUnit.MINUTES,
-                KeepAliveConfig.TimeUnit.HOURS,
-                KeepAliveConfig.TimeUnit.DAYS
+                IntervalUnit.MINUTES,
+                IntervalUnit.HOURS,
+                IntervalUnit.DAYS
         ));
-        unitComboBox.setValue(KeepAliveConfig.TimeUnit.MINUTES);
+        unitComboBox.setValue(IntervalUnit.MINUTES);
     }
 
+    /**
+     * 初始化保活方式选择框。
+     */
+    private void setupMethodComboBox() {
+        methodComboBox.setItems(FXCollections.observableArrayList(
+                KeepAliveMethod.HTTP,
+                KeepAliveMethod.PING
+        ));
+        methodComboBox.setValue(KeepAliveMethod.HTTP);
+    }
+
+    /**
+     * 初始化最小和最大间隔输入器。
+     */
     private void setupIntervalSpinners() {
         minIntervalSpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(
                 1, 1000, 10));
@@ -214,18 +361,27 @@ public class KeepAliveManagerController {
         });
     }
 
+    /**
+     * 初始化表格选中项监听器。
+     */
     private void setupSelectionListener() {
         configTableView.getSelectionModel().selectedItemProperty().addListener(
                 (observable, oldValue, newValue) -> showConfigDetails(newValue)
         );
     }
 
+    /**
+     * 将选中配置回填到表单。
+     *
+     * @param config 选中的保活配置
+     */
     private void showConfigDetails(KeepAliveConfig config) {
         if (config != null) {
             // 批量更新UI，减少单独更新
             runOnFxThread(() -> {
                 domainField.setText(config.getDomain());
                 enabledCheckBox.setSelected(config.isEnabled());
+                methodComboBox.setValue(config.getMethod());
                 minIntervalSpinner.getValueFactory().setValue(config.getMinInterval());
                 maxIntervalSpinner.getValueFactory().setValue(config.getMaxInterval());
                 unitComboBox.setValue(config.getUnit());
@@ -233,6 +389,9 @@ public class KeepAliveManagerController {
         }
     }
 
+    /**
+     * 新增保活配置。
+     */
     @FXML
     private void handleAdd() {
         String domain = domainField.getText().trim();
@@ -257,6 +416,7 @@ public class KeepAliveManagerController {
         KeepAliveConfig config = new KeepAliveConfig(
                 domain,
                 enabledCheckBox.isSelected(),
+                methodComboBox.getValue(),
                 minInterval,
                 maxInterval,
                 unitComboBox.getValue()
@@ -272,14 +432,12 @@ public class KeepAliveManagerController {
         // 异步更新服务（后台线程）
         backgroundExecutor.submit(() -> {
             try {
-                if (config.isEnabled()) {
-                    keepAliveService.startDomain(domain);
-                }
+                keepAliveService.updateConfigs(new ArrayList<>(configList));
                 saveConfigsToFileBackground();
 
                 runOnFxThread(() -> {
                     clearInputFields();
-                    logInfo("已添加配置: " + domain);
+                    afterOperation("添加");
                 });
             } catch (Exception e) {
                 runOnFxThread(() -> logError("添加配置失败: " + e.getMessage()));
@@ -287,9 +445,11 @@ public class KeepAliveManagerController {
                 isUpdating.set(false);
             }
         });
-        afterOperation("添加");
     }
 
+    /**
+     * 更新当前选中的保活配置。
+     */
     @FXML
     private void handleUpdate() {
         KeepAliveConfig selectedConfig = configTableView.getSelectionModel().getSelectedItem();
@@ -325,6 +485,7 @@ public class KeepAliveManagerController {
         // 在UI线程中更新表格数据
         selectedConfig.setDomain(domain);
         selectedConfig.setEnabled(enabledCheckBox.isSelected());
+        selectedConfig.setMethod(methodComboBox.getValue());
         selectedConfig.setMinInterval(minInterval);
         selectedConfig.setMaxInterval(maxInterval);
         selectedConfig.setUnit(unitComboBox.getValue());
@@ -345,6 +506,7 @@ public class KeepAliveManagerController {
 
                 runOnFxThread(() -> {
                     logInfo("已更新配置: " + domain);
+                    afterOperation("修改");
                 });
             } catch (Exception e) {
                 runOnFxThread(() -> logError("更新配置失败: " + e.getMessage()));
@@ -352,9 +514,11 @@ public class KeepAliveManagerController {
                 isUpdating.set(false);
             }
         });
-        afterOperation("修改");
     }
 
+    /**
+     * 删除当前选中的保活配置。
+     */
     @FXML
     private void handleRemove() {
         KeepAliveConfig selectedConfig = configTableView.getSelectionModel().getSelectedItem();
@@ -379,6 +543,7 @@ public class KeepAliveManagerController {
                     runOnFxThread(() -> {
                         logInfo("已删除配置: " + domain);
                         clearInputFields();
+                        afterOperation("删除");
                     });
                 } catch (Exception e) {
                     runOnFxThread(() -> logError("删除配置失败: " + e.getMessage()));
@@ -389,9 +554,11 @@ public class KeepAliveManagerController {
         } else {
             showAlert("请选择要删除的配置");
         }
-        afterOperation("删除");
     }
 
+    /**
+     * 保存全部保活配置。
+     */
     @FXML
     private void handleSave() {
         if (!beginUpdate()) {
@@ -409,6 +576,7 @@ public class KeepAliveManagerController {
                     showProgress(false);
                     logInfo("已保存所有配置");
                     showInfoAlert("保存成功", "配置已成功保存到文件");
+                    afterOperation("保存");
                 });
             } catch (Exception e) {
                 runOnFxThread(() -> {
@@ -420,16 +588,27 @@ public class KeepAliveManagerController {
                 isUpdating.set(false);
             }
         });
-        afterOperation("保存");
     }
 
+    /**
+     * 异步加载保活配置文件。
+     */
     private void loadConfigsAsync() {
         Task<List<KeepAliveConfig>> loadTask = new Task<>() {
+            /**
+             * 后台读取保活配置文件。
+             *
+             * @return 保活配置列表
+             * @throws Exception 配置读取异常
+             */
             @Override
             protected List<KeepAliveConfig> call() throws Exception {
                 return loadConfigsFromFileBackground();
             }
 
+            /**
+             * 配置加载成功后刷新表格和服务。
+             */
             @Override
             protected void succeeded() {
                 List<KeepAliveConfig> loadedList = getValue();
@@ -446,6 +625,9 @@ public class KeepAliveManagerController {
                 }
             }
 
+            /**
+             * 配置加载失败后恢复按钮状态。
+             */
             @Override
             protected void failed() {
                 logError("加载配置文件失败: " + getException().getMessage());
@@ -457,6 +639,11 @@ public class KeepAliveManagerController {
         backgroundExecutor.submit(loadTask);
     }
 
+    /**
+     * 在后台线程读取配置文件。
+     *
+     * @return 保活配置列表
+     */
     private List<KeepAliveConfig> loadConfigsFromFileBackground() {
         File configFile = new File(CONFIG_FILE);
 
@@ -490,6 +677,11 @@ public class KeepAliveManagerController {
         }
     }
 
+    /**
+     * 在后台线程保存当前配置列表。
+     *
+     * @throws IOException 文件写入失败时抛出
+     */
     private void saveConfigsToFileBackground() throws IOException {
         File configFile = ensureConfigDirectoryExists();
 
@@ -497,6 +689,9 @@ public class KeepAliveManagerController {
         CONFIG_MAPPER.writeValue(configFile, listToSave);
     }
 
+    /**
+     * 写入空配置文件。
+     */
     private void saveEmptyConfigFile() {
         try {
             File configFile = ensureConfigDirectoryExists();
@@ -508,6 +703,11 @@ public class KeepAliveManagerController {
         }
     }
 
+    /**
+     * 确保配置文件父目录存在。
+     *
+     * @return 配置文件对象
+     */
     private File ensureConfigDirectoryExists() {
         File configFile = new File(CONFIG_FILE);
         File parent = configFile.getParentFile();
@@ -517,6 +717,11 @@ public class KeepAliveManagerController {
         return configFile;
     }
 
+    /**
+     * 显示或隐藏后台操作进度。
+     *
+     * @param show 是否显示
+     */
     private void showProgress(boolean show) {
         if (progressIndicator != null) {
             progressIndicator.setVisible(show);
@@ -524,29 +729,39 @@ public class KeepAliveManagerController {
         }
     }
 
+    /**
+     * 获取域名保活模块日志输出区域。
+     *
+     * @return 日志输出区域
+     */
+    @Override
+    public TextArea getLogArea() {
+        return logArea;
+    }
+
+    /**
+     * 记录信息日志。
+     *
+     * @param message 日志内容
+     */
     private void logInfo(String message) {
-        runOnFxThread(() -> {
-            if (logArea != null) {
-                // 简化日志追加，避免频繁滚动
-                logArea.appendText("[INFO] " + message + "\n");
-
-                // 偶尔滚动到底部
-                if (Math.random() < 0.1) {
-                    logArea.setScrollTop(Double.MAX_VALUE);
-                }
-            }
-        });
+        info(message);
     }
 
+    /**
+     * 记录错误日志。
+     *
+     * @param message 日志内容
+     */
     private void logError(String message) {
-        runOnFxThread(() -> {
-            if (logArea != null) {
-                logArea.appendText("[ERROR] " + message + "\n");
-                logArea.setScrollTop(Double.MAX_VALUE);
-            }
-        });
+        error(message);
     }
 
+    /**
+     * 显示警告弹窗。
+     *
+     * @param message 警告内容
+     */
     private void showAlert(String message) {
         runOnFxThread(() -> {
             Alert alert = new Alert(Alert.AlertType.WARNING);
@@ -557,6 +772,12 @@ public class KeepAliveManagerController {
         });
     }
 
+    /**
+     * 显示信息弹窗。
+     *
+     * @param title 弹窗标题
+     * @param message 弹窗内容
+     */
     private void showInfoAlert(String title, String message) {
         runOnFxThread(() -> {
             Alert alert = new Alert(Alert.AlertType.INFORMATION);
@@ -567,18 +788,33 @@ public class KeepAliveManagerController {
         });
     }
 
+    /**
+     * 清空配置编辑表单。
+     */
     private void clearInputFields() {
         domainField.clear();
         enabledCheckBox.setSelected(false);
+        methodComboBox.setValue(KeepAliveMethod.HTTP);
         minIntervalSpinner.getValueFactory().setValue(10);
         maxIntervalSpinner.getValueFactory().setValue(30);
-        unitComboBox.setValue(KeepAliveConfig.TimeUnit.MINUTES);
+        unitComboBox.setValue(IntervalUnit.MINUTES);
     }
 
+    /**
+     * 校验保活地址是否为 HTTP/HTTPS URL。
+     *
+     * @param url 待校验地址
+     * @return 是否有效
+     */
     private boolean isValidUrl(String url) {
         return url != null && (url.startsWith("http://") || url.startsWith("https://"));
     }
 
+    /**
+     * 尝试进入更新状态。
+     *
+     * @return 是否成功进入更新状态
+     */
     private boolean beginUpdate() {
         if (isUpdating.compareAndSet(false, true)) {
             return true;
@@ -587,6 +823,11 @@ public class KeepAliveManagerController {
         return false;
     }
 
+    /**
+     * 确保指定任务在 JavaFX 线程执行。
+     *
+     * @param runnable 要执行的任务
+     */
     private void runOnFxThread(Runnable runnable) {
         if (Platform.isFxApplicationThread()) {
             runnable.run();
@@ -595,10 +836,20 @@ public class KeepAliveManagerController {
         }
     }
 
+    /**
+     * 设置外部注入的保活服务。
+     *
+     * @param service 保活服务实例
+     */
     public void setKeepAliveService(EnhancedKeepAliveService service) {
         this.keepAliveService = service;
     }
 
+    /**
+     * 获取当前配置列表。
+     *
+     * @return 保活配置列表
+     */
     public ObservableList<KeepAliveConfig> getConfigList() {
         return configList;
     }
@@ -641,12 +892,13 @@ public class KeepAliveManagerController {
 
         logInfo("保活管理器资源清理完成");
     }
+
+    /**
+     * 清空域名保活模块日志。
+     */
     @FXML
     private void handleClearLogs() {
-        if (logArea != null) {
-            logArea.clear();
-            logInfo("日志已清空");
-        }
+        handleClearLog();
     }
 
     // 在所有操作完成后调用updateUIStatus()

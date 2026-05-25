@@ -6,7 +6,7 @@
 
 <GridPane xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1"
           fx:controller="plugin.javafxtools.controller.AppLauncherController"
-          hgap="10" vgap="10" prefWidth="1000" prefHeight="700">
+          hgap="12" vgap="12" prefWidth="1000" prefHeight="700" styleClass="tool-page">
 
     <padding>
         <Insets bottom="10" left="10" right="10" top="10"/>
@@ -14,39 +14,39 @@
 
     <!-- 第0行 - 应用程序路径输入 -->
     <Label text="应用程序路径:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
-    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="0">
+    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="0" styleClass="toolbar-card">
         <TextField fx:id="appPathField" prefWidth="500"/>
-        <Button fx:id="browseButton" text="浏览..." onAction="#handleBrowse"/>
-        <Button fx:id="addButton" text="添加" onAction="#handleAdd"/>
+        <Button fx:id="browseButton" text="浏览..." onAction="#handleBrowse" styleClass="secondary-button"/>
+        <Button fx:id="addButton" text="添加" onAction="#handleAdd" styleClass="success-button"/>
     </HBox>
 
     <!-- 第1行 - 应用程序列表 -->
     <Label text="应用程序列表:" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
-    <VBox GridPane.columnIndex="1" GridPane.rowIndex="1">
+    <VBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="1" styleClass="content-card">
         <ListView fx:id="appListView"
                   prefHeight="200" GridPane.vgrow="NEVER" styleClass="enhanced-list-view"/>
         <HBox spacing="10" alignment="CENTER_RIGHT">
-            <Button text="上移" onAction="#handleMoveUp"/>
-            <Button text="下移" onAction="#handleMoveDown"/>
+            <Button text="上移" onAction="#handleMoveUp" styleClass="secondary-button"/>
+            <Button text="下移" onAction="#handleMoveDown" styleClass="secondary-button"/>
         </HBox>
     </VBox>
 
     <!-- 第2行 - 操作按钮 -->
     <Label text="操作:" GridPane.columnIndex="0" GridPane.rowIndex="2"/>
-    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="2">
-        <Button fx:id="launchSingleButton" text="启动选中" onAction="#handleLaunchSingle"/>
-        <Button fx:id="launchAllButton" text="启动所有" onAction="#handleLaunchAll"/>
-        <Button fx:id="killProcessButton" text="结束进程" onAction="#handleKillProcess"/>
-        <Button fx:id="refreshStatusButton" text="手动刷新状态" onAction="#handleRefreshStatus"/>
-        <Button fx:id="removeButton" text="移除选中" onAction="#handleRemove"/>
-        <Button fx:id="clearButton" text="清除所有" onAction="#handleClear"/>
+    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="2" styleClass="toolbar-card">
+        <Button fx:id="launchSingleButton" text="启动选中" onAction="#handleLaunchSingle" styleClass="success-button"/>
+        <Button fx:id="launchAllButton" text="启动所有" onAction="#handleLaunchAll" styleClass="success-button"/>
+        <Button fx:id="killProcessButton" text="结束进程" onAction="#handleKillProcess" styleClass="danger-button"/>
+        <Button fx:id="refreshStatusButton" text="手动刷新状态" onAction="#handleRefreshStatus" styleClass="secondary-button"/>
+        <Button fx:id="removeButton" text="移除选中" onAction="#handleRemove" styleClass="secondary-button"/>
+        <Button fx:id="clearButton" text="清除所有" onAction="#handleClear" styleClass="secondary-button"/>
     </HBox>
 
     <!-- 第3行 - 日志输出 -->
     <HBox spacing="10" alignment="CENTER_LEFT" GridPane.columnIndex="0" GridPane.rowIndex="3">
-        <Label text="执行日志/响应内容:"/>
-        <Button text="清空日志" onAction="#handleClearLog"/>
+        <Label text="执行日志/响应内容:" styleClass="section-title"/>
+        <Button text="清空日志" onAction="#handleClearLog" styleClass="secondary-button"/>
     </HBox>
     <TextArea fx:id="logArea" editable="false" GridPane.columnIndex="1" GridPane.rowIndex="3"
-              GridPane.vgrow="ALWAYS"/>
+              GridPane.vgrow="ALWAYS" styleClass="log-area"/>
 </GridPane>

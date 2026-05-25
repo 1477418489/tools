@@ -10,11 +10,25 @@ import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 
+/**
+ * 全局日志服务，负责向主界面中央日志区域分发日志。
+ */
 public class LoggingService {
+    /**
+     * 单个日志区域保留的最大日志行数。
+     */
     private static final int MAX_LOG_LINES = 800;
+
+    /**
+     * 中央日志区域弱引用列表，避免控制器释放后仍被服务持有。
+     */
     private final List<WeakReference<TextArea>> globalLogAreas = new ArrayList<>();
 
-    // 添加全局日志区域（如中央日志）
+    /**
+     * 注册全局日志区域。
+     *
+     * @param logArea 要注册的日志区域
+     */
     public synchronized void addGlobalLogArea(TextArea logArea) {
         if (logArea == null) {
             return;
@@ -28,32 +42,47 @@ public class LoggingService {
         }
     }
 
-    // 记录全局日志（中央）
+    /**
+     * 记录信息级别全局日志。
+     *
+     * @param message 日志内容
+     */
     public void info(String message) {
-        log("INFO", message, true);
+        log("INFO", message);
     }
 
-    // 记录错误日志（中央）
+    /**
+     * 记录错误级别全局日志。
+     *
+     * @param message 日志内容
+     */
     public void error(String message) {
-        log("ERROR", message, false);
+        log("ERROR", message);
     }
 
-    private void log(String level, String message, boolean isGlobal) {
+    /**
+     * 向所有全局日志区域追加日志。
+     *
+     * @param level 日志级别
+     * @param message 日志内容
+     */
+    private void log(String level, String message) {
         String formattedMessage = String.format("[%s][%s] %s",
                 TimeUtils.formatDateTime(new Date()), level, message);
 
         Platform.runLater(() -> {
-            if (isGlobal) {
-                synchronized (this) {
-                    cleanupReleasedAreas();
-                    for (WeakReference<TextArea> areaRef : globalLogAreas) {
-                        safeAppend(areaRef.get(), formattedMessage);
-                    }
+            synchronized (this) {
+                cleanupReleasedAreas();
+                for (WeakReference<TextArea> areaRef : globalLogAreas) {
+                    safeAppend(areaRef.get(), formattedMessage);
                 }
             }
         });
     }
 
+    /**
+     * 清理已经被释放的日志区域引用。
+     */
     private synchronized void cleanupReleasedAreas() {
         Iterator<WeakReference<TextArea>> iterator = globalLogAreas.iterator();
         while (iterator.hasNext()) {
@@ -63,15 +92,25 @@ public class LoggingService {
         }
     }
 
-    // 安全追加日志（避免NPE）
+    /**
+     * 安全追加日志到单个文本区域。
+     *
+     * @param area 日志文本区域
+     * @param message 已格式化的日志内容
+     */
     private void safeAppend(TextArea area, String message) {
         if (area != null && area.getScene() != null) {
             trimLogLines(area);
             area.appendText(message + "\n");
-            area.setScrollTop(Double.MAX_VALUE); // 自动滚动到底部
+            area.setScrollTop(Double.MAX_VALUE);
         }
     }
 
+    /**
+     * 控制日志区域行数，删除超过限制的旧日志。
+     *
+     * @param area 日志文本区域
+     */
     private void trimLogLines(TextArea area) {
         String text = area.getText();
         if (text == null || text.isEmpty()) {
@@ -113,7 +152,6 @@ public class LoggingService {
                 }
             }
         });
-        System.out.println("所有日志区域已清空");
     }
 
     /**

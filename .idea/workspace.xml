@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="ee1c44d2-bcb9-434c-ac67-b5e91efd8462" name="更改" comment="init">
+      <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/module-info.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/module-info.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/AppLauncherController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/AppLauncherController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/DataFormatController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/DataFormatController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/HttpRequestController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/HttpRequestController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/JarLauncherController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/JarLauncherController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/KeepAliveManagerController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/KeepAliveManagerController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/MainController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/MainController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/MemoReminderController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/MemoReminderController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/NetworkToolsController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/NetworkToolsController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/StrDataFormatController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/StrDataFormatController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/WebSocketController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/WebSocketController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/model/KeepAliveConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/model/KeepAliveConfig.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/model/MemoReminder.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/model/MemoReminder.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/EnhancedKeepAliveService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/EnhancedKeepAliveService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/css/styles.css" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/css/styles.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/app-launcher-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/app-launcher-view.fxml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/data-format-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/data-format-view.fxml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/keepalive-manager-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/keepalive-manager-view.fxml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/network-tools-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/network-tools-view.fxml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/strData-format-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/strData-format-view.fxml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/websocket-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/websocket-view.fxml" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="FxmlFile" />
+        <option value="Class" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+    <option name="UPDATE_TYPE" value="REBASE" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;453012269&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "https://github.com/1477418489/tools.git",
+    "accountId": "3cd50728-e35c-43fd-8867-013ab0e43e47"
+  }
+}]]></component>
+  <component name="MavenImportPreferences">
+    <option name="generalSettings">
+      <MavenGeneralSettings>
+        <option name="customMavenHome" value="D:\tools\apache-maven\maven" />
+        <option name="localRepository" value="D:\tools\apache-maven\repository" />
+        <option name="mavenHomeTypeForPersistence" value="CUSTOM" />
+        <option name="userSettingsFile" value="D:\tools\apache-maven\maven\conf\settings.xml" />
+      </MavenGeneralSettings>
+    </option>
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 8
+}</component>
+  <component name="ProjectId" id="36vhWb5gW7JGWhhgxrGCwd4p5Dw" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Maven.JavaFxTools [clean].executor&quot;: &quot;Run&quot;,
+    &quot;Maven.JavaFxTools [org.openjfx:javafx-maven-plugin:0.0.8:jlink].executor&quot;: &quot;Run&quot;,
+    &quot;Maven.JavaFxTools [package].executor&quot;: &quot;Run&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;D:/github/tools&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;project.structure.last.edited&quot;: &quot;模块&quot;,
+    &quot;project.structure.proportion&quot;: &quot;0.15&quot;,
+    &quot;project.structure.side.proportion&quot;: &quot;0.2&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;http.proxy&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;,
+    &quot;应用程序.ToolsApplication.executor&quot;: &quot;Run&quot;
+  }
+}</component>
+  <component name="RebelAgentSelection">
+    <selection>jr</selection>
+  </component>
+  <component name="RunManager">
+    <configuration name="ToolsApplication" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="plugin.javafxtools.ToolsApplication" />
+      <module name="JavaFxTools" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="plugin.javafxtools.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="应用程序.ToolsApplication" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-jdk-30f59d01ecdd-2fc7cc6b9a17-intellij.indexing.shared.core-IU-253.31033.145" />
+        <option value="bundled-js-predefined-d6986cc7102b-9b0f141eb926-JavaScript-IU-253.31033.145" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="ee1c44d2-bcb9-434c-ac67-b5e91efd8462" name="更改" comment="" />
+      <created>1734657884687</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1734657884687</updated>
+      <workItem from="1734657885851" duration="568000" />
+      <workItem from="1765892986234" duration="143000" />
+      <workItem from="1768789248158" duration="2058000" />
+      <workItem from="1773294504453" duration="1223000" />
+      <workItem from="1773307187117" duration="193000" />
+      <workItem from="1773323310410" duration="3460000" />
+      <workItem from="1773362040097" duration="4673000" />
+      <workItem from="1778818764510" duration="5860000" />
+      <workItem from="1779171363652" duration="5985000" />
+    </task>
+    <task id="LOCAL-00001" summary="init">
+      <option name="closed" value="true" />
+      <created>1765893049677</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1765893049677</updated>
+    </task>
+    <task id="LOCAL-00002" summary="init">
+      <option name="closed" value="true" />
+      <created>1773365589498</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1773365589498</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <option name="CHECK_CODE_SMELLS_BEFORE_PROJECT_COMMIT" value="false" />
+    <option name="CHECK_NEW_TODO" value="false" />
+    <MESSAGE value="init" />
+    <option name="LAST_COMMIT_MESSAGE" value="init" />
+    <option name="NON_MODAL_COMMIT_POSTPONE_SLOW_CHECKS" value="false" />
+  </component>
+  <component name="XSLT-Support.FileAssociations.UIState">
+    <expand />
+    <select />
+  </component>
+</project>

@@ -7,8 +7,7 @@ import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
-import plugin.javafxtools.base.ModuleLogger;
-import plugin.javafxtools.util.TimeUtils;
+import plugin.javafxtools.base.BaseController;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -16,43 +15,64 @@ import java.net.URISyntaxException;
 /**
  * WebSocket客户端控制器 - 处理WebSocket连接和消息通信
  */
-public class WebSocketController implements ModuleLogger {
+public class WebSocketController extends BaseController {
 
+    /**
+     * WebSocket 服务器地址输入框。
+     */
     @FXML
-    private TextField wsUrlField;          // WebSocket服务器地址
-    @FXML
-    private Button wsConnectButton;        // 连接按钮
-    @FXML
-    private Button wsDisconnectButton;     // 断开按钮
-    @FXML
-    private TextArea wsMessageArea;        // 消息记录区
-    @FXML
-    private TextField wsMessageField;      // 消息输入框
-    @FXML
-    private Button wsSendButton;           // 发送按钮
-    @FXML
-    private Button wsClearButton;          // 清除按钮
+    private TextField wsUrlField;
 
-    private WebSocketClient webSocketClient;     // WebSocket客户端实例
+    /**
+     * 建立 WebSocket 连接的按钮。
+     */
+    @FXML
+    private Button wsConnectButton;
+
+    /**
+     * 断开 WebSocket 连接的按钮。
+     */
+    @FXML
+    private Button wsDisconnectButton;
+
+    /**
+     * 消息记录和模块日志输出区。
+     */
+    @FXML
+    private TextArea wsMessageArea;
+
+    /**
+     * 待发送消息输入框。
+     */
+    @FXML
+    private TextField wsMessageField;
+
+    /**
+     * 发送消息按钮。
+     */
+    @FXML
+    private Button wsSendButton;
+
+    /**
+     * 清空消息记录按钮。
+     */
+    @FXML
+    private Button wsClearButton;
+
+    /**
+     * 当前 WebSocket 客户端实例。
+     */
+    private WebSocketClient webSocketClient;
 
 
     /**
-     * 自定义日志方法 - 只输出到本模块日志区
+     * 获取当前模块日志输出区域。
+     *
+     * @return WebSocket 消息记录区域
      */
     @Override
-    public void log(String level, String message) {
-        String formattedMessage = String.format("\n"+"[%s][%s] %s",
-                TimeUtils.getCurrentDateTime(), level, message);
-        Platform.runLater(() -> {
-            if (wsMessageArea != null && wsMessageArea.getScene() != null) {
-                wsMessageArea.appendText(formattedMessage);
-                wsMessageArea.setScrollTop(Double.MAX_VALUE); // 自动滚动到底部
-            }
-        });
-    }
-
     public TextArea getLogArea() {
-        return wsMessageArea; // 或 return messageArea（根据实际变量名调整）
+        return wsMessageArea;
     }
 
     /**
@@ -82,6 +102,11 @@ public class WebSocketController implements ModuleLogger {
         try {
             // 创建WebSocket客户端
             webSocketClient = new WebSocketClient(new URI(url)) {
+                /**
+                 * WebSocket 连接建立后的回调。
+                 *
+                 * @param handshakedata 服务端握手信息
+                 */
                 @Override
                 public void onOpen(ServerHandshake handshakedata) {
                     Platform.runLater(() -> {
@@ -92,6 +117,11 @@ public class WebSocketController implements ModuleLogger {
                     info("WebSocket连接已建立");
                 }
 
+                /**
+                 * 接收到服务端消息后的回调。
+                 *
+                 * @param message 服务端消息
+                 */
                 @Override
                 public void onMessage(String message) {
                     Platform.runLater(() -> {
@@ -99,6 +129,13 @@ public class WebSocketController implements ModuleLogger {
                     });
                 }
 
+                /**
+                 * WebSocket 连接关闭后的回调。
+                 *
+                 * @param code 关闭状态码
+                 * @param reason 关闭原因
+                 * @param remote 是否由远端关闭
+                 */
                 @Override
                 public void onClose(int code, String reason, boolean remote) {
                     Platform.runLater(() -> {
@@ -109,6 +146,11 @@ public class WebSocketController implements ModuleLogger {
                     info("WebSocket连接已关闭: " + reason + " (code: " + code + ")");
                 }
 
+                /**
+                 * WebSocket 异常回调。
+                 *
+                 * @param ex 异常信息
+                 */
                 @Override
                 public void onError(Exception ex) {
                     error("WebSocket错误: " + ex.getMessage());
@@ -174,6 +216,5 @@ public class WebSocketController implements ModuleLogger {
             webSocketClient.close();
             webSocketClient = null;
         }
-        System.out.println("WebSocketController 资源已清理");
     }
 }

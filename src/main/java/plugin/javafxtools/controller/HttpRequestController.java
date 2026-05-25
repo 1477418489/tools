@@ -3,12 +3,12 @@ package plugin.javafxtools.controller;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
-import plugin.javafxtools.base.ModuleLogger;
+import plugin.javafxtools.base.BaseController;
+import plugin.javafxtools.model.HttpTemplate;
 import plugin.javafxtools.util.TimeUtils;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -28,52 +28,130 @@ import java.util.stream.Collectors;
  * - 响应区显示状态码及header信息
  * - 代码结构优化，关键步骤均有注释
  */
-public class HttpRequestController implements ModuleLogger {
+public class HttpRequestController extends BaseController {
 
-    // ----------- FXML UI组件 -----------
+    /**
+     * 定时请求开始时间输入框。
+     */
     @FXML private TextField startTimeField;
+
+    /**
+     * 定时请求间隔秒数输入框。
+     */
     @FXML private TextField intervalField;
+
+    /**
+     * HTTP 请求地址输入框。
+     */
     @FXML private TextField urlField;
+
+    /**
+     * HTTP 请求方法选择框。
+     */
     @FXML private ComboBox<String> methodComboBox;
+
+    /**
+     * 请求参数输入区。
+     */
     @FXML private TextArea paramsArea;
+
+    /**
+     * 请求头输入区。
+     */
     @FXML private TextArea headersArea;
+
+    /**
+     * 请求日志和响应输出区。
+     */
     @FXML private TextArea logArea;
+
+    /**
+     * 启动定时请求按钮。
+     */
     @FXML private Button startButton;
+
+    /**
+     * 停止定时请求按钮。
+     */
     @FXML private Button stopButton;
+
+    /**
+     * 将开始时间设置为当前时间的按钮。
+     */
     @FXML private Button nowButton;
+
+    /**
+     * 格式化最近响应体按钮。
+     */
     @FXML private Button formatButton;
+
+    /**
+     * 响应体格式化策略选择框。
+     */
     @FXML private ComboBox<String> responseFormatComboBox;
+
+    /**
+     * 请求模板选择框。
+     */
     @FXML private ComboBox<String> templateComboBox;
+
+    /**
+     * 连接超时时间输入框。
+     */
     @FXML private TextField connectTimeoutField;
+
+    /**
+     * 读取超时时间输入框。
+     */
     @FXML private TextField readTimeoutField;
 
-    // ----------- 业务字段 -----------
+    /**
+     * 定时请求调度器。
+     */
     private ScheduledExecutorService scheduler;
+
+    /**
+     * 当前正在执行或排队的请求任务。
+     */
     private Future<?> currentTaskFuture;
+
+    /**
+     * 定时请求运行状态。
+     */
     private boolean isRunning = false;
 
-    // 存储最近响应体（用于美化，仅对最新一次HTTP请求响应体做格式化）
+    /**
+     * 最近一次 HTTP 响应体，用于格式化按钮处理。
+     */
     private String lastRawResponseBody = null;
 
-    // 请求模板存档
+    /**
+     * 已加载的请求模板集合。
+     */
     private final Map<String, HttpTemplate> templates = new HashMap<>();
+
+    /**
+     * 请求模板持久化文件路径。
+     */
     private static final String TEMPLATE_FILE = "http_templates.json";
 
-    // ----------- 日志输出重定向 -----------
+    /**
+     * 单次响应体最多保留字符数，避免大响应撑爆内存和日志区域。
+     */
+    private static final int MAX_RESPONSE_BODY_CHARS = 200_000;
+
+    /**
+     * 单次日志中响应体最多展示字符数，避免 TextArea 一次写入过大导致卡顿。
+     */
+    private static final int MAX_RESPONSE_LOG_CHARS = 20_000;
+
+    /**
+     * 获取当前模块日志输出区域。
+     *
+     * @return HTTP 请求日志区域
+     */
     @Override
     public TextArea getLogArea() { return logArea; }
-
-    @Override
-    public void log(String level, String message) {
-        String formattedMessage = String.format("\n[%s][%s] %s",
-                TimeUtils.getCurrentDateTime(), level, message);
-        Platform.runLater(() -> {
-            if (logArea != null && logArea.getScene() != null) {
-                logArea.appendText(formattedMessage);
-                logArea.setScrollTop(Double.MAX_VALUE);
-            }
-        });
-    }
 
     // ----------- 初始化 -----------
     @FXML
@@ -105,7 +183,6 @@ public class HttpRequestController implements ModuleLogger {
             info("HTTP请求模块初始化完成");
         } catch (Exception e) {
             error("HTTP控制器初始化失败: " + e.getMessage());
-            e.printStackTrace();
         }
     }
 
@@ -186,17 +263,6 @@ public class HttpRequestController implements ModuleLogger {
     }
 
     /**
-     * 清空日志按钮
-     */
-    @FXML
-    private void handleClearLog() {
-        Platform.runLater(() -> {
-            if (logArea != null) {
-                logArea.clear();
-            }
-        });
-    }
-    /**
      * 开始调度按钮
      */
     @FXML
@@ -226,6 +292,10 @@ public class HttpRequestController implements ModuleLogger {
                 return;
             }
             long interval = Long.parseLong(intervalStr) * 1000L;
+            if (interval <= 0) {
+                error("间隔必须大于0秒");
+                return;
+            }
             long delay = startTime.getTime() - System.currentTimeMillis();
             if (delay < 0) {
                 debug("开始时间已过，将立即执行第一次请求");
@@ -235,7 +305,11 @@ public class HttpRequestController implements ModuleLogger {
             int connectTimeout = parseIntOrDefault(connectTimeoutField.getText(), 5000);
             int readTimeout = parseIntOrDefault(readTimeoutField.getText(), 10000);
 
-            scheduler = Executors.newSingleThreadScheduledExecutor();
+            scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "HttpRequest-Scheduler");
+                t.setDaemon(true);
+                return t;
+            });
             isRunning = true;
             startButton.setDisable(true);
             stopButton.setDisable(false);
@@ -259,6 +333,7 @@ public class HttpRequestController implements ModuleLogger {
                         String pretty = tryPrettyJson(lastRawResponseBody);
                         if (pretty != null) displayResp = pretty;
                     }
+                    displayResp = limitForLog(displayResp);
                     info("请求完成：\n" + logContent + (displayResp != null ? ("\n[响应体美化预览]\n" + displayResp) : ""));
                 } catch (IOException e) {
                     error("请求失败: " + e.getMessage());
@@ -267,7 +342,7 @@ public class HttpRequestController implements ModuleLogger {
                 }
             };
 
-            currentTaskFuture = scheduler.scheduleAtFixedRate(task, delay, interval, TimeUnit.MILLISECONDS);
+            currentTaskFuture = scheduler.scheduleWithFixedDelay(task, delay, interval, TimeUnit.MILLISECONDS);
             info(String.format("调度器已启动，将在 %s 开始执行，间隔 %d 秒",
                     TimeUtils.formatDateTime(startTime, TimeUtils.DEFAULT_DATETIME_FORMAT), interval / 1000));
         } catch (Exception e) {
@@ -378,18 +453,43 @@ public class HttpRequestController implements ModuleLogger {
                             connection.getInputStream() : connection.getErrorStream(), "utf-8"))) {
 
                 String responseLine;
+                boolean truncated = false;
                 while ((responseLine = br.readLine()) != null) {
+                    if (responseBody.length() + responseLine.length() + 1 > MAX_RESPONSE_BODY_CHARS) {
+                        int remaining = Math.max(0, MAX_RESPONSE_BODY_CHARS - responseBody.length());
+                        if (remaining > 0) {
+                            responseBody.append(responseLine, 0, Math.min(remaining, responseLine.length()));
+                        }
+                        truncated = true;
+                        break;
+                    }
                     responseBody.append(responseLine).append("\n");
+                }
+                if (truncated) {
+                    responseBody.append("\n[响应体过大，已截断]");
                 }
             }
             // 仅保存纯响应体，不包含header，用于格式化
             lastRawResponseBody = responseBody.toString().trim();
 
             // 将header和响应体返回用于日志区显示
-            return headerStr.append(lastRawResponseBody).toString();
+            return headerStr.append(limitForLog(lastRawResponseBody)).toString();
         } finally {
             if (connection != null) connection.disconnect();
         }
+    }
+
+    /**
+     * 限制写入日志的响应体大小。
+     *
+     * @param text 原始响应体
+     * @return 限制后的响应体
+     */
+    private String limitForLog(String text) {
+        if (text == null || text.length() <= MAX_RESPONSE_LOG_CHARS) {
+            return text;
+        }
+        return text.substring(0, MAX_RESPONSE_LOG_CHARS) + "\n[日志展示内容过大，已截断]";
     }
 
     /**
@@ -438,15 +538,10 @@ public class HttpRequestController implements ModuleLogger {
      */
     private String tryPrettyJson(String json) {
         try {
-            String s = json.trim();
-            if (s.startsWith("{")) {
-                JSONObject obj = new JSONObject(json);
-                return obj.toString(2);
-            } else if (s.startsWith("[")) {
-                JSONArray arr = new JSONArray(json);
-                return arr.toString(2);
-            }
-        } catch (Throwable ignore) {}
+            Gson prettyGson = new GsonBuilder().setPrettyPrinting().create();
+            Object obj = prettyGson.fromJson(json, Object.class);
+            return prettyGson.toJson(obj);
+        } catch (Exception ignore) {}
         return null;
     }
 
@@ -523,32 +618,7 @@ public class HttpRequestController implements ModuleLogger {
      */
     public void cleanup() {
         stopScheduler();
-        System.out.println("HttpRequestController 资源已清理");
+        info("HTTP请求模块资源已清理");
     }
 
-    // ----------- 内部类 -----------
-    /**
-     * 请求模板数据结构
-     */
-    public static class HttpTemplate {
-        public String url;
-        public String method;
-        public String params;
-        public String headers;
-        public String interval;
-        public String connectTimeout;
-        public String readTimeout;
-
-        public HttpTemplate() {}
-        public HttpTemplate(String url, String method, String params, String headers,
-                            String interval, String connectTimeout, String readTimeout) {
-            this.url = url;
-            this.method = method;
-            this.params = params;
-            this.headers = headers;
-            this.interval = interval;
-            this.connectTimeout = connectTimeout;
-            this.readTimeout = readTimeout;
-        }
-    }
 }

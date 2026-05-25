@@ -12,9 +12,19 @@ public class TimeUtils {
     private TimeUtils() {
     }
 
-    // 常用的时间格式常量
+    /**
+     * 默认日期时间格式。
+     */
     public static final String DEFAULT_DATETIME_FORMAT = "yyyy-MM-dd HH:mm:ss";
+
+    /**
+     * 默认时间格式，包含毫秒。
+     */
     public static final String DEFAULT_TIME_FORMAT = "HH:mm:ss.SSS";
+
+    /**
+     * 紧凑日期时间格式，常用于文件名或批次号。
+     */
     public static final String COMPACT_DATETIME_FORMAT = "yyyyMMddHHmmss";
 
     /**

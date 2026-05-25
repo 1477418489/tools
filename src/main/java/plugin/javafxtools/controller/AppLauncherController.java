@@ -8,7 +8,7 @@ import javafx.scene.control.*;
 import javafx.scene.text.Text;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-import plugin.javafxtools.base.ModuleLogger;
+import plugin.javafxtools.base.BaseController;
 import plugin.javafxtools.model.AppInfo;
 import plugin.javafxtools.util.TimeUtils;
 
@@ -30,41 +30,103 @@ import java.util.stream.Collectors;
  * 5. 内存泄漏防护和性能监控
  * 6. 异步I/O操作优化
  */
-public class AppLauncherController implements ModuleLogger {
-    private final ExecutorService sequentialExecutor = Executors.newSingleThreadExecutor();
+public class AppLauncherController extends BaseController {
+    /**
+     * 串行执行启动、停止等顺序敏感任务的执行器。
+     */
+    private final ExecutorService sequentialExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "AppLauncher-Sequential");
+        t.setDaemon(true);
+        return t;
+    });
 
-    private static final ExecutorService backgroundExecutor = Executors.newFixedThreadPool(1);
+    /**
+     * 后台加载配置和刷新状态的共享执行器。
+     */
+    private final ExecutorService backgroundExecutor = Executors.newFixedThreadPool(2, r -> {
+        Thread t = new Thread(r, "AppLauncher-Background");
+        t.setDaemon(true);
+        return t;
+    });
 
     // 记录最后选中的索引
     private volatile int lastSelectedIndex = -1;
 
     // 配置文件路径
     private static final String STORAGE_FILE = "userData/app_launcher_paths.json";
+
+    /**
+     * 启动器进程映射持久化文件路径。
+     */
     private static final String PROCESS_MAP_FILE = "userData/process_map.json";
 
     // 优化的进程控制参数
     private static final long PROCESS_CHECK_DELAY_MS = 800;
+
+    /**
+     * 终止进程时等待正常退出的毫秒数。
+     */
     private static final int PROCESS_TERMINATE_TIMEOUT_MS = 1500;
-    private static final int PROCESS_CHECK_INTERVAL_MS = 1000*10; // 减少检查频率以提高性能
-    private static final int MAX_LOG_LINES = 800; // 减少日志行数限制
+
+    /**
+     * 进程状态定时检查间隔，单位毫秒。
+     */
+    private static final int PROCESS_CHECK_INTERVAL_MS = 1000 * 10;
+
+    /**
+     * 启动项日志最大保留行数。
+     */
+    private static final int MAX_LOG_LINES = 800;
+
+    /**
+     * 防止状态检查任务重入的标志。
+     */
     private volatile boolean statusCheckInProgress = false;
+
+    /**
+     * 状态检查任务互斥锁。
+     */
     private final Object statusCheckLock = new Object();
 
     // FXML注入的UI组件
     @FXML
     private TextField appPathField;
+
+    /**
+     * 应用启动项列表。
+     */
     @FXML
     private ListView<AppInfo> appListView;
+
+    /**
+     * 启动项页签中的操作按钮组。
+     */
     @FXML
     private Button browseButton, addButton, launchSingleButton, launchAllButton,
             killProcessButton, removeButton, clearButton, refreshStatusButton;
+
+    /**
+     * 启动项模块日志输出区域。
+     */
     @FXML
     private TextArea logArea;
 
     // 数据存储 - 使用线程安全的集合
     private final List<AppInfo> appInfos = Collections.synchronizedList(new ArrayList<>());
+
+    /**
+     * 启动器记录的应用路径与进程标识映射。
+     */
     private volatile Map<String, String> launcherProcessMap = new ConcurrentHashMap<>();
+
+    /**
+     * 主舞台引用，用于文件选择等窗口交互。
+     */
     private volatile Stage primaryStage;
+
+    /**
+     * 进程状态跟踪器。
+     */
     private final ProcessTracker processTracker = new ProcessTracker();
 
     // 优化的状态检查执行器
@@ -80,26 +142,57 @@ public class AppLauncherController implements ModuleLogger {
 
     // UI更新批处理控制
     private volatile boolean uiUpdatePending = false;
+
+    /**
+     * UI 批量刷新互斥锁。
+     */
     private final Object uiUpdateLock = new Object();
 
     // 性能监控
     private volatile long lastStatusCheckTime = 0;
+
+    /**
+     * 已执行的状态检查次数。
+     */
     private volatile int statusCheckCount = 0;
 
     /**
      * 进程状态缓存项 - 包含状态和时间戳
      */
     private static class ProcessStatus {
+        /**
+         * 最近一次检查到的运行状态。
+         */
         final boolean isRunning;
+
+        /**
+         * 缓存创建时间戳。
+         */
         final long timestamp;
+
+        /**
+         * 进程检查耗时。
+         */
         final long checkDuration;
 
+        /**
+         * 创建进程状态缓存项。
+         *
+         * @param isRunning 是否运行中
+         * @param checkDuration 检查耗时
+         */
         ProcessStatus(boolean isRunning, long checkDuration) {
             this.isRunning = isRunning;
             this.timestamp = System.currentTimeMillis();
             this.checkDuration = checkDuration;
         }
 
+        /**
+         * 判断缓存项是否过期。
+         *
+         * @param maxAge 最大缓存时长
+         * @return 是否过期
+         */
         boolean isExpired(long maxAge) {
             return System.currentTimeMillis() - timestamp > maxAge;
         }
@@ -186,7 +279,7 @@ public class AppLauncherController implements ModuleLogger {
         // 异步加载进程映射配置
         backgroundExecutor.submit(this::loadProcessMap);
         // 优化的定期状态检查任务
-        statusCheckExecutor.scheduleAtFixedRate(() -> {
+        statusCheckExecutor.scheduleWithFixedDelay(() -> {
             if (!appInfos.isEmpty()) {
                 long startTime = System.currentTimeMillis();
                 checkAllProcessStatusOptimized();
@@ -239,13 +332,26 @@ public class AppLauncherController implements ModuleLogger {
      * 优化的ListCell实现 - 使用文字状态显示，性能更好且更直观
      */
     private class OptimizedListCell extends ListCell<AppInfo> {
+        /**
+         * 当前单元格复用的文本节点。
+         */
         private final Text text = new Text();
+
+        /**
+         * 上一次展示文本，用于避免重复刷新。
+         */
         private String lastDisplayText = "";
 
         {
             setGraphic(text);
         }
 
+        /**
+         * 根据应用配置和进程状态刷新单元格展示内容。
+         *
+         * @param item 应用配置项
+         * @param empty 当前单元格是否为空
+         */
         @Override
         protected void updateItem(AppInfo item, boolean empty) {
             super.updateItem(item, empty);
@@ -293,7 +399,7 @@ public class AppLauncherController implements ModuleLogger {
                         procName : new File(appInfo.getAppPath()).getName();
                 ProcessStatus cached = processStatusCache.get(appInfo.getAppPath());
                 if (cached != null && !cached.isExpired(PROCESS_CHECK_INTERVAL_MS * 2)) {
-                    return;
+                    continue;
                 }
                 long start = System.currentTimeMillis();
                 boolean isRunning = processTracker.isProcessRunning(checkName);
@@ -374,11 +480,14 @@ public class AppLauncherController implements ModuleLogger {
         File configFile = new File(PROCESS_MAP_FILE);
         if (configFile.exists()) {
             try (Reader reader = new FileReader(configFile)) {
-                launcherProcessMap = new Gson().fromJson(
+                Map<String, String> loaded = new Gson().fromJson(
                         reader,
                         new TypeToken<Map<String, String>>() {
                         }.getType()
                 );
+                if (loaded != null) {
+                    launcherProcessMap = new ConcurrentHashMap<>(loaded);
+                }
             } catch (Exception e) {
                 error("读取进程映射配置失败: " + e.getMessage());
             }
@@ -399,18 +508,10 @@ public class AppLauncherController implements ModuleLogger {
         fileChooser.setTitle("选择可执行文件");
         fileChooser.setInitialDirectory(new File(System.getProperty("user.home")));
 
-        // 根据操作系统设置文件过滤器
-        if (isWindows()) {
-            fileChooser.getExtensionFilters().addAll(
-                    new FileChooser.ExtensionFilter("可执行文件", "*.exe", "*.bat", "*.cmd"),
-                    new FileChooser.ExtensionFilter("所有文件", "*.*")
-            );
-        } else {
-            fileChooser.getExtensionFilters().addAll(
-                    new FileChooser.ExtensionFilter("可执行文件", "*"),
-                    new FileChooser.ExtensionFilter("所有文件", "*.*")
-            );
-        }
+        fileChooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("可执行文件", "*.exe", "*.bat", "*.cmd"),
+                new FileChooser.ExtensionFilter("所有文件", "*.*")
+        );
 
         File selectedFile = fileChooser.showOpenDialog(primaryStage);
         if (selectedFile != null) {
@@ -456,7 +557,11 @@ public class AppLauncherController implements ModuleLogger {
 
         // 显示对话框并获取结果
         Optional<String> result = dialog.showAndWait();
-        String processName = result.orElse(defaultProcessName);
+        if (result.isEmpty()) {
+            info("用户取消了添加操作");
+            return;
+        }
+        String processName = result.get().isEmpty() ? defaultProcessName : result.get();
 
         // 添加新应用到列表
         appInfos.add(new AppInfo(appPath, processName));
@@ -558,9 +663,11 @@ public class AppLauncherController implements ModuleLogger {
                     String checkName = procName != null && !procName.isEmpty() ?
                             procName : new File(ai.getAppPath()).getName();
                     // 强制检查进程状态，不使用缓存
+                    long checkStart = System.currentTimeMillis();
                     boolean isRunning = processTracker.isProcessRunning(checkName, true);
+                    long checkDuration = System.currentTimeMillis() - checkStart;
                     processStatusCache.put(ai.getAppPath(),
-                            new ProcessStatus(isRunning, System.currentTimeMillis()));
+                            new ProcessStatus(isRunning, checkDuration));
                     verifiedCount++;
                     debug(String.format("验证进度 %d/%d: %s -> %s",
                             verifiedCount, launchedApps.size(), checkName,
@@ -568,7 +675,7 @@ public class AppLauncherController implements ModuleLogger {
                     // 每批次后立即更新UI
                     Platform.runLater(this::refreshListViewOptimized);
                     // 批次间短暂延迟，避免系统负载过高
-                    Thread.sleep(3000);
+                    Thread.sleep(1000);
                 }
                 // 最后再次更新UI确保显示正确
                 Platform.runLater(() -> {
@@ -608,12 +715,19 @@ public class AppLauncherController implements ModuleLogger {
             String checkName = procName != null && !procName.isEmpty() ?
                     procName : new File(ai.getAppPath()).getName();
             info("正在尝试结束进程: " + checkName + " (" + ai.getAppPath() + ")");
-            if (processTracker.killProcess(checkName)) {
-                info("成功结束进程: " + ai.getAppPath());
-                Platform.runLater(this::updateAppList);
-            } else {
-                info("未找到运行中的进程: " + ai.getAppPath());
-            }
+            killProcessButton.setDisable(true);
+            backgroundExecutor.submit(() -> {
+                boolean killed = processTracker.killProcess(checkName);
+                Platform.runLater(() -> {
+                    killProcessButton.setDisable(false);
+                    if (killed) {
+                        info("成功结束进程: " + ai.getAppPath());
+                        updateAppList();
+                    } else {
+                        info("未找到运行中的进程: " + ai.getAppPath());
+                    }
+                });
+            });
         } else {
             error("请先选择要结束的应用程序");
         }
@@ -640,19 +754,21 @@ public class AppLauncherController implements ModuleLogger {
                 return;
             }
 
-            // 移除应用
-            appInfos.remove(selectedIndex);
             String procName = removed.getProcessName();
             String checkName = procName != null && !procName.isEmpty() ?
                     procName : new File(removed.getAppPath()).getName();
 
-            if (processTracker.killProcess(checkName)) {
-                info("已停止并移除: " + removed.getAppPath());
-            }
-
+            // 先更新界面，再在后台终止进程，避免系统命令阻塞 JavaFX 线程。
+            appInfos.remove(selectedIndex);
             updateAppList();
-            saveAppInfos();
             info("已从列表移除: " + removed.getAppPath());
+            saveAppInfosAsync();
+
+            backgroundExecutor.submit(() -> {
+                if (processTracker.killProcess(checkName)) {
+                    info("已停止并移除: " + removed.getAppPath());
+                }
+            });
         } else {
             error("请先选择要移除的应用程序");
         }
@@ -745,8 +861,17 @@ public class AppLauncherController implements ModuleLogger {
             return;
         }
 
+        List<AppInfo> appsToKill = new ArrayList<>(appInfos);
+
+        // 先清空界面数据，再在后台终止进程，避免批量 taskkill 卡住界面。
+        appInfos.clear();
+        updateAppList();
+        saveAppInfosAsync();
+        info("已清除所有应用程序路径");
+
         // 终止所有进程
-        boolean anyProcessKilled = appInfos.stream()
+        backgroundExecutor.submit(() -> {
+            boolean anyProcessKilled = appsToKill.stream()
                 .map(ai -> {
                     String procName = ai.getProcessName();
                     return processTracker.killProcess(
@@ -756,28 +881,12 @@ public class AppLauncherController implements ModuleLogger {
                 })
                 .reduce(false, Boolean::logicalOr);
 
-        if (!anyProcessKilled) {
-            info("没有正在运行的进程");
-        }
-
-        // 清空列表
-        appInfos.clear();
-        updateAppList();
-        saveAppInfos();
-        info("已清除所有应用程序路径");
-    }
-
-    /**
-     * 清空日志处理
-     */
-    @FXML
-    private void handleClearLog() {
-        Platform.runLater(() -> {
-            if (logArea != null) {
-                logArea.clear();
+            if (!anyProcessKilled) {
+                info("没有正在运行的进程");
             }
         });
     }
+
 
     /**
      * 优化的手动刷新进程状态 - 解决内存占用问题
@@ -826,9 +935,11 @@ public class AppLauncherController implements ModuleLogger {
                         procName : new File(appInfo.getAppPath()).getName();
 
                 // 执行轻量级检查
+                long checkStart = System.currentTimeMillis();
                 boolean isRunning = processTracker.isProcessRunning(checkName, true);
+                long checkDuration = System.currentTimeMillis() - checkStart;
                 processStatusCache.put(appInfo.getAppPath(),
-                        new ProcessStatus(isRunning, System.currentTimeMillis()));
+                        new ProcessStatus(isRunning, checkDuration));
 
                 checkedCount++;
             }
@@ -1094,24 +1205,27 @@ public class AppLauncherController implements ModuleLogger {
 
         } catch (Exception e) {
             // 静默处理日志错误，避免递归
-            System.err.println("日志追加失败: " + e.getMessage());
         }
-    }
-
-    /**
-     * 检查是否为Windows系统
-     */
-    private boolean isWindows() {
-        return System.getProperty("os.name").toLowerCase().contains("win");
     }
 
     /**
      * 高度优化的进程跟踪器内部类
      */
     private class ProcessTracker {
+        /**
+         * 当前控制器直接管理的进程集合。
+         */
         private final Map<String, Process> managedProcesses = new ConcurrentHashMap<>();
+
+        /**
+         * 最近一次进程检查时间缓存。
+         */
         private final Map<String, Long> processCheckCache = new ConcurrentHashMap<>();
-        private static final long PROCESS_CHECK_CACHE_TTL = 2000; // 2秒缓存
+
+        /**
+         * 进程检查缓存有效期。
+         */
+        private static final long PROCESS_CHECK_CACHE_TTL = 2000;
 
         /**
          * 优化的进程运行状态检查
@@ -1143,10 +1257,7 @@ public class AppLauncherController implements ModuleLogger {
             }
 
             try {
-                // 执行系统检查
-                boolean isRunning = isWindows() ?
-                        checkWindowsProcessOptimized(processName) :
-                        checkUnixProcessOptimized(processName);
+                boolean isRunning = checkWindowsProcessOptimized(processName);
 
                 // 更新缓存
                 String cacheKey = processName.toLowerCase();
@@ -1204,55 +1315,19 @@ public class AppLauncherController implements ModuleLogger {
             }
 
             boolean killed = false;
-            // 并行处理托管进程终止
-            List<CompletableFuture<Boolean>> futures = managedProcesses.entrySet().stream()
-                    .filter(entry -> {
-                        String path = entry.getKey();
-                        Process managed = entry.getValue();
-                        return (path.endsWith(processName) ||
-                                new File(path).getName().equalsIgnoreCase(processName)) &&
-                                managed != null && managed.isAlive();
-                    })
-                    .map(entry -> CompletableFuture.supplyAsync(() -> {
-                        Process managed = entry.getValue();
-                        String path = entry.getKey();
-
-                        try {
-                            managed.destroy();
-                            if (!managed.waitFor(PROCESS_TERMINATE_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
-                                managed.destroyForcibly();
-                                managed.waitFor(1000, TimeUnit.MILLISECONDS); // 给强制终止一点时间
-                            }
-                            managedProcesses.remove(path);
-                            debug("已终止托管进程: " + path);
-                            return true;
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            managed.destroyForcibly();
-                            managedProcesses.remove(path);
-                            return true;
-                        } catch (Exception e) {
-                            error("终止托管进程失败: " + path + " - " + e.getMessage());
-                            return false;
-                        }
-                    }, backgroundExecutor))
-                    .collect(Collectors.toList());
-
-            // 等待托管进程终止完成
-            try {
-                killed = futures.stream()
-                        .map(CompletableFuture::join)
-                        .reduce(false, Boolean::logicalOr);
-            } catch (Exception e) {
-                error("等待托管进程终止时出错: " + e.getMessage());
+            // 在当前后台任务中处理托管进程，避免向同一线程池提交子任务后等待导致自锁。
+            for (Map.Entry<String, Process> entry : managedProcesses.entrySet()) {
+                String path = entry.getKey();
+                Process managed = entry.getValue();
+                if ((path.endsWith(processName) || new File(path).getName().equalsIgnoreCase(processName))
+                        && managed != null && managed.isAlive()) {
+                    killed |= terminateManagedProcess(path, managed);
+                }
             }
 
             // 使用系统命令终止进程
             try {
-                boolean systemKilled = isWindows() ?
-                        killWindowsProcessOptimized(processName) :
-                        killUnixProcessOptimized(processName);
-                killed |= systemKilled;
+                killed |= killWindowsProcessOptimized(processName);
 
                 // 清理缓存
                 processCheckCache.remove(processName.toLowerCase());
@@ -1266,6 +1341,35 @@ public class AppLauncherController implements ModuleLogger {
 
 
         /**
+         * 终止一个当前工具托管的进程。
+         *
+         * @param path 进程启动路径
+         * @param process 进程对象
+         * @return 是否已触发终止
+         */
+        private boolean terminateManagedProcess(String path, Process process) {
+            try {
+                process.destroy();
+                if (!process.waitFor(PROCESS_TERMINATE_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                    process.destroyForcibly();
+                    process.waitFor(1000, TimeUnit.MILLISECONDS);
+                }
+                debug("已终止托管进程: " + path);
+                return true;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                process.destroyForcibly();
+                return true;
+            } catch (Exception e) {
+                error("终止托管进程失败: " + path + " - " + e.getMessage());
+                return false;
+            } finally {
+                managedProcesses.remove(path);
+            }
+        }
+
+
+        /**
          * 仅清理托管进程 - 不影响独立启动的进程
          */
         void cleanupManagedProcessesOnly() {
@@ -1275,36 +1379,12 @@ public class AppLauncherController implements ModuleLogger {
             }
             info("开始清理 " + managedProcesses.size() + " 个托管进程...");
 
-            // 并行清理所有托管进程
-            List<CompletableFuture<Void>> futures = managedProcesses.entrySet().stream()
-                    .map(entry -> CompletableFuture.runAsync(() -> {
-                        String path = entry.getKey();
-                        Process process = entry.getValue();
-
-                        if (process.isAlive()) {
-                            try {
-                                process.destroy();
-                                if (!process.waitFor(PROCESS_TERMINATE_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
-                                    process.destroyForcibly();
-                                    process.waitFor(1000, TimeUnit.MILLISECONDS);
-                                }
-                                debug("已清理托管进程: " + path);
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                                process.destroyForcibly();
-                            } catch (Exception e) {
-                                error("清理托管进程失败: " + path + " - " + e.getMessage());
-                            }
-                        }
-                    }, backgroundExecutor))
-                    .collect(Collectors.toList());
-
-            // 等待所有进程清理完成
-            try {
-                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
-                        .get(5, TimeUnit.SECONDS); // 最多等待5秒
-            } catch (Exception e) {
-                error("等待托管进程清理超时: " + e.getMessage());
+            // 关闭流程直接顺序清理，避免清理时继续向即将关闭的后台线程池提交任务。
+            for (Map.Entry<String, Process> entry : managedProcesses.entrySet()) {
+                Process process = entry.getValue();
+                if (process != null && process.isAlive()) {
+                    terminateManagedProcess(entry.getKey(), process);
+                }
             }
 
             managedProcesses.clear();
@@ -1357,17 +1437,21 @@ public class AppLauncherController implements ModuleLogger {
         private void monitorProcessIndependently(String path, Process process) {
             backgroundExecutor.submit(() -> {
                 try {
-                    // 只是记录进程启动，不等待进程结束
                     info(String.format("独立进程已启动: %s (PID: %d)", path, process.pid()));
-                    // 短暂等待确认进程启动成功
-                    Thread.sleep(1000);
-                    if (process.isAlive()) {
+                    String procName = new File(path).getName();
+                    // 多次检查进程是否启动成功（某些应用启动较慢）
+                    boolean actuallyRunning = false;
+                    for (int i = 0; i < 3; i++) {
+                        Thread.sleep(2000);
+                        actuallyRunning = isProcessRunning(procName, true);
+                        if (actuallyRunning) break;
+                        debug(String.format("进程检查第%d次: %s 未检测到", i + 1, procName));
+                    }
+                    if (actuallyRunning) {
                         info(String.format("进程启动确认成功: %s", path));
                     } else {
-                        int exitCode = process.exitValue();
-                        info(String.format("进程快速退出: %s (退出码: %d)", path, exitCode));
+                        info(String.format("进程可能未成功启动: %s", path));
                     }
-                    // 更新UI状态
                     Platform.runLater(() -> scheduleUIUpdate());
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -1383,29 +1467,22 @@ public class AppLauncherController implements ModuleLogger {
          */
         private ProcessBuilder createProcessBuilder(String path) {
             String lowerPath = path.toLowerCase();
-            ProcessBuilder builder;
 
             if (lowerPath.endsWith(".bat") || lowerPath.endsWith(".cmd")) {
-                if (isWindows()) {
-                    // Windows批处理文件：使用start命令启动独立进程
-                    builder = new ProcessBuilder("cmd.exe", "/c", "start", "\"\"", "\"" + path + "\"");
-                } else {
-                    // Linux下运行Windows批处理文件（通过wine）
-                    builder = new ProcessBuilder("wine", "cmd.exe", "/c", path);
-                }
-            } else if (lowerPath.endsWith(".sh") && !isWindows()) {
-                // Linux shell脚本
-                builder = new ProcessBuilder("bash", path);
-            } else {
-                // 可执行文件：在Windows下使用start命令启动独立进程
-                if (isWindows()) {
-                    builder = new ProcessBuilder("cmd.exe", "/c", "start", "\"\"", "\"" + path + "\"");
-                } else {
-                    builder = new ProcessBuilder(path);
-                }
+                File execFile = new File(path);
+                // Windows批处理文件通过 start 独立启动，避免 cmd /c 直接执行时窗口/工作目录异常。
+                return new ProcessBuilder(
+                        "cmd.exe",
+                        "/c",
+                        "start",
+                        "",
+                        "/D",
+                        execFile.getParent(),
+                        execFile.getName()
+                );
             }
 
-            return builder;
+            return new ProcessBuilder(path);
         }
 
 
@@ -1460,38 +1537,6 @@ public class AppLauncherController implements ModuleLogger {
         }
 
         /**
-         * 优化的Unix进程检查
-         */
-        private boolean checkUnixProcessOptimized(String processName) throws IOException {
-            if (processName == null || processName.trim().isEmpty()) {
-                return false;
-            }
-
-            // 使用pgrep命令，比ps更高效
-            ProcessBuilder pb = new ProcessBuilder("pgrep", "-f", processName);
-            pb.redirectErrorStream(true);
-
-            Process process = pb.start();
-
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream()))) {
-
-                // pgrep如果找到进程会输出PID，否则无输出
-                return reader.lines().findFirst().isPresent();
-
-            } finally {
-                try {
-                    process.waitFor(3, TimeUnit.SECONDS);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-                if (process.isAlive()) {
-                    process.destroyForcibly();
-                }
-            }
-        }
-
-        /**
          * 优化的Windows进程终止
          */
         private boolean killWindowsProcessOptimized(String processName) throws IOException {
@@ -1529,53 +1574,14 @@ public class AppLauncherController implements ModuleLogger {
             }
         }
 
-        /**
-         * 优化的Unix进程终止
-         */
-        private boolean killUnixProcessOptimized(String processName) throws IOException {
-            if (processName == null || processName.trim().isEmpty()) {
-                return false;
-            }
-
-            // 先尝试优雅终止（SIGTERM）
-            ProcessBuilder pb1 = new ProcessBuilder("pkill", "-TERM", "-f", processName);
-            pb1.redirectErrorStream(true);
-
-            Process killProcess1 = pb1.start();
-
-            try {
-                boolean gracefulKill = killProcess1.waitFor(3, TimeUnit.SECONDS) &&
-                        killProcess1.exitValue() == 0;
-
-                if (gracefulKill) {
-                    debug("优雅终止Unix进程: " + processName);
-                    return true;
-                }
-
-                // 如果优雅终止失败，强制终止（SIGKILL）
-                ProcessBuilder pb2 = new ProcessBuilder("pkill", "-KILL", "-f", processName);
-                pb2.redirectErrorStream(true);
-
-                Process killProcess2 = pb2.start();
-                boolean forceKill = killProcess2.waitFor(3, TimeUnit.SECONDS) &&
-                        killProcess2.exitValue() == 0;
-
-                if (forceKill) {
-                    debug("强制终止Unix进程: " + processName);
-                }
-                return forceKill;
-
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return false;
-            } finally {
-                if (killProcess1.isAlive()) {
-                    killProcess1.destroyForcibly();
-                }
-            }
-        }
     }
 
+    /**
+     * 获取线程池当前活跃任务数和排队任务数。
+     *
+     * @param threadPoolExecutor 待检查的执行器
+     * @return 当前任务数，非 ThreadPoolExecutor 时返回 -1
+     */
     public static int getCurrentTaskCount(ExecutorService threadPoolExecutor) {
         if (threadPoolExecutor instanceof ThreadPoolExecutor) {
             ThreadPoolExecutor executor = (ThreadPoolExecutor) threadPoolExecutor;

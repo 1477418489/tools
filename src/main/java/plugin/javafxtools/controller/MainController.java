@@ -1,13 +1,9 @@
 package plugin.javafxtools.controller;
 
-import javafx.application.Platform;
 import javafx.fxml.FXML;
-import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextArea;
-import plugin.javafxtools.base.ModuleLogger;
 import plugin.javafxtools.service.LoggingService;
-import plugin.javafxtools.util.TimeUtils;
 
 import java.io.File;
 import java.util.LinkedHashMap;
@@ -17,33 +13,82 @@ import java.util.Map;
  * 主控制器 - 协调各功能模块和共享服务
  */
 public class MainController {
+    /**
+     * 主界面页签容器。
+     */
     @FXML
     private TabPane tabPane;
 
+    /**
+     * HTTP 请求页签控制器。
+     */
     @FXML
     private HttpRequestController httpRequestTabController;
+
+    /**
+     * WebSocket 页签控制器。
+     */
     @FXML
     private WebSocketController webSocketTabController;
+
+    /**
+     * 网络工具页签控制器。
+     */
     @FXML
     private NetworkToolsController networkToolsTabController;
+
+    /**
+     * 数据格式化页签控制器。
+     */
     @FXML
     private DataFormatController dataFormatTabController;
+
+    /**
+     * 字符串工具页签控制器。
+     */
     @FXML
     private StrDataFormatController strDataFormatTabController;
+
+    /**
+     * 启动项页签控制器。
+     */
     @FXML
     private AppLauncherController appLauncherTabController;
+
+    /**
+     * JAR 应用启动器页签控制器。
+     */
+    @FXML
+    private JarLauncherController jarLauncherTabController;
+
+    /**
+     * 域名保活页签控制器。
+     */
     @FXML
     private KeepAliveManagerController keepAliveTabController;
+
+    /**
+     * 备忘提醒页签控制器。
+     */
     @FXML
     private MemoReminderController memoReminderTabController;
 
-    // 共享服务
+    /**
+     * 主界面共享的全局日志服务。
+     */
     private final LoggingService loggingService = new LoggingService();
 
-    // 中央日志区域（可选）
+    /**
+     * 主界面中央日志区域。
+     */
     @FXML
     private TextArea centralLogArea;
 
+    /**
+     * 获取启动项页签控制器。
+     *
+     * @return 启动项控制器
+     */
     public AppLauncherController getAppLauncherController() {
         return appLauncherTabController;
     }
@@ -61,11 +106,13 @@ public class MainController {
             setupControllers();
             loggingService.info("主控制器初始化完成");
         } catch (Exception e) {
-            System.err.println("主控制器初始化失败: " + e.getMessage());
-            e.printStackTrace();
+            loggingService.error("主控制器初始化失败: " + e.getMessage());
         }
     }
 
+    /**
+     * 确保用户数据目录存在。
+     */
     private void ensureUserDataDirectoryExists() {
         try {
             File userDataDir = new File("userData");
@@ -94,6 +141,7 @@ public class MainController {
         controllers.put("数据格式化", dataFormatTabController);
         controllers.put("字符串工具", strDataFormatTabController);
         controllers.put("启动项", appLauncherTabController);
+        controllers.put("JAR启动器", jarLauncherTabController);
         controllers.put("域名保活", keepAliveTabController);
         controllers.put("备忘提醒", memoReminderTabController);
 
@@ -130,6 +178,9 @@ public class MainController {
         if (appLauncherTabController == null) {
             errorMsg.append("启动项控制器注入失败\n");
         }
+        if (jarLauncherTabController == null) {
+            errorMsg.append("JAR启动器控制器注入失败\n");
+        }
         if (memoReminderTabController == null) {
             errorMsg.append("备忘提醒控制器注入失败\n");
         }
@@ -139,36 +190,13 @@ public class MainController {
         }
     }
 
+    /**
+     * 获取主界面页签容器。
+     *
+     * @return 页签容器
+     */
     public TabPane getTabPane() {
         return tabPane;
-    }
-
-    /**
-     * 根据 Tab 对象获取对应的日志区域
-     */
-    private TextArea getLogAreaByTab(Tab tab) {
-        if (tab.getContent() != null && tab.getContent().getUserData() != null) {
-            Object controller = tab.getContent().getUserData();
-            if (controller instanceof ModuleLogger moduleLogger) {
-                return moduleLogger.getLogArea();
-            }
-        }
-        return null;
-    }
-
-    /**
-     * 记录全局日志到中央日志区
-     */
-    private void logToGlobal(String level, String message) {
-        String formattedMessage = String.format("[%s][%s] %s",
-                TimeUtils.getCurrentDateTime(), level, message);
-
-        Platform.runLater(() -> {
-            if (centralLogArea != null && centralLogArea.getScene() != null) {
-                centralLogArea.appendText(formattedMessage + "\n");
-                centralLogArea.setScrollTop(Double.MAX_VALUE);
-            }
-        });
     }
 
     /**
@@ -197,17 +225,18 @@ public class MainController {
             if (appLauncherTabController != null) {
                 appLauncherTabController.cleanup();
             }
+            if (jarLauncherTabController != null) {
+                jarLauncherTabController.cleanup();
+            }
             if (memoReminderTabController != null) {
                 memoReminderTabController.cleanup();
             }
             if (centralLogArea != null) {
                 centralLogArea.clear();
             }
-            logToGlobal("INFO", "应用程序资源已清理");
-            System.out.println("MainController 资源已清理");
+            loggingService.info("应用程序资源已清理");
         } catch (Exception e) {
-            System.err.println("资源清理出错: " + e.getMessage());
-            e.printStackTrace();
+            loggingService.error("资源清理出错: " + e.getMessage());
         }
     }
 }

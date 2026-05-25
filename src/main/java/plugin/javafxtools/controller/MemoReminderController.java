@@ -9,9 +9,9 @@ import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.scene.layout.VBox;
-import plugin.javafxtools.base.ModuleLogger;
+import plugin.javafxtools.base.BaseController;
+import plugin.javafxtools.model.IntervalUnit;
 import plugin.javafxtools.model.MemoReminder;
-import plugin.javafxtools.util.TimeUtils;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
@@ -27,50 +27,127 @@ import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 
-public class MemoReminderController implements ModuleLogger {
+/**
+ * 备忘提醒页签控制器，负责提醒配置、定时调度和弹窗确认。
+ */
+public class MemoReminderController extends BaseController {
+    /**
+     * 备忘提醒日志区域最大保留行数。
+     */
     private static final int MAX_LOG_LINES = 400;
+
+    /**
+     * 稍后提醒的固定延迟时间。
+     */
     private static final long SNOOZE_MILLIS = 5 * 60_000L;
+
+    /**
+     * 备忘提醒数据持久化文件。
+     */
     private static final Path DATA_FILE = Path.of("userData", "memo_reminders.json");
 
+    /**
+     * 表格展示的提醒配置集合。
+     */
     private final ObservableList<MemoReminder> reminders = FXCollections.observableArrayList();
+
+    /**
+     * 已排队的提醒调度任务。
+     */
     private final ConcurrentMap<Long, ScheduledFuture<?>> scheduledTasks = new ConcurrentHashMap<>();
+
+    /**
+     * 提醒任务后台调度器。
+     */
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, r -> {
         Thread t = new Thread(r, "memo-reminder-scheduler");
         t.setDaemon(true);
         return t;
     });
+
+    /**
+     * 新提醒 ID 生成器。
+     */
     private final AtomicLong idGenerator = new AtomicLong(System.currentTimeMillis());
+
+    /**
+     * 备忘提醒 JSON 序列化工具。
+     */
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
+    /**
+     * 备忘内容输入区。
+     */
     @FXML
     private TextArea memoInput;
+
+    /**
+     * 提醒间隔输入框。
+     */
     @FXML
     private TextField intervalField;
+
+    /**
+     * 提醒间隔单位选择框。
+     */
     @FXML
-    private ComboBox<MemoReminder.TimeUnit> intervalUnitBox;
+    private ComboBox<IntervalUnit> intervalUnitBox;
+
+    /**
+     * 提醒次数输入框。
+     */
     @FXML
     private TextField timesField;
 
+    /**
+     * 备忘提醒列表表格。
+     */
     @FXML
     private TableView<MemoReminder> reminderTable;
+
+    /**
+     * 备忘内容列。
+     */
     @FXML
     private TableColumn<MemoReminder, String> contentCol;
+
+    /**
+     * 提醒间隔列。
+     */
     @FXML
     private TableColumn<MemoReminder, String> intervalCol;
+
+    /**
+     * 剩余次数列。
+     */
     @FXML
     private TableColumn<MemoReminder, String> remainCol;
+
+    /**
+     * 下次提醒时间列。
+     */
     @FXML
     private TableColumn<MemoReminder, String> nextTimeCol;
+
+    /**
+     * 运行状态列。
+     */
     @FXML
     private TableColumn<MemoReminder, String> statusCol;
 
+    /**
+     * 备忘提醒模块日志输出区。
+     */
     @FXML
     private TextArea logArea;
 
+    /**
+     * 初始化备忘提醒页签。
+     */
     @FXML
     public void initialize() {
-        intervalUnitBox.setItems(FXCollections.observableArrayList(MemoReminder.TimeUnit.values()));
-        intervalUnitBox.setValue(MemoReminder.TimeUnit.MINUTES);
+        intervalUnitBox.setItems(FXCollections.observableArrayList(IntervalUnit.values()));
+        intervalUnitBox.setValue(IntervalUnit.MINUTES);
         timesField.setText("1");
         initTable();
         loadFromDisk();
@@ -78,6 +155,9 @@ public class MemoReminderController implements ModuleLogger {
         info("备忘提醒模块初始化完成");
     }
 
+    /**
+     * 初始化提醒表格列绑定。
+     */
     private void initTable() {
         reminderTable.setItems(reminders);
         contentCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().getContent()));
@@ -87,6 +167,9 @@ public class MemoReminderController implements ModuleLogger {
         statusCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().isActive() ? "运行中" : "已暂停"));
     }
 
+    /**
+     * 新增备忘提醒。
+     */
     @FXML
     private void addReminder() {
         String content = memoInput.getText() == null ? "" : memoInput.getText().trim();
@@ -120,6 +203,9 @@ public class MemoReminderController implements ModuleLogger {
         info("新增备忘提醒: " + content);
     }
 
+    /**
+     * 删除当前选中的备忘提醒。
+     */
     @FXML
     private void removeSelected() {
         MemoReminder selected = reminderTable.getSelectionModel().getSelectedItem();
@@ -133,6 +219,9 @@ public class MemoReminderController implements ModuleLogger {
         info("已删除备忘提醒: " + selected.getContent());
     }
 
+    /**
+     * 暂停当前选中的备忘提醒。
+     */
     @FXML
     private void pauseSelected() {
         MemoReminder selected = reminderTable.getSelectionModel().getSelectedItem();
@@ -147,6 +236,9 @@ public class MemoReminderController implements ModuleLogger {
         info("已暂停提醒: " + selected.getContent());
     }
 
+    /**
+     * 恢复当前选中的备忘提醒。
+     */
     @FXML
     private void resumeSelected() {
         MemoReminder selected = reminderTable.getSelectionModel().getSelectedItem();
@@ -168,6 +260,11 @@ public class MemoReminderController implements ModuleLogger {
         info("已恢复提醒: " + selected.getContent());
     }
 
+    /**
+     * 为指定提醒排队下一次弹窗任务。
+     *
+     * @param reminder 要调度的提醒
+     */
     private void scheduleReminder(MemoReminder reminder) {
         if (!reminder.isActive() || reminder.getRemainingTimes() == 0) {
             return;
@@ -179,6 +276,11 @@ public class MemoReminderController implements ModuleLogger {
         scheduledTasks.put(reminder.getId(), future);
     }
 
+    /**
+     * 显示备忘提醒弹窗。
+     *
+     * @param reminder 要显示的提醒
+     */
     private void showReminderDialog(MemoReminder reminder) {
         Platform.runLater(() -> {
             if (!reminder.isActive()) {
@@ -202,6 +304,13 @@ public class MemoReminderController implements ModuleLogger {
         });
     }
 
+    /**
+     * 根据弹窗按钮和勾选状态更新提醒状态。
+     *
+     * @param reminder 当前提醒
+     * @param buttonType 用户点击的按钮
+     * @param checkedDone 是否勾选已处理
+     */
     private void handleDialogResult(MemoReminder reminder, ButtonType buttonType, boolean checkedDone) {
         if (buttonType.getButtonData() == ButtonBar.ButtonData.OTHER) {
             reminder.setNextTriggerEpochMillis(System.currentTimeMillis() + SNOOZE_MILLIS);
@@ -234,6 +343,11 @@ public class MemoReminderController implements ModuleLogger {
         reminderTable.refresh();
     }
 
+    /**
+     * 取消指定提醒的排队任务。
+     *
+     * @param reminderId 提醒 ID
+     */
     private void cancelTask(long reminderId) {
         ScheduledFuture<?> task = scheduledTasks.remove(reminderId);
         if (task != null) {
@@ -241,6 +355,9 @@ public class MemoReminderController implements ModuleLogger {
         }
     }
 
+    /**
+     * 从本地文件加载备忘提醒。
+     */
     private void loadFromDisk() {
         try {
             if (!Files.exists(DATA_FILE)) {
@@ -261,6 +378,9 @@ public class MemoReminderController implements ModuleLogger {
         }
     }
 
+    /**
+     * 保存备忘提醒到本地文件。
+     */
     private void persist() {
         try {
             Files.createDirectories(DATA_FILE.getParent());
@@ -271,6 +391,12 @@ public class MemoReminderController implements ModuleLogger {
         }
     }
 
+    /**
+     * 格式化时间戳为界面展示文本。
+     *
+     * @param epochMillis 时间戳毫秒
+     * @return 格式化后的时间文本
+     */
     private String formatTime(long epochMillis) {
         if (epochMillis <= 0) {
             return "-";
@@ -280,9 +406,16 @@ public class MemoReminderController implements ModuleLogger {
                 .format(Instant.ofEpochMilli(epochMillis));
     }
 
+    /**
+     * 记录备忘提醒模块日志。
+     *
+     * @param level 日志级别
+     * @param message 日志内容
+     */
     @Override
     public void log(String level, String message) {
-        String formatted = String.format("[%s][%s][备忘提醒] %s", TimeUtils.getCurrentDateTime(), level, message);
+        String formatted = String.format("[%s][%s][备忘提醒] %s",
+                plugin.javafxtools.util.TimeUtils.getCurrentDateTime(), level, message);
         Platform.runLater(() -> {
             if (logArea != null && logArea.getScene() != null) {
                 trimLogs();
@@ -292,6 +425,9 @@ public class MemoReminderController implements ModuleLogger {
         });
     }
 
+    /**
+     * 裁剪过长的日志内容。
+     */
     private void trimLogs() {
         int lineCount = logArea.getParagraphs().size();
         if (lineCount < MAX_LOG_LINES) {
@@ -313,11 +449,19 @@ public class MemoReminderController implements ModuleLogger {
         }
     }
 
+    /**
+     * 获取备忘提醒模块日志输出区域。
+     *
+     * @return 日志输出区域
+     */
     @Override
     public TextArea getLogArea() {
         return logArea;
     }
 
+    /**
+     * 清理提醒调度任务和后台线程。
+     */
     public void cleanup() {
         scheduledTasks.values().forEach(task -> task.cancel(false));
         scheduledTasks.clear();

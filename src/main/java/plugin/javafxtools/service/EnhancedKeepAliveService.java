@@ -4,6 +4,7 @@ import javafx.application.Platform;
 import javafx.scene.control.TextArea;
 import plugin.javafxtools.base.ModuleLogger;
 import plugin.javafxtools.model.KeepAliveConfig;
+import plugin.javafxtools.model.KeepAliveMethod;
 import plugin.javafxtools.util.TimeUtils;
 
 import java.io.IOException;
@@ -13,29 +14,87 @@ import java.util.*;
 import java.util.concurrent.*;
 
 /**
- * 增强版域名保活服务
- * 支持多域名独立配置和多种时间单位
+ * 增强版域名保活服务，支持多域名独立配置、随机间隔和 HTTP/Ping 两种保活方式。
  */
 public class EnhancedKeepAliveService implements ModuleLogger {
-    private final Map<String, ScheduledExecutorService> schedulers = new ConcurrentHashMap<>();
-    private final Map<String, ScheduledFuture<?>> scheduledFutures = new ConcurrentHashMap<>(); // 添加这个字段
+    /**
+     * 所有域名共享的保活调度器，避免域名数量增加时线性创建线程。
+     */
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(
+            Math.max(2, Math.min(4, Runtime.getRuntime().availableProcessors())),
+            r -> {
+                Thread t = new Thread(r, "KeepAlive-Worker");
+                t.setDaemon(true);
+                t.setPriority(Thread.MIN_PRIORITY);
+                return t;
+            }
+    );
+
+    /**
+     * 每个域名当前排队的下一次任务。
+     */
+    private final Map<String, ScheduledFuture<?>> scheduledFutures = new ConcurrentHashMap<>();
+
+    /**
+     * 当前处于运行状态的域名集合。
+     */
+    private final Set<String> activeDomains = ConcurrentHashMap.newKeySet();
+
+    /**
+     * 当前已加载的保活配置。
+     */
     private final Map<String, KeepAliveConfig> configs = new ConcurrentHashMap<>();
+
+    /**
+     * 保活页签日志输出区域。
+     */
     private TextArea logArea;
 
-    // 配置常量
+    /**
+     * HTTP 连接和 Ping 等待的基础超时时间。
+     */
     private static final int CONNECT_TIMEOUT = 8000;
-    private static final int READ_TIMEOUT = 10000;
-    private static final int TERMINATION_TIMEOUT = 2; // 减少关闭等待时间
-    private static final int LOG_LINE_LIMIT = 500;
-    private static final int LOG_CLEAN_BATCH_SIZE = 100;
 
-    // 日志批处理
+    /**
+     * HTTP 读取超时时间。
+     */
+    private static final int READ_TIMEOUT = 10000;
+
+    /**
+     * 等待批量刷新的日志队列。
+     */
     private final Queue<String> logQueue = new ConcurrentLinkedQueue<>();
+
+    /**
+     * 定时刷新日志队列的执行器。
+     */
     private ScheduledExecutorService logExecutor;
+
+    /**
+     * 日志刷新中的并发保护标记。
+     */
     private volatile boolean isLogProcessing = false;
+
+    /**
+     * 单次最多刷新的日志数量。
+     */
     private static final int LOG_BATCH_SIZE = 10;
+
+    /**
+     * 日志队列最大积压数量。
+     */
+    private static final int MAX_LOG_QUEUE_SIZE = 200;
+
+    /**
+     * 日志刷新间隔，单位毫秒。
+     */
     private static final long LOG_FLUSH_INTERVAL = 100;
 
+    /**
+     * 创建域名保活服务。
+     *
+     * @param logArea 日志输出区域
+     */
     public EnhancedKeepAliveService(TextArea logArea) {
         this.logArea = logArea;
 
@@ -49,7 +108,7 @@ public class EnhancedKeepAliveService implements ModuleLogger {
         });
 
         // 定期刷新日志
-        logExecutor.scheduleAtFixedRate(this::flushLogs,
+        logExecutor.scheduleWithFixedDelay(this::flushLogs,
                 LOG_FLUSH_INTERVAL, LOG_FLUSH_INTERVAL, TimeUnit.MILLISECONDS);
 
         info("EnhancedKeepAliveService 初始化完成");
@@ -66,14 +125,16 @@ public class EnhancedKeepAliveService implements ModuleLogger {
         debug("批量更新配置，共 " + configList.size() + " 条");
 
         // 收集要停止的域名
-        Set<String> domainsToStop = new HashSet<>(schedulers.keySet());
+        Set<String> domainsToStop = new HashSet<>(activeDomains);
 
         // 更新配置
         configs.clear();
         for (KeepAliveConfig config : configList) {
             if (config != null) {
                 configs.put(config.getDomain(), config);
-                domainsToStop.remove(config.getDomain());
+                if (config.isEnabled()) {
+                    domainsToStop.remove(config.getDomain());
+                }
             }
         }
 
@@ -102,17 +163,6 @@ public class EnhancedKeepAliveService implements ModuleLogger {
         // 如果已有任务在运行，先停止
         stopDomain(domain);
 
-        // 创建调度器（使用守护线程）
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r);
-            t.setDaemon(true); // 关键：设置为守护线程
-            t.setName("KeepAlive-" + getDomainName(domain));
-            t.setPriority(Thread.MIN_PRIORITY); // 降低优先级
-            return t;
-        });
-
-        schedulers.put(domain, scheduler);
-
         // 安排第一次执行（使用随机延迟开始，避免所有任务同时启动）
         long initialDelay = (long)(Math.random() * 5000); // 0-5秒随机延迟
         ScheduledFuture<?> future = scheduler.schedule(() -> {
@@ -124,6 +174,7 @@ public class EnhancedKeepAliveService implements ModuleLogger {
         }, initialDelay, TimeUnit.MILLISECONDS);
 
         scheduledFutures.put(domain, future); // 保存Future引用
+        activeDomains.add(domain);
 
         info("启动: " + getDomainName(domain));
     }
@@ -137,7 +188,7 @@ public class EnhancedKeepAliveService implements ModuleLogger {
             return;
         }
 
-        // 执行ping
+        // 执行保活
         pingDomain(domain);
 
         // 安排下一次执行
@@ -153,7 +204,6 @@ public class EnhancedKeepAliveService implements ModuleLogger {
             return;
         }
 
-        ScheduledExecutorService scheduler = schedulers.get(domain);
         if (scheduler == null || scheduler.isShutdown()) {
             return;
         }
@@ -199,34 +249,8 @@ public class EnhancedKeepAliveService implements ModuleLogger {
             future.cancel(false);
             debug("已取消计划任务: " + getDomainName(domain));
         }
-
-        // 关闭调度器
-        ScheduledExecutorService scheduler = schedulers.remove(domain);
-        if (scheduler != null) {
-            shutdownScheduler(scheduler);
+        if (activeDomains.remove(domain)) {
             info("停止: " + getDomainName(domain));
-        }
-    }
-
-    /**
-     * 优雅关闭调度器
-     */
-    private void shutdownScheduler(ScheduledExecutorService scheduler) {
-        try {
-            // 先尝试优雅关闭
-            scheduler.shutdown();
-
-            // 等待很短时间
-            if (!scheduler.awaitTermination(TERMINATION_TIMEOUT, TimeUnit.SECONDS)) {
-                // 超时后强制关闭
-                List<Runnable> pendingTasks = scheduler.shutdownNow();
-                if (!pendingTasks.isEmpty()) {
-                    debug("强制关闭，有 " + pendingTasks.size() + " 个任务未执行");
-                }
-            }
-        } catch (InterruptedException e) {
-            scheduler.shutdownNow();
-            Thread.currentThread().interrupt();
         }
     }
 
@@ -247,65 +271,12 @@ public class EnhancedKeepAliveService implements ModuleLogger {
     }
 
     /**
-     * 停止所有域名保活服务
+     * 清理资源 - 停止所有域名任务并释放线程池
      */
-    public void stopAll() {
-        debug("停止所有域名保活服务...");
+    public void cleanup() {
+        info("清理保活服务资源...");
 
-        // 先取消所有计划任务
-        for (ScheduledFuture<?> future : scheduledFutures.values()) {
-            if (future != null && !future.isDone()) {
-                future.cancel(false);
-            }
-        }
-        scheduledFutures.clear();
-
-        // 关闭所有调度器
-        for (ScheduledExecutorService scheduler : schedulers.values()) {
-            if (scheduler != null) {
-                shutdownScheduler(scheduler);
-            }
-        }
-        schedulers.clear();
-
-        debug("所有域名保活服务已停止");
-    }
-
-    /**
-     * 快速停止所有域名任务（不等待）
-     */
-    public void stopAllQuickly() {
-        debug("快速停止所有域名任务...");
-
-        // 立即取消所有计划任务
-        for (ScheduledFuture<?> future : scheduledFutures.values()) {
-            if (future != null) {
-                future.cancel(true); // 强制中断
-            }
-        }
-        scheduledFutures.clear();
-
-        // 立即关闭所有调度器
-        for (ScheduledExecutorService scheduler : schedulers.values()) {
-            if (scheduler != null) {
-                List<Runnable> pendingTasks = scheduler.shutdownNow();
-                if (!pendingTasks.isEmpty()) {
-                    debug("强制关闭，有 " + pendingTasks.size() + " 个任务被丢弃");
-                }
-            }
-        }
-        schedulers.clear();
-
-        debug("快速停止完成");
-    }
-
-    /**
-     * 强制关闭（立即停止所有）
-     */
-    public void forceShutdown() {
-        debug("强制关闭保活服务...");
-
-        // 1. 立即停止所有计划任务
+        // 取消所有计划任务
         for (ScheduledFuture<?> future : scheduledFutures.values()) {
             if (future != null) {
                 future.cancel(true);
@@ -313,61 +284,20 @@ public class EnhancedKeepAliveService implements ModuleLogger {
         }
         scheduledFutures.clear();
 
-        // 2. 立即关闭所有调度器
-        for (ScheduledExecutorService scheduler : schedulers.values()) {
-            if (scheduler != null) {
-                scheduler.shutdownNow();
-            }
-        }
-        schedulers.clear();
+        activeDomains.clear();
 
-        // 3. 停止日志处理器
+        // 关闭共享保活调度器
+        scheduler.shutdownNow();
+
+        // 关闭日志处理器
         if (logExecutor != null) {
             logExecutor.shutdownNow();
         }
 
-        // 4. 清空所有数据
+        // 清空数据
         configs.clear();
         logQueue.clear();
         logArea = null;
-
-        debug("强制关闭完成");
-    }
-
-    /**
-     * 清理资源
-     */
-    public void cleanup() {
-        info("开始清理保活服务资源...");
-        long startTime = System.currentTimeMillis();
-
-        // 使用快速停止
-        stopAllQuickly();
-
-        // 清理日志处理器
-        if (logExecutor != null) {
-            try {
-                logExecutor.shutdown();
-                if (!logExecutor.awaitTermination(1, TimeUnit.SECONDS)) {
-                    logExecutor.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                logExecutor.shutdownNow();
-                Thread.currentThread().interrupt();
-            }
-        }
-
-        // 清空所有数据
-        configs.clear();
-        logQueue.clear();
-        scheduledFutures.clear();
-        schedulers.clear();
-
-        // 清理UI引用
-        logArea = null;
-
-        long endTime = System.currentTimeMillis();
-        System.out.println("保活服务清理完成，耗时: " + (endTime - startTime) + "ms");
     }
 
     /**
@@ -379,12 +309,26 @@ public class EnhancedKeepAliveService implements ModuleLogger {
             return;
         }
 
+        if (config.getMethod() == KeepAliveMethod.PING) {
+            pingDomainByWindowsCommand(domain);
+            return;
+        }
+
+        requestDomainByHttp(domain);
+    }
+
+    /**
+     * 通过 HTTP GET 请求访问域名。
+     *
+     * @param domain 域名或 URL
+     */
+    private void requestDomainByHttp(String domain) {
         long startTime = System.currentTimeMillis();
         try {
             // 随机用户代理
             String[] userAgents = {
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/120.0.0.0 Safari/537.36",
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0"
             };
 
@@ -433,6 +377,67 @@ public class EnhancedKeepAliveService implements ModuleLogger {
     }
 
     /**
+     * 通过 Windows ping.exe 命令访问域名主机。
+     *
+     * @param domain 域名或 URL
+     */
+    private void pingDomainByWindowsCommand(String domain) {
+        long startTime = System.currentTimeMillis();
+        Process process = null;
+        try {
+            String host = getPingHost(domain);
+            ProcessBuilder builder = new ProcessBuilder(
+                    "ping.exe",
+                    "-n", "1",
+                    "-w", String.valueOf(CONNECT_TIMEOUT),
+                    host
+            );
+            builder.redirectErrorStream(true);
+            builder.redirectOutput(ProcessBuilder.Redirect.DISCARD);
+
+            process = builder.start();
+            boolean finished = process.waitFor(CONNECT_TIMEOUT + 2000L, TimeUnit.MILLISECONDS);
+            long responseTime = System.currentTimeMillis() - startTime;
+            if (!finished) {
+                process.destroyForcibly();
+                error("✗ Ping " + getDomainName(domain) + " (超时, " + responseTime + "ms)");
+                return;
+            }
+
+            int exitCode = process.exitValue();
+            if (exitCode == 0) {
+                info("✓ Ping " + getDomainName(domain) + " (" + responseTime + "ms)");
+            } else {
+                warn("⚠ Ping " + getDomainName(domain) + " (退出码 " + exitCode + ", " + responseTime + "ms)");
+            }
+        } catch (IOException e) {
+            long responseTime = System.currentTimeMillis() - startTime;
+            error("✗ Ping " + getDomainName(domain) + " (" + e.getClass().getSimpleName() + ", " + responseTime + "ms)");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            if (process != null && process.isAlive()) {
+                process.destroyForcibly();
+            }
+        }
+    }
+
+    /**
+     * 从 URL 中解析 Ping 命令可使用的主机名。
+     *
+     * @param domain 域名或 URL
+     * @return 主机名
+     * @throws IOException URL 无法解析主机名时抛出
+     */
+    private String getPingHost(String domain) throws IOException {
+        String host = new URL(domain).getHost();
+        if (host == null || host.trim().isEmpty()) {
+            throw new IOException("无法解析Ping主机名");
+        }
+        return host;
+    }
+
+    /**
      * 获取简化的域名显示
      */
     private String getDomainName(String url) {
@@ -448,6 +453,12 @@ public class EnhancedKeepAliveService implements ModuleLogger {
         }
     }
 
+    /**
+     * 记录保活模块日志。
+     *
+     * @param level 日志级别
+     * @param message 日志内容
+     */
     @Override
     public void log(String level, String message) {
         if (message == null || message.trim().isEmpty()) {
@@ -459,6 +470,7 @@ public class EnhancedKeepAliveService implements ModuleLogger {
                 TimeUtils.getCurrentDateTime(), level, message);
 
         logQueue.offer(formattedMessage);
+        trimLogQueue();
 
         // 如果队列积压太多，立即处理
         if (logQueue.size() > LOG_BATCH_SIZE * 2) {
@@ -539,25 +551,59 @@ public class EnhancedKeepAliveService implements ModuleLogger {
         return logArea != null && logArea.getScene() != null;
     }
 
+    /**
+     * 获取日志输出区域。
+     *
+     * @return 日志输出区域
+     */
     @Override
     public TextArea getLogArea() {
         return logArea;
     }
 
-    // 便利方法 - 减少日志输出
+    /**
+     * 限制日志队列积压，避免界面不可用时日志无限占用内存。
+     */
+    private void trimLogQueue() {
+        while (logQueue.size() > MAX_LOG_QUEUE_SIZE) {
+            logQueue.poll();
+        }
+    }
+
+    /**
+     * 记录信息日志。
+     *
+     * @param message 日志内容
+     */
     @Override
     public void info(String message) {
         log("INFO", message);
     }
+
+    /**
+     * 记录错误日志。
+     *
+     * @param message 日志内容
+     */
     @Override
     public void error(String message) {
         log("ERROR", message);
     }
 
+    /**
+     * 记录警告日志。
+     *
+     * @param message 日志内容
+     */
     public void warn(String message) {
         log("WARN", message);
     }
 
+    /**
+     * 记录调试日志，队列积压时自动降噪。
+     *
+     * @param message 日志内容
+     */
     @Override
     public void debug(String message) {
         // 调试日志只在需要时输出
@@ -570,14 +616,14 @@ public class EnhancedKeepAliveService implements ModuleLogger {
      * 获取当前活跃的域名数量
      */
     public int getActiveDomainCount() {
-        return schedulers.size();
+        return activeDomains.size();
     }
 
     /**
      * 检查域名是否正在保活
      */
     public boolean isDomainActive(String domain) {
-        return schedulers.containsKey(domain);
+        return activeDomains.contains(domain);
     }
 
     /**
@@ -591,18 +637,14 @@ public class EnhancedKeepAliveService implements ModuleLogger {
      * 手动触发一次域名访问（用于测试）
      */
     public void testPingDomain(String domain) {
-        new Thread(() -> {
-            Thread.currentThread().setName("TestPing-" + getDomainName(domain));
-            Thread.currentThread().setPriority(Thread.MIN_PRIORITY);
-            pingDomain(domain);
-        }).start();
+        scheduler.execute(() -> pingDomain(domain));
     }
 
     /**
      * 获取服务状态信息
      */
     public String getServiceStatus() {
-        int activeCount = schedulers.size();
+        int activeCount = activeDomains.size();
         int configCount = configs.size();
         int enabledCount = (int) configs.values().stream()
                 .filter(KeepAliveConfig::isEnabled)

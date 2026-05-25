@@ -5,47 +5,60 @@ import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
-import plugin.javafxtools.base.ModuleLogger;
-import plugin.javafxtools.util.TimeUtils;
+import plugin.javafxtools.base.BaseController;
 
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
  * 网络查询工具控制器 - 提供IP/DNS查询功能
  */
-public class NetworkToolsController implements ModuleLogger {
-
-    @FXML
-    private TextField hostField;         // 主机名/IP输入框
-    @FXML
-    private Button lookupButton;        // 查询按钮
-    @FXML
-    private Button clearButton;         // 清除按钮
-    @FXML
-    private TextArea lookupResultArea;  // 结果显示区域
-
-
-    public TextArea getLogArea() {
-        return lookupResultArea;
-    }
+public class NetworkToolsController extends BaseController {
 
     /**
-     * 自定义日志方法 - 只输出到本模块日志区
+     * 主机名或 IP 输入框。
+     */
+    @FXML
+    private TextField hostField;
+
+    /**
+     * 执行网络查询的按钮。
+     */
+    @FXML
+    private Button lookupButton;
+
+    /**
+     * 清空查询条件和结果的按钮。
+     */
+    @FXML
+    private Button clearButton;
+
+    /**
+     * 网络查询结果和模块日志输出区域。
+     */
+    @FXML
+    private TextArea lookupResultArea;
+
+    /**
+     * 后台网络查询执行器，避免 DNS 和可达性检测阻塞 JavaFX 线程。
+     */
+    private final ExecutorService queryExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "NetworkQuery");
+        t.setDaemon(true);
+        return t;
+    });
+
+    /**
+     * 获取当前模块日志输出区域。
+     *
+     * @return 网络查询结果区域
      */
     @Override
-    public void log(String level, String message) {
-        String formattedMessage = String.format("\n"+"[%s][%s] %s",
-                TimeUtils.getCurrentDateTime(), level, message);
-
-        Platform.runLater(() -> {
-            if (lookupResultArea != null && lookupResultArea.getScene() != null) {
-                lookupResultArea.appendText(formattedMessage);
-                lookupResultArea.setScrollTop(Double.MAX_VALUE); // 自动滚动到底部
-            }
-        });
+    public TextArea getLogArea() {
+        return lookupResultArea;
     }
 
     /**
@@ -74,8 +87,8 @@ public class NetworkToolsController implements ModuleLogger {
         lookupButton.setDisable(true);
         clearButton.setDisable(true);
 
-        // 使用线程池执行网络查询，避免阻塞UI线程
-        Executors.newSingleThreadExecutor().submit(() -> {
+        // 使用共享线程池执行网络查询，避免阻塞UI线程
+        queryExecutor.submit(() -> {
             try {
                 info("开始查询: " + host);
 
@@ -146,20 +159,12 @@ public class NetworkToolsController implements ModuleLogger {
         lookupResultArea.clear();
         info("已清除查询条件和结果");
     }
+
     /**
-     * 清空日志按钮
+     * 清理网络查询线程池。
      */
-    @FXML
-    private void handleClearLog() {
-        Platform.runLater(() -> {
-            if (lookupResultArea != null) {
-                lookupResultArea.clear();
-            }
-        });
-    }
-    /**
-     * 清理资源
-     */
+    @Override
     public void cleanup() {
+        queryExecutor.shutdownNow();
     }
 }

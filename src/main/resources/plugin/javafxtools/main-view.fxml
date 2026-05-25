@@ -6,7 +6,7 @@
 
 <VBox xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="plugin.javafxtools.controller.MainController"
-      spacing="10" prefWidth="1000" prefHeight="700" styleClass="toolbox-container">
+      spacing="12" prefWidth="1180" prefHeight="760" styleClass="app-shell">
 
     <padding>
         <Insets bottom="10" left="10" right="10" top="10"/>
@@ -59,6 +59,8 @@
     </TabPane>
 
     <!-- 中央日志区域 -->
-    <Label text="系统日志:" styleClass="section-title"/>
-    <TextArea fx:id="centralLogArea" editable="false" prefRowCount="15" VBox.vgrow="NEVER" styleClass="log-area"/>
+    <VBox spacing="8" VBox.vgrow="NEVER" styleClass="log-panel">
+        <Label text="系统日志" styleClass="section-title"/>
+        <TextArea fx:id="centralLogArea" editable="false" prefRowCount="7" VBox.vgrow="NEVER" styleClass="log-area"/>
+    </VBox>
 </VBox>

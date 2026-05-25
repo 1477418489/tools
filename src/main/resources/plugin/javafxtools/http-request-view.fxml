@@ -6,7 +6,7 @@
 
 <GridPane xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1"
           fx:controller="plugin.javafxtools.controller.HttpRequestController"
-          hgap="10" vgap="10" prefWidth="1000" prefHeight="750">
+          hgap="12" vgap="12" prefWidth="1000" prefHeight="750" styleClass="tool-page">
 
     <padding>
         <Insets bottom="10" left="10" right="10" top="10"/>
@@ -15,7 +15,7 @@
     <!-- 第0行 - 开始时间 -->
     <Label text="开始时间 (yyyy-MM-dd HH:mm:ss):" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
     <TextField fx:id="startTimeField" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
-    <Button fx:id="nowButton" text="现在" onAction="#handleNowButton" GridPane.columnIndex="2" GridPane.rowIndex="0"/>
+    <Button fx:id="nowButton" text="现在" onAction="#handleNowButton" GridPane.columnIndex="2" GridPane.rowIndex="0" styleClass="secondary-button"/>
 
     <!-- 第1行 - 执行间隔 -->
     <Label text="执行间隔 (秒):" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
@@ -45,18 +45,18 @@
 
     <!-- 第7行 - 请求模板 -->
     <Label text="请求模板:" GridPane.columnIndex="0" GridPane.rowIndex="7"/>
-    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="7" GridPane.columnSpan="4">
+    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="7" GridPane.columnSpan="4" styleClass="toolbar-card">
         <ComboBox fx:id="templateComboBox" editable="true" prefWidth="180"/>
-        <Button text="保存模板" onAction="#handleSaveTemplate"/>
-        <Button text="载入模板" onAction="#handleLoadTemplate"/>
-        <Button text="删除模板" onAction="#handleDeleteTemplate"/>
+        <Button text="保存模板" onAction="#handleSaveTemplate" styleClass="success-button"/>
+        <Button text="载入模板" onAction="#handleLoadTemplate" styleClass="secondary-button"/>
+        <Button text="删除模板" onAction="#handleDeleteTemplate" styleClass="danger-button"/>
     </HBox>
 
     <!-- 第8行 - 控制按钮 -->
-    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="8" GridPane.columnSpan="3">
-        <Button fx:id="startButton" text="开始" onAction="#handleStartButton"/>
-        <Button fx:id="stopButton" text="停止" onAction="#handleStopButton"/>
-        <Button fx:id="formatButton" text="美化响应" onAction="#handleFormatButton"/>
+    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="8" GridPane.columnSpan="3" styleClass="toolbar-card">
+        <Button fx:id="startButton" text="开始" onAction="#handleStartButton" styleClass="success-button"/>
+        <Button fx:id="stopButton" text="停止" onAction="#handleStopButton" styleClass="danger-button"/>
+        <Button fx:id="formatButton" text="美化响应" onAction="#handleFormatButton" styleClass="secondary-button"/>
         <Label text="响应格式:"/>
         <ComboBox fx:id="responseFormatComboBox"/>
     </HBox>
