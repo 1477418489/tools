@@ -5,25 +5,22 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ee1c44d2-bcb9-434c-ac67-b5e91efd8462" name="更改" comment="init">
+      <change beforePath="$PROJECT_DIR$/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/settings.local.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/build-exe.bat" beforeDir="false" afterPath="$PROJECT_DIR$/build-exe.bat" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/module-info.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/module-info.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/run.bat" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/AppLauncherController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/AppLauncherController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/DataFormatController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/DataFormatController.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/HttpRequestController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/HttpRequestController.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/JarLauncherController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/JarLauncherController.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/KeepAliveManagerController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/KeepAliveManagerController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/MainController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/MainController.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/MemoReminderController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/MemoReminderController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/NetworkToolsController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/NetworkToolsController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/StrDataFormatController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/StrDataFormatController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/WebSocketController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/WebSocketController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/model/KeepAliveConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/model/KeepAliveConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/model/MemoReminder.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/model/MemoReminder.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/EnhancedKeepAliveService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/EnhancedKeepAliveService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/css/styles.css" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/css/styles.css" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/app-launcher-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/app-launcher-view.fxml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/data-format-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/data-format-view.fxml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/keepalive-manager-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/keepalive-manager-view.fxml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/http-request-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/http-request-view.fxml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/jar-launcher-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/jar-launcher-view.fxml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/network-tools-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/network-tools-view.fxml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/strData-format-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/strData-format-view.fxml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/websocket-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/websocket-view.fxml" afterDir="false" />
@@ -51,12 +48,12 @@
     &quot;assignee&quot;: &quot;453012269&quot;
   }
 }</component>
-  <component name="GithubPullRequestsUISettings"><![CDATA[{
-  "selectedUrlAndAccountId": {
-    "url": "https://github.com/1477418489/tools.git",
-    "accountId": "3cd50728-e35c-43fd-8867-013ab0e43e47"
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/1477418489/tools.git&quot;,
+    &quot;accountId&quot;: &quot;3cd50728-e35c-43fd-8867-013ab0e43e47&quot;
   }
-}]]></component>
+}</component>
   <component name="MavenImportPreferences">
     <option name="generalSettings">
       <MavenGeneralSettings>
@@ -123,8 +120,8 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-jdk-30f59d01ecdd-2fc7cc6b9a17-intellij.indexing.shared.core-IU-253.31033.145" />
-        <option value="bundled-js-predefined-d6986cc7102b-9b0f141eb926-JavaScript-IU-253.31033.145" />
+        <option value="bundled-jdk-30f59d01ecdd-37e91769500f-intellij.indexing.shared.core-IU-261.24374.151" />
+        <option value="bundled-js-predefined-d6986cc7102b-31caf2ab9e3c-JavaScript-IU-261.24374.151" />
       </set>
     </attachedChunks>
   </component>
@@ -144,6 +141,8 @@
       <workItem from="1773362040097" duration="4673000" />
       <workItem from="1778818764510" duration="5860000" />
       <workItem from="1779171363652" duration="5985000" />
+      <workItem from="1779668949053" duration="2459000" />
+      <workItem from="1779755647856" duration="14000" />
     </task>
     <task id="LOCAL-00001" summary="init">
       <option name="closed" value="true" />
@@ -161,7 +160,15 @@
       <option name="project" value="LOCAL" />
       <updated>1773365589498</updated>
     </task>
-    <option name="localTasksCounter" value="3" />
+    <task id="LOCAL-00003" summary="init">
+      <option name="closed" value="true" />
+      <created>1779669070024</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1779669070024</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

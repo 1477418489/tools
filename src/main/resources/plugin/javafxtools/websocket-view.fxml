@@ -12,9 +12,19 @@
         <Insets bottom="10" left="10" right="10" top="10"/>
     </padding>
 
+    <columnConstraints>
+        <ColumnConstraints minWidth="120" prefWidth="140" hgrow="NEVER"/>
+        <ColumnConstraints hgrow="ALWAYS"/>
+    </columnConstraints>
+    <rowConstraints>
+        <RowConstraints vgrow="NEVER"/>
+        <RowConstraints vgrow="ALWAYS"/>
+        <RowConstraints vgrow="NEVER"/>
+    </rowConstraints>
+
     <!-- 第0行 - 服务器地址 -->
     <Label text="WebSocket服务器:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
-    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="0" styleClass="toolbar-card">
+    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="0" GridPane.hgrow="ALWAYS" styleClass="toolbar-card">
         <TextField fx:id="wsUrlField" HBox.hgrow="ALWAYS"/>
         <Button fx:id="wsConnectButton" text="连接" onAction="#handleWsConnect" styleClass="success-button"/>
         <Button fx:id="wsDisconnectButton" text="断开" onAction="#handleWsDisconnect" styleClass="danger-button"/>
@@ -22,11 +32,12 @@
 
     <!-- 第1行 - 消息记录 -->
     <Label text="消息记录:" GridPane.columnIndex="0" GridPane.rowIndex="1" styleClass="section-title"/>
-    <TextArea fx:id="wsMessageArea" editable="false" GridPane.columnIndex="1" GridPane.rowIndex="1" GridPane.vgrow="ALWAYS" styleClass="log-area"/>
+    <TextArea fx:id="wsMessageArea" editable="false" GridPane.columnIndex="1" GridPane.rowIndex="1"
+              GridPane.hgrow="ALWAYS" GridPane.vgrow="ALWAYS" styleClass="log-area"/>
 
     <!-- 第2行 - 消息发送 -->
     <Label text="发送消息:" GridPane.columnIndex="0" GridPane.rowIndex="2"/>
-    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="2" styleClass="toolbar-card">
+    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="2" GridPane.hgrow="ALWAYS" styleClass="toolbar-card">
         <TextField fx:id="wsMessageField" HBox.hgrow="ALWAYS" onAction="#handleWsSend"/>
         <Button fx:id="wsSendButton" text="发送" onAction="#handleWsSend"/>
         <Button fx:id="wsClearButton" text="清除" onAction="#handleWsClear" styleClass="secondary-button"/>

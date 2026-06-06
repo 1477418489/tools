@@ -12,17 +12,28 @@
         <Insets bottom="10" left="10" right="10" top="10"/>
     </padding>
 
+    <columnConstraints>
+        <ColumnConstraints minWidth="110" prefWidth="120" hgrow="NEVER"/>
+        <ColumnConstraints hgrow="ALWAYS"/>
+    </columnConstraints>
+    <rowConstraints>
+        <RowConstraints vgrow="NEVER"/>
+        <RowConstraints vgrow="NEVER"/>
+        <RowConstraints vgrow="NEVER"/>
+        <RowConstraints vgrow="ALWAYS"/>
+    </rowConstraints>
+
     <!-- 第0行 - 应用程序路径输入 -->
     <Label text="应用程序路径:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
-    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="0" styleClass="toolbar-card">
-        <TextField fx:id="appPathField" prefWidth="500"/>
+    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="0" GridPane.hgrow="ALWAYS" styleClass="toolbar-card">
+        <TextField fx:id="appPathField" prefWidth="500" HBox.hgrow="ALWAYS"/>
         <Button fx:id="browseButton" text="浏览..." onAction="#handleBrowse" styleClass="secondary-button"/>
         <Button fx:id="addButton" text="添加" onAction="#handleAdd" styleClass="success-button"/>
     </HBox>
 
     <!-- 第1行 - 应用程序列表 -->
     <Label text="应用程序列表:" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
-    <VBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="1" styleClass="content-card">
+    <VBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="1" GridPane.hgrow="ALWAYS" styleClass="content-card">
         <ListView fx:id="appListView"
                   prefHeight="200" GridPane.vgrow="NEVER" styleClass="enhanced-list-view"/>
         <HBox spacing="10" alignment="CENTER_RIGHT">
@@ -33,7 +44,7 @@
 
     <!-- 第2行 - 操作按钮 -->
     <Label text="操作:" GridPane.columnIndex="0" GridPane.rowIndex="2"/>
-    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="2" styleClass="toolbar-card">
+    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="2" GridPane.hgrow="ALWAYS" styleClass="toolbar-card">
         <Button fx:id="launchSingleButton" text="启动选中" onAction="#handleLaunchSingle" styleClass="success-button"/>
         <Button fx:id="launchAllButton" text="启动所有" onAction="#handleLaunchAll" styleClass="success-button"/>
         <Button fx:id="killProcessButton" text="结束进程" onAction="#handleKillProcess" styleClass="danger-button"/>
@@ -48,5 +59,6 @@
         <Button text="清空日志" onAction="#handleClearLog" styleClass="secondary-button"/>
     </HBox>
     <TextArea fx:id="logArea" editable="false" GridPane.columnIndex="1" GridPane.rowIndex="3"
+              GridPane.hgrow="ALWAYS"
               GridPane.vgrow="ALWAYS" styleClass="log-area"/>
 </GridPane>

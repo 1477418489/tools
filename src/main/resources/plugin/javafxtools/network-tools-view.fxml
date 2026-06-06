@@ -12,9 +12,18 @@
         <Insets bottom="10" left="10" right="10" top="10"/>
     </padding>
 
+    <columnConstraints>
+        <ColumnConstraints minWidth="110" prefWidth="130" hgrow="NEVER"/>
+        <ColumnConstraints hgrow="ALWAYS"/>
+    </columnConstraints>
+    <rowConstraints>
+        <RowConstraints vgrow="NEVER"/>
+        <RowConstraints vgrow="ALWAYS"/>
+    </rowConstraints>
+
     <!-- 第0行 - 输入框和按钮 -->
     <Label text="主机名/IP地址:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
-    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="0" styleClass="toolbar-card">
+    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="0" GridPane.hgrow="ALWAYS" styleClass="toolbar-card">
         <TextField fx:id="hostField" HBox.hgrow="ALWAYS"/>
         <Button fx:id="lookupButton" text="查询" onAction="#handleLookup" styleClass="success-button"/>
         <Button fx:id="clearButton" text="清除" onAction="#handleClear" styleClass="secondary-button"/>
@@ -25,5 +34,6 @@
         <Label text="执行日志/响应内容:" styleClass="section-title"/>
         <Button text="清空日志" onAction="#handleClearLog" styleClass="secondary-button"/>
     </HBox>
-    <TextArea fx:id="lookupResultArea" editable="false" GridPane.columnIndex="1" GridPane.rowIndex="1" GridPane.vgrow="ALWAYS" styleClass="log-area"/>
+    <TextArea fx:id="lookupResultArea" editable="false" GridPane.columnIndex="1" GridPane.rowIndex="1"
+              GridPane.hgrow="ALWAYS" GridPane.vgrow="ALWAYS" styleClass="log-area"/>
 </GridPane>

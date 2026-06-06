@@ -38,8 +38,8 @@
 
             <!-- 操作按钮 -->
             <HBox spacing="15" alignment="CENTER">
-                <Button text="添加项目" fx:id="addProjectButton" onAction="#handleAddProject" styleClass="success-button" />
-                <Button text="复制文件" fx:id="copyButton" onAction="#handleCopyAction" styleClass="secondary-button" />
+                <Button text="添加项目" onAction="#handleAddProject" styleClass="success-button" />
+                <Button text="复制文件" onAction="#handleCopyAction" styleClass="secondary-button" />
                 <Button text="编辑项目" onAction="#handleEditProject" styleClass="secondary-button"/>
                 <Button text="启动应用" fx:id="launchButton" onAction="#handleLaunchAction" styleClass="success-button" />
                 <Button text="停止应用" fx:id="stopButton" onAction="#handleStopAction" styleClass="danger-button" />
@@ -49,7 +49,7 @@
             <!-- 操作按钮 -->
             <HBox spacing="15" alignment="CENTER">
                 <TextField fx:id="portNumField" prefWidth="100" promptText="端口"/>
-                <Button text="查询端口" fx:id="queryPortButton" onAction="#queryPort" styleClass="secondary-button" />
+                <Button text="查询端口" onAction="#queryPort" styleClass="secondary-button" />
             </HBox>
         </VBox>
     </top>
