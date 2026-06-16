@@ -2,6 +2,7 @@ package plugin.javafxtools.service;
 
 import javafx.application.Platform;
 import javafx.scene.control.TextArea;
+import plugin.javafxtools.util.LogTextTrimmer;
 import plugin.javafxtools.util.TimeUtils;
 
 import java.lang.ref.WeakReference;
@@ -100,40 +101,9 @@ public class LoggingService {
      */
     private void safeAppend(TextArea area, String message) {
         if (area != null && area.getScene() != null) {
-            trimLogLines(area);
+            LogTextTrimmer.trimToMaxLines(area, MAX_LOG_LINES, 100);
             area.appendText(message + "\n");
             area.setScrollTop(Double.MAX_VALUE);
-        }
-    }
-
-    /**
-     * 控制日志区域行数，删除超过限制的旧日志。
-     *
-     * @param area 日志文本区域
-     */
-    private void trimLogLines(TextArea area) {
-        String text = area.getText();
-        if (text == null || text.isEmpty()) {
-            return;
-        }
-        int lineCount = area.getParagraphs().size();
-        if (lineCount < MAX_LOG_LINES) {
-            return;
-        }
-
-        int removeLines = Math.max(100, lineCount - MAX_LOG_LINES + 1);
-        int index = 0;
-        while (removeLines > 0) {
-            int newlineIndex = text.indexOf('\n', index);
-            if (newlineIndex < 0) {
-                break;
-            }
-            index = newlineIndex + 1;
-            removeLines--;
-        }
-
-        if (index > 0) {
-            area.deleteText(0, index);
         }
     }
 

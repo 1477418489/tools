@@ -102,7 +102,8 @@
 .card,
 .content-card,
 .toolbar-card,
-.log-panel {
+.log-panel,
+.system-log-panel {
     -fx-background-color: #ffffff;
     -fx-background-radius: 8;
     -fx-border-color: #e5e7eb;
@@ -120,6 +121,13 @@
 
 .log-panel {
     -fx-padding: 10;
+}
+
+.system-log-panel {
+    -fx-padding: 10;
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-background-color: #ffffff;
 }
 
 .status-bar {
@@ -378,6 +386,23 @@
 .split-pane-divider {
     -fx-background-color: #e5e7eb;
     -fx-padding: 0 0.5;
+}
+
+.main-split-pane {
+    -fx-background-color: transparent;
+}
+
+.main-split-pane > .split-pane-divider {
+    -fx-background-color: #d7deea;
+    -fx-padding: 2;
+}
+
+.system-log-panel .log-area {
+    -fx-text-fill: #dbeafe;
+}
+
+.system-log-panel .log-area .content {
+    -fx-background-color: #0f172a;
 }
 
 .progress-bar {

@@ -54,17 +54,11 @@
         </VBox>
     </top>
 
-    <!-- 日志区域 -->
+    <!-- 日志区域：独立 JAR 通过外部进程启动，仅保留有效执行日志 -->
     <center>
-        <SplitPane orientation="VERTICAL" BorderPane.alignment="CENTER" VBox.vgrow="ALWAYS">
-            <VBox spacing="8" styleClass="log-panel">
-                <Label text="执行日志" styleClass="section-title"/>
-                <TextArea fx:id="logArea" editable="false" styleClass="log-text-area" VBox.vgrow="ALWAYS" prefHeight="200"/>
-            </VBox>
-            <VBox spacing="8" styleClass="log-panel">
-                <Label text="进程输出" styleClass="section-title"/>
-                <TextArea fx:id="processOutputArea" editable="false" styleClass="log-text-area" VBox.vgrow="ALWAYS" prefHeight="200"/>
-            </VBox>
-        </SplitPane>
+        <VBox spacing="8" styleClass="log-panel" BorderPane.alignment="CENTER">
+            <Label text="执行日志" styleClass="section-title"/>
+            <TextArea fx:id="logArea" editable="false" styleClass="log-text-area" VBox.vgrow="ALWAYS"/>
+        </VBox>
     </center>
 </BorderPane>

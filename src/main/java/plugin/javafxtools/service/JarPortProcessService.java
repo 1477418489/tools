@@ -5,7 +5,9 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -124,21 +126,40 @@ public class JarPortProcessService {
         ProcessBuilder namePb = new ProcessBuilder("cmd.exe", "/c",
                 "wmic process where processid=" + pid + " get name,commandline /FORMAT:LIST");
         Process nameProcess = namePb.start();
-        StringBuilder processInfo = new StringBuilder();
+        List<String> outputLines = new ArrayList<>();
         try (BufferedReader nameReader = new BufferedReader(
                 new InputStreamReader(nameProcess.getInputStream(), "GBK"))) {
             String nameLine;
             while ((nameLine = nameReader.readLine()) != null) {
-                String trimmed = nameLine.trim();
-                if (!trimmed.isEmpty() && !trimmed.startsWith("CommandLine")
-                        && !trimmed.startsWith("Name")) {
-                    processInfo.append(trimmed).append(" ");
-                }
+                outputLines.add(nameLine);
             }
         } finally {
             waitForProcessExit(nameProcess, 3);
         }
-        return processInfo.length() > 0 ? "PID:" + pid + " " + processInfo : "PID:" + pid;
+        return formatProcessDetails(pid, outputLines);
+    }
+
+    static String formatProcessDetails(String pid, List<String> wmicLines) {
+        String processName = "";
+        String commandLine = "";
+
+        for (String line : wmicLines) {
+            String trimmed = line == null ? "" : line.trim();
+            if (trimmed.startsWith("Name=")) {
+                processName = trimmed.substring("Name=".length()).trim();
+            } else if (trimmed.startsWith("CommandLine=")) {
+                commandLine = trimmed.substring("CommandLine=".length()).trim();
+            }
+        }
+
+        StringBuilder details = new StringBuilder("PID:").append(pid);
+        if (!processName.isEmpty()) {
+            details.append("，进程名: ").append(processName);
+        }
+        if (!commandLine.isEmpty()) {
+            details.append("，命令行: ").append(commandLine);
+        }
+        return details.toString();
     }
 
     private Set<String> findListeningPidsByPort(int port) throws IOException {

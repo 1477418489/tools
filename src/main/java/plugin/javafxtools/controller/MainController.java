@@ -1,6 +1,8 @@
 package plugin.javafxtools.controller;
 
+import javafx.application.Platform;
 import javafx.fxml.FXML;
+import javafx.scene.control.SplitPane;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextArea;
 import plugin.javafxtools.service.LoggingService;
@@ -18,6 +20,12 @@ public class MainController {
      */
     @FXML
     private TabPane tabPane;
+
+    /**
+     * 主内容和系统日志的可拖动分割容器。
+     */
+    @FXML
+    private SplitPane mainSplitPane;
 
     /**
      * HTTP 请求页签控制器。
@@ -103,6 +111,7 @@ public class MainController {
             if (centralLogArea != null) {
                 loggingService.addGlobalLogArea(centralLogArea);
             }
+            setupMainSplitPane();
             setupControllers();
             loggingService.info("主控制器初始化完成");
         } catch (Exception e) {
@@ -187,6 +196,15 @@ public class MainController {
 
         if (!errorMsg.isEmpty()) {
             throw new IllegalStateException(errorMsg.toString());
+        }
+    }
+
+    /**
+     * 设置系统日志初始高度，之后用户可拖动分割条自行调整。
+     */
+    private void setupMainSplitPane() {
+        if (mainSplitPane != null) {
+            Platform.runLater(() -> mainSplitPane.setDividerPositions(0.76));
         }
     }
 

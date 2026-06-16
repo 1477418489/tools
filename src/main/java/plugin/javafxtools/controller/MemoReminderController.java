@@ -15,6 +15,7 @@ import plugin.javafxtools.model.MemoReminder;
 import plugin.javafxtools.service.MemoReminderSchedulerService;
 import plugin.javafxtools.service.MemoReminderStore;
 import plugin.javafxtools.service.MemoReminderTableSupport;
+import plugin.javafxtools.util.LogTextTrimmer;
 import plugin.javafxtools.util.TimeUtils;
 
 import java.io.IOException;
@@ -179,7 +180,7 @@ public class MemoReminderController extends BaseController {
                 TimeUtils.getCurrentDateTime(), level, message);
         Platform.runLater(() -> {
             if (logArea != null && logArea.getScene() != null) {
-                trimLogs();
+                LogTextTrimmer.trimToMaxLines(logArea, MAX_LOG_LINES, 80);
                 logArea.appendText(formatted + "\n");
                 logArea.setScrollTop(Double.MAX_VALUE);
             }
@@ -252,27 +253,6 @@ public class MemoReminderController extends BaseController {
             return Integer.parseInt(text.trim());
         } catch (Exception e) {
             return null;
-        }
-    }
-
-    private void trimLogs() {
-        int lineCount = logArea.getParagraphs().size();
-        if (lineCount < MAX_LOG_LINES) {
-            return;
-        }
-        String text = logArea.getText();
-        int toRemove = Math.max(80, lineCount - MAX_LOG_LINES + 1);
-        int idx = 0;
-        while (toRemove > 0) {
-            int next = text.indexOf('\n', idx);
-            if (next < 0) {
-                break;
-            }
-            idx = next + 1;
-            toRemove--;
-        }
-        if (idx > 0) {
-            logArea.deleteText(0, idx);
         }
     }
 }

@@ -40,9 +40,6 @@ public class JarLauncherController {
     private TextArea logArea;
 
     @FXML
-    private TextArea processOutputArea;
-
-    @FXML
     private ProgressBar progressBar;
 
     @FXML

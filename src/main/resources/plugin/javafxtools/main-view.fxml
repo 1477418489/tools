@@ -12,55 +12,47 @@
         <Insets bottom="10" left="10" right="10" top="10"/>
     </padding>
 
-    <!-- 主选项卡 -->
-    <TabPane fx:id="tabPane" VBox.vgrow="ALWAYS" styleClass="toolbox-tab-pane">
-        <tabs>
-            <!-- 启动项工具 -->
-            <Tab text="启动项工具">
-                <fx:include fx:id="appLauncherTab" source="app-launcher-view.fxml" />
-            </Tab>
-            <!-- HTTP请求调度器  对应的控制器字段命名规则是：<fx:include> 的 fx:id + "Controller" = 控制器字段名-->
-            <Tab text="HTTP请求">
-                <fx:include fx:id="httpRequestTab" source="http-request-view.fxml" />
-            </Tab>
+    <SplitPane orientation="VERTICAL" fx:id="mainSplitPane" VBox.vgrow="ALWAYS" styleClass="main-split-pane">
+        <items>
+            <!-- 主选项卡 -->
+            <TabPane fx:id="tabPane" styleClass="toolbox-tab-pane">
+                <tabs>
+                    <Tab text="启动项工具">
+                        <fx:include fx:id="appLauncherTab" source="app-launcher-view.fxml"/>
+                    </Tab>
+                    <!-- HTTP请求调度器：<fx:include> 的 fx:id + "Controller" = 控制器字段名 -->
+                    <Tab text="HTTP请求">
+                        <fx:include fx:id="httpRequestTab" source="http-request-view.fxml"/>
+                    </Tab>
+                    <Tab text="WebSocket">
+                        <fx:include fx:id="webSocketTab" source="websocket-view.fxml"/>
+                    </Tab>
+                    <Tab text="网络工具">
+                        <fx:include fx:id="networkToolsTab" source="network-tools-view.fxml"/>
+                    </Tab>
+                    <Tab text="数据格式化">
+                        <fx:include fx:id="dataFormatTab" source="data-format-view.fxml"/>
+                    </Tab>
+                    <Tab text="字符串工具">
+                        <fx:include fx:id="strDataFormatTab" source="strData-format-view.fxml"/>
+                    </Tab>
+                    <Tab text="JAR应用启动器">
+                        <fx:include fx:id="jarLauncherTab" source="jar-launcher-view.fxml"/>
+                    </Tab>
+                    <Tab text="备忘提醒">
+                        <fx:include fx:id="memoReminderTab" source="memo-reminder-view.fxml"/>
+                    </Tab>
+                    <Tab text="域名保活">
+                        <fx:include fx:id="keepAliveTab" source="keepalive-manager-view.fxml"/>
+                    </Tab>
+                </tabs>
+            </TabPane>
 
-            <!-- WebSocket客户端 -->
-            <Tab text="WebSocket">
-                <fx:include fx:id="webSocketTab" source="websocket-view.fxml" />
-            </Tab>
-
-            <!-- 网络工具 -->
-            <Tab text="网络工具">
-                <fx:include fx:id="networkToolsTab" source="network-tools-view.fxml" />
-            </Tab>
-
-            <!-- 数据格式化 -->
-            <Tab text="数据格式化">
-                <fx:include fx:id="dataFormatTab" source="data-format-view.fxml" />
-            </Tab>
-
-            <!-- 字符串工具 -->
-            <Tab text="字符串工具">
-                <fx:include fx:id="strDataFormatTab" source="strData-format-view.fxml" />
-            </Tab>
-            <!-- 在TabPane中新增一个Tab -->
-            <Tab text="JAR应用启动器">
-                <fx:include fx:id="jarLauncherTab" source="jar-launcher-view.fxml" />
-            </Tab>
-            <!-- 备忘提醒 -->
-            <Tab text="备忘提醒">
-                <fx:include fx:id="memoReminderTab" source="memo-reminder-view.fxml" />
-            </Tab>
-            <!-- 域名保活 -->
-            <Tab text="域名保活">
-                <fx:include fx:id="keepAliveTab" source="keepalive-manager-view.fxml" />
-            </Tab>
-        </tabs>
-    </TabPane>
-
-    <!-- 中央日志区域 -->
-    <VBox spacing="8" VBox.vgrow="NEVER" styleClass="log-panel">
-        <Label text="系统日志" styleClass="section-title"/>
-        <TextArea fx:id="centralLogArea" editable="false" prefRowCount="7" VBox.vgrow="NEVER" styleClass="log-area"/>
-    </VBox>
+            <!-- 系统日志区域：通过 SplitPane 可上下拖动调整高度 -->
+            <VBox spacing="8" minHeight="120" prefHeight="180" styleClass="system-log-panel">
+                <Label text="系统日志" styleClass="section-title"/>
+                <TextArea fx:id="centralLogArea" editable="false" VBox.vgrow="ALWAYS" styleClass="log-area"/>
+            </VBox>
+        </items>
+    </SplitPane>
 </VBox>

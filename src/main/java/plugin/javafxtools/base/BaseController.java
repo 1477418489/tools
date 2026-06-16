@@ -3,6 +3,7 @@ package plugin.javafxtools.base;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.scene.control.TextArea;
+import plugin.javafxtools.util.LogTextTrimmer;
 import plugin.javafxtools.util.TimeUtils;
 
 /**
@@ -27,38 +28,11 @@ public abstract class BaseController implements ModuleLogger {
         Platform.runLater(() -> {
             TextArea area = getLogArea();
             if (area != null && area.getScene() != null) {
-                trimLogLines(area);
+                LogTextTrimmer.trimToMaxLines(area, MAX_LOG_LINES, 100);
                 area.appendText(formattedMessage + "\n");
                 area.setScrollTop(Double.MAX_VALUE);
             }
         });
-    }
-
-    /**
-     * 裁剪超过上限的旧日志，避免 TextArea 长时间运行后拖慢界面。
-     *
-     * @param area 日志文本区域
-     */
-    private void trimLogLines(TextArea area) {
-        int lineCount = area.getParagraphs().size();
-        if (lineCount < MAX_LOG_LINES) {
-            return;
-        }
-
-        String text = area.getText();
-        int linesToRemove = Math.max(100, lineCount - MAX_LOG_LINES + 1);
-        int deleteIndex = 0;
-        while (linesToRemove > 0) {
-            int nextNewline = text.indexOf('\n', deleteIndex);
-            if (nextNewline < 0) {
-                break;
-            }
-            deleteIndex = nextNewline + 1;
-            linesToRemove--;
-        }
-        if (deleteIndex > 0) {
-            area.deleteText(0, deleteIndex);
-        }
     }
 
     /**
