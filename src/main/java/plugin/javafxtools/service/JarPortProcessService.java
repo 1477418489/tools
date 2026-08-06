@@ -43,12 +43,25 @@ public class JarPortProcessService {
      * @return 是否占用
      */
     public boolean checkPortInUse(int port) {
+        if (!isValidPort(port)) {
+            throw new IllegalArgumentException("端口必须在 1 到 65535 之间");
+        }
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress("127.0.0.1", port), 200);
             return true;
         } catch (IOException e) {
             return false;
         }
+    }
+
+    /**
+     * 判断端口号是否处于 TCP/UDP 有效范围。
+     *
+     * @param port 端口号
+     * @return 是否有效
+     */
+    public static boolean isValidPort(int port) {
+        return port >= 1 && port <= 65535;
     }
 
     /**
@@ -59,7 +72,7 @@ public class JarPortProcessService {
      */
     public String getProcessUsingPort(int port) {
         try {
-            ProcessBuilder pb = new ProcessBuilder("cmd.exe", "/c", "netstat -ano");
+            ProcessBuilder pb = new ProcessBuilder("netstat.exe", "-ano");
             Process process = pb.start();
             String pid = null;
             try (BufferedReader reader = new BufferedReader(
@@ -123,8 +136,12 @@ public class JarPortProcessService {
     }
 
     private String describeProcess(String pid) throws IOException {
-        ProcessBuilder namePb = new ProcessBuilder("cmd.exe", "/c",
-                "wmic process where processid=" + pid + " get name,commandline /FORMAT:LIST");
+        ProcessBuilder namePb = new ProcessBuilder(
+                "wmic.exe",
+                "process",
+                "where", "processid=" + pid,
+                "get", "name,commandline",
+                "/FORMAT:LIST");
         Process nameProcess = namePb.start();
         List<String> outputLines = new ArrayList<>();
         try (BufferedReader nameReader = new BufferedReader(
@@ -164,7 +181,7 @@ public class JarPortProcessService {
 
     private Set<String> findListeningPidsByPort(int port) throws IOException {
         Set<String> pids = new LinkedHashSet<>();
-        ProcessBuilder getPidPb = new ProcessBuilder("cmd.exe", "/c", "netstat -ano -p tcp");
+        ProcessBuilder getPidPb = new ProcessBuilder("netstat.exe", "-ano", "-p", "tcp");
         Process getPidProcess = getPidPb.start();
         String portSuffix = ":" + port + " ";
         try (BufferedReader reader = new BufferedReader(

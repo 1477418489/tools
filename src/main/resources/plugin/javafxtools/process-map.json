@@ -21,7 +21,7 @@
   "npm.cmd": "node.exe",
   "python.bat": "python.exe",
   "pythonw.bat": "pythonw.exe",
-  "RedisDesktopManager.exe": "RedisDesktopManager.exe",
+  "redisdesktopmanager.exe": "RedisDesktopManager.exe",
   "idea.bat": "idea64.exe",
   "pycharm.bat": "pycharm64.exe",
   "webstorm.bat": "webstorm64.exe",

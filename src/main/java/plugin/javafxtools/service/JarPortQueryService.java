@@ -3,6 +3,7 @@ package plugin.javafxtools.service;
 import javafx.application.Platform;
 
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Consumer;
 import java.util.function.IntPredicate;
 
@@ -17,6 +18,7 @@ public class JarPortQueryService {
     private final Consumer<String> logger;
     private final Consumer<String> errorReporter;
     private final IntPredicate confirmKillProcessOnPort;
+    private final Runnable operationFinished;
 
     /**
      * 创建端口查询服务。
@@ -26,53 +28,86 @@ public class JarPortQueryService {
      * @param logger 日志输出回调
      * @param errorReporter 错误提示回调
      * @param confirmKillProcessOnPort 终止端口占用进程确认回调
+     * @param operationFinished 查询完成回调
      */
     public JarPortQueryService(ExecutorService backgroundExecutor,
                                JarPortProcessService portProcessService,
                                Consumer<String> logger,
                                Consumer<String> errorReporter,
-                               IntPredicate confirmKillProcessOnPort) {
+                               IntPredicate confirmKillProcessOnPort,
+                               Runnable operationFinished) {
         this.backgroundExecutor = backgroundExecutor;
         this.portProcessService = portProcessService;
         this.logger = logger;
         this.errorReporter = errorReporter;
         this.confirmKillProcessOnPort = confirmKillProcessOnPort;
+        this.operationFinished = operationFinished;
     }
 
     /**
      * 查询端口占用情况，必要时提示用户终止占用进程。
      *
-     * @param portText 端口文本
+     * @param targetPort 目标端口
      */
-    public void queryPort(String portText) {
-        String port = portText == null ? "" : portText.trim();
-        if (port.isEmpty()) {
-            errorReporter.accept("端口为空,请输入端口");
-            return;
-        }
-
-        int targetPort;
+    public void queryPort(int targetPort) {
         try {
-            targetPort = Integer.parseInt(port);
-        } catch (NumberFormatException e) {
-            errorReporter.accept("端口必须是数字");
-            return;
-        }
+            backgroundExecutor.submit(() -> {
+                try {
+                    boolean inUse = portProcessService.checkPortInUse(targetPort);
+                    if (!inUse) {
+                        finish(() -> logger.accept("端口:" + targetPort + " 未被占用"));
+                        return;
+                    }
 
-        backgroundExecutor.submit(() -> {
-            boolean inUse = portProcessService.checkPortInUse(targetPort);
-            if (!inUse) {
-                Platform.runLater(() -> logger.accept("端口:" + targetPort + " 未被占用"));
-                return;
-            }
-
-            String processInfo = portProcessService.getProcessUsingPort(targetPort);
-            Platform.runLater(() -> {
-                logger.accept("端口:" + targetPort + " 被占用，" + processInfo);
-                if (confirmKillProcessOnPort.test(targetPort)) {
-                    backgroundExecutor.submit(() -> portProcessService.killProcessOnPort(targetPort));
+                    String processInfo = portProcessService.getProcessUsingPort(targetPort);
+                    Platform.runLater(() -> confirmTermination(targetPort, processInfo));
+                } catch (RuntimeException e) {
+                    finish(() -> errorReporter.accept("查询端口失败: " + errorMessage(e)));
                 }
             });
-        });
+        } catch (RejectedExecutionException e) {
+            finish(() -> errorReporter.accept("端口查询服务已关闭"));
+        }
+    }
+
+    private void confirmTermination(int targetPort, String processInfo) {
+        logger.accept("端口:" + targetPort + " 被占用，" + processInfo);
+        try {
+            if (!confirmKillProcessOnPort.test(targetPort)) {
+                operationFinished.run();
+                return;
+            }
+            backgroundExecutor.submit(() -> {
+                try {
+                    portProcessService.killProcessOnPort(targetPort);
+                    finish(() -> { });
+                } catch (RuntimeException e) {
+                    finish(() -> errorReporter.accept("终止端口进程失败: " + errorMessage(e)));
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            finish(() -> errorReporter.accept("端口查询服务已关闭"));
+        } catch (RuntimeException e) {
+            finish(() -> errorReporter.accept("端口操作失败: " + errorMessage(e)));
+        }
+    }
+
+    private void finish(Runnable uiAction) {
+        Runnable finishAction = () -> {
+            try {
+                uiAction.run();
+            } finally {
+                operationFinished.run();
+            }
+        };
+        if (Platform.isFxApplicationThread()) {
+            finishAction.run();
+        } else {
+            Platform.runLater(finishAction);
+        }
+    }
+
+    private String errorMessage(RuntimeException exception) {
+        return exception.getMessage() != null ? exception.getMessage() : "未知错误";
     }
 }

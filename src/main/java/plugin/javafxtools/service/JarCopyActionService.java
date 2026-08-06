@@ -3,8 +3,9 @@ package plugin.javafxtools.service;
 import javafx.application.Platform;
 import plugin.javafxtools.model.ProjectConfig;
 
-import java.io.IOException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.ToIntFunction;
@@ -23,6 +24,7 @@ public class JarCopyActionService {
     private final Consumer<String> errorReporter;
     private final BiConsumer<ProjectConfig, Integer> buttonStateUpdater;
     private final ToIntFunction<ProjectConfig> statusPortResolver;
+    private final AtomicBoolean copying = new AtomicBoolean();
 
     /**
      * 创建复制动作服务。
@@ -60,23 +62,46 @@ public class JarCopyActionService {
      * @param project 项目配置快照
      */
     public void copyProjectFiles(ProjectConfig project) {
-        backgroundExecutor.submit(() -> {
-            Platform.runLater(beforeCopy);
-            logger.accept("开始执行文件操作...");
+        if (!copying.compareAndSet(false, true)) {
+            logger.accept("文件复制正在进行中");
+            return;
+        }
+        try {
+            beforeCopy.run();
+        } catch (RuntimeException e) {
+            finishCopy(project);
+            errorReporter.accept("无法开始文件复制: " + e.getMessage());
+            return;
+        }
+        try {
+            backgroundExecutor.submit(() -> {
+                logger.accept("开始执行文件操作...");
 
-            try {
-                jarFileService.copyProjectFiles(project);
-                Platform.runLater(() -> {
-                    afterCopy.run();
-                    logger.accept("文件操作完成");
-                    buttonStateUpdater.accept(project, statusPortResolver.applyAsInt(project));
-                });
-            } catch (IOException e) {
-                Platform.runLater(() -> {
-                    afterCopy.run();
-                    errorReporter.accept("文件操作失败: " + e.getMessage());
-                });
-            }
-        });
+                try {
+                    jarFileService.copyProjectFiles(project);
+                    Platform.runLater(() -> {
+                        logger.accept("文件操作完成");
+                        finishCopy(project);
+                    });
+                } catch (Exception e) {
+                    Platform.runLater(() -> {
+                        finishCopy(project);
+                        errorReporter.accept("文件操作失败: " + e.getMessage());
+                    });
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            finishCopy(project);
+            errorReporter.accept("文件复制服务已关闭");
+        }
+    }
+
+    private void finishCopy(ProjectConfig project) {
+        copying.set(false);
+        try {
+            afterCopy.run();
+        } finally {
+            buttonStateUpdater.accept(project, statusPortResolver.applyAsInt(project));
+        }
     }
 }

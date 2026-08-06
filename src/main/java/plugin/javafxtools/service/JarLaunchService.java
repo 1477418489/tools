@@ -4,6 +4,7 @@ import javafx.application.Platform;
 import plugin.javafxtools.model.ProjectConfig;
 
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.IntPredicate;
@@ -26,8 +27,6 @@ public class JarLaunchService {
     private final BiConsumer<ProjectConfig, Integer> updateButtonStates;
     private final BiConsumer<ProjectConfig, Integer> runningPortRecorder;
     private final Consumer<ProjectConfig> runningPortClearer;
-    private final Consumer<Boolean> launchButtonDisabler;
-    private final Consumer<Boolean> stopButtonDisabler;
 
     /**
      * 创建 JAR 启停编排服务。
@@ -41,8 +40,6 @@ public class JarLaunchService {
      * @param updateButtonStates 按钮状态刷新回调
      * @param runningPortRecorder 运行端口写入回调
      * @param runningPortClearer 运行端口清除回调
-     * @param launchButtonDisabler 启动按钮禁用回调
-     * @param stopButtonDisabler 停止按钮禁用回调
      */
     public JarLaunchService(ExecutorService backgroundExecutor,
                             JarPortProcessService portProcessService,
@@ -52,9 +49,7 @@ public class JarLaunchService {
                             IntPredicate confirmKillProcessOnPort,
                             BiConsumer<ProjectConfig, Integer> updateButtonStates,
                             BiConsumer<ProjectConfig, Integer> runningPortRecorder,
-                            Consumer<ProjectConfig> runningPortClearer,
-                            Consumer<Boolean> launchButtonDisabler,
-                            Consumer<Boolean> stopButtonDisabler) {
+                            Consumer<ProjectConfig> runningPortClearer) {
         this.backgroundExecutor = backgroundExecutor;
         this.portProcessService = portProcessService;
         this.jarFileService = jarFileService;
@@ -64,8 +59,6 @@ public class JarLaunchService {
         this.updateButtonStates = updateButtonStates;
         this.runningPortRecorder = runningPortRecorder;
         this.runningPortClearer = runningPortClearer;
-        this.launchButtonDisabler = launchButtonDisabler;
-        this.stopButtonDisabler = stopButtonDisabler;
     }
 
     /**
@@ -76,32 +69,51 @@ public class JarLaunchService {
      * @param profile Spring profile
      */
     public void launch(ProjectConfig project, int port, String profile) {
-        launchButtonDisabler.accept(true);
-        backgroundExecutor.submit(() -> {
-            if (!portProcessService.checkPortInUse(port)) {
-                startLaunchProcess(project, port, profile);
+        try {
+            backgroundExecutor.submit(() -> {
+                try {
+                    if (!portProcessService.checkPortInUse(port)) {
+                        startLaunchProcess(project, port, profile);
+                        return;
+                    }
+
+                    Platform.runLater(() -> confirmPortReleaseAndLaunch(project, port, profile));
+                } catch (RuntimeException e) {
+                    finishWithError(project, port, "启动检查失败: " + errorMessage(e));
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            finishWithError(project, port, "启动服务已关闭");
+        }
+    }
+
+    private void confirmPortReleaseAndLaunch(ProjectConfig project, int port, String profile) {
+        try {
+            if (!confirmKillProcessOnPort.test(port)) {
+                updateButtonStates.accept(project, port);
                 return;
             }
+        } catch (RuntimeException e) {
+            finishWithError(project, port, "端口确认失败: " + errorMessage(e));
+            return;
+        }
 
-            Platform.runLater(() -> {
-                if (!confirmKillProcessOnPort.test(port)) {
-                    launchButtonDisabler.accept(false);
-                    return;
-                }
-
-                backgroundExecutor.submit(() -> {
+        try {
+            backgroundExecutor.submit(() -> {
+                try {
                     boolean portFreed = portProcessService.killProcessOnPort(port);
                     if (!portFreed && portProcessService.checkPortInUse(port)) {
-                        Platform.runLater(() -> {
-                            launchButtonDisabler.accept(false);
-                            errorReporter.accept("端口 " + port + " 未释放，已取消启动");
-                        });
+                        finishWithError(project, port, "端口 " + port + " 未释放，已取消启动");
                         return;
                     }
                     startLaunchProcess(project, port, profile);
-                });
+                } catch (RuntimeException e) {
+                    finishWithError(project, port, "释放端口失败: " + errorMessage(e));
+                }
             });
-        });
+        } catch (RejectedExecutionException e) {
+            finishWithError(project, port, "启动服务已关闭");
+        }
     }
 
     /**
@@ -111,21 +123,39 @@ public class JarLaunchService {
      * @param port 停止端口
      */
     public void stop(ProjectConfig project, int port) {
-        stopButtonDisabler.accept(true);
-        backgroundExecutor.submit(() -> {
-            if (!portProcessService.checkPortInUse(port)) {
-                runningPortClearer.accept(project);
-                Platform.runLater(() -> updateButtonStates.accept(project, port));
+        try {
+            backgroundExecutor.submit(() -> {
+                try {
+                    if (!portProcessService.checkPortInUse(port)) {
+                        runningPortClearer.accept(project);
+                        Platform.runLater(() -> updateButtonStates.accept(project, port));
+                        return;
+                    }
+
+                    Platform.runLater(() -> confirmStop(project, port));
+                } catch (RuntimeException e) {
+                    finishWithError(project, port, "停止检查失败: " + errorMessage(e));
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            finishWithError(project, port, "停止服务已关闭");
+        }
+    }
+
+    private void confirmStop(ProjectConfig project, int port) {
+        try {
+            if (!confirmKillProcessOnPort.test(port)) {
+                updateButtonStates.accept(project, port);
                 return;
             }
+        } catch (RuntimeException e) {
+            finishWithError(project, port, "停止确认失败: " + errorMessage(e));
+            return;
+        }
 
-            Platform.runLater(() -> {
-                if (!confirmKillProcessOnPort.test(port)) {
-                    updateButtonStates.accept(project, port);
-                    return;
-                }
-
-                backgroundExecutor.submit(() -> {
+        try {
+            backgroundExecutor.submit(() -> {
+                try {
                     boolean stopped = portProcessService.killProcessOnPort(port);
                     boolean stillRunning = portProcessService.checkPortInUse(port);
                     if (!stillRunning) {
@@ -137,40 +167,59 @@ public class JarLaunchService {
                         logger.accept("端口 " + port + " 仍被占用，请检查是否有守护进程自动重启");
                     }
                     Platform.runLater(() -> updateButtonStates.accept(project, port));
-                });
+                } catch (RuntimeException e) {
+                    finishWithError(project, port, "停止失败: " + errorMessage(e));
+                }
             });
-        });
+        } catch (RejectedExecutionException e) {
+            finishWithError(project, port, "停止服务已关闭");
+        }
     }
 
     private void startLaunchProcess(ProjectConfig project, int port, String profile) {
-        backgroundExecutor.submit(() -> {
-            try {
-                Process process = jarFileService.startJavaApplication(project, port, profile);
-                Platform.runLater(() -> {
-                    logger.accept("应用程序已作为独立进程启动");
-                    logger.accept("进程ID: " + process.pid());
-                    logger.accept("即使关闭此工具，应用程序也将继续运行");
-                    runningPortRecorder.accept(project, port);
-                    launchButtonDisabler.accept(true);
-                    stopButtonDisabler.accept(false);
-                });
+        try {
+            Process process = jarFileService.startJavaApplication(project, port, profile);
+            Platform.runLater(() -> {
+                logger.accept("应用程序已作为独立进程启动");
+                logger.accept("进程ID: " + process.pid());
+                logger.accept("即使关闭此工具，应用程序也将继续运行");
+                runningPortRecorder.accept(project, port);
+            });
 
-                boolean portReady = waitForPortReady(port);
-                Platform.runLater(() -> {
-                    if (portReady) {
-                        logger.accept("端口 " + port + " 已就绪");
-                    } else {
-                        logger.accept("等待端口就绪超时，应用可能仍在启动中");
-                    }
-                    updateButtonStates.accept(project, port);
-                });
-            } catch (Exception e) {
-                Platform.runLater(() -> {
-                    launchButtonDisabler.accept(false);
-                    errorReporter.accept("启动失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
-                });
+            boolean portReady = waitForPortReady(port);
+            Platform.runLater(() -> {
+                if (portReady) {
+                    logger.accept("端口 " + port + " 已就绪");
+                } else {
+                    logger.accept("等待端口就绪超时，应用可能仍在启动中");
+                }
+                updateButtonStates.accept(project, port);
+            });
+        } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
             }
-        });
+            finishWithError(project, port, "启动失败: " + errorMessage(e));
+        }
+    }
+
+    private void finishWithError(ProjectConfig project, int port, String message) {
+        Runnable finish = () -> {
+            try {
+                errorReporter.accept(message);
+            } finally {
+                updateButtonStates.accept(project, port);
+            }
+        };
+        if (Platform.isFxApplicationThread()) {
+            finish.run();
+        } else {
+            Platform.runLater(finish);
+        }
+    }
+
+    private String errorMessage(Exception exception) {
+        return exception.getMessage() != null ? exception.getMessage() : "未知错误";
     }
 
     private boolean waitForPortReady(int port) throws InterruptedException {

@@ -1,15 +1,21 @@
 package plugin.javafxtools.service;
 
 import javafx.application.Platform;
+import javafx.geometry.Pos;
+import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.SelectionMode;
-import javafx.scene.text.Text;
+import javafx.scene.control.Tooltip;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.VBox;
 import plugin.javafxtools.base.ModuleLogger;
 import plugin.javafxtools.model.AppInfo;
 import plugin.javafxtools.model.AppProcessStatus;
 
 import java.util.ArrayList;
+import java.io.File;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -77,11 +83,16 @@ public class AppLauncherListViewSupport {
      * @param selectedIndex 目标索引
      */
     public void selectAndFocus(int selectedIndex) {
-        Platform.runLater(() -> {
+        Runnable select = () -> {
             appListView.getSelectionModel().select(selectedIndex);
             appListView.requestFocus();
             lastSelectedIndexSetter.accept(selectedIndex);
-        });
+        };
+        if (Platform.isFxApplicationThread()) {
+            select.run();
+        } else {
+            Platform.runLater(select);
+        }
     }
 
     /**
@@ -100,12 +111,11 @@ public class AppLauncherListViewSupport {
      */
     public void updateList(List<AppInfo> appInfos) {
         List<AppInfo> newItems = new ArrayList<>(appInfos);
-        int selectedIndex = selectedIndex();
 
         if (Platform.isFxApplicationThread()) {
-            updateListInternal(newItems, selectedIndex);
+            updateListInternal(newItems, selectedIndex());
         } else {
-            Platform.runLater(() -> updateListInternal(newItems, selectedIndex));
+            Platform.runLater(() -> updateListInternal(newItems, selectedIndex()));
         }
     }
 
@@ -156,32 +166,56 @@ public class AppLauncherListViewSupport {
     }
 
     private class OptimizedListCell extends ListCell<AppInfo> {
-        private final Text text = new Text();
+        private final Label titleLabel = new Label();
+        private final Label pathLabel = new Label();
+        private final Label statusLabel = new Label();
+        private final Tooltip pathTooltip = new Tooltip();
+        private final HBox content = new HBox(10);
         private String lastDisplayText = "";
 
         OptimizedListCell() {
-            setGraphic(text);
+            titleLabel.getStyleClass().add("list-item-title");
+            pathLabel.getStyleClass().add("list-item-meta");
+            statusLabel.getStyleClass().addAll("status-badge", "status-offline");
+
+            VBox details = new VBox(2, titleLabel, pathLabel);
+            details.setMinWidth(0);
+            titleLabel.setMaxWidth(Double.MAX_VALUE);
+            pathLabel.setMaxWidth(Double.MAX_VALUE);
+            HBox.setHgrow(details, Priority.ALWAYS);
+            content.setAlignment(Pos.CENTER_LEFT);
+            content.getChildren().addAll(details, statusLabel);
+            setPrefHeight(52);
         }
 
         @Override
         protected void updateItem(AppInfo item, boolean empty) {
             super.updateItem(item, empty);
             if (empty || item == null) {
-                if (!lastDisplayText.isEmpty()) {
-                    text.setText(null);
-                    lastDisplayText = "";
-                }
+                setGraphic(null);
+                setTooltip(null);
+                lastDisplayText = "";
                 return;
             }
 
-            String baseText = item.toString();
             AppProcessStatus status = processStatusCache.get(item.getAppPath());
-            String statusText = (status != null && status.isRunning()) ? " [运行中]" : " [未运行]";
-            String displayText = baseText + statusText;
+            boolean running = status != null && status.isRunning();
+            String displayText = item + "|" + running;
             if (!displayText.equals(lastDisplayText)) {
-                text.setText(displayText);
+                String fileName = new File(item.getAppPath()).getName();
+                String processName = item.getProcessName();
+                titleLabel.setText(processName == null || processName.isBlank()
+                        ? fileName
+                        : fileName + "  (" + processName + ")");
+                pathLabel.setText(item.getAppPath());
+                pathTooltip.setText(item.getAppPath());
+                statusLabel.setText(running ? "运行中" : "未运行");
+                statusLabel.getStyleClass().removeAll("status-offline", "status-online");
+                statusLabel.getStyleClass().add(running ? "status-online" : "status-offline");
                 lastDisplayText = displayText;
             }
+            setTooltip(pathTooltip);
+            setGraphic(content);
         }
     }
 }

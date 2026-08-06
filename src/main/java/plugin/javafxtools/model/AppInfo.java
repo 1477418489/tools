@@ -1,11 +1,9 @@
 package plugin.javafxtools.model;
 
-import java.io.Serializable;
-
 /**
  * 启动项工具中的应用配置项。
  */
-public class AppInfo implements Serializable {
+public class AppInfo {
     /**
      * 可执行文件或脚本的完整路径。
      */

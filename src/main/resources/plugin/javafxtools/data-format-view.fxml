@@ -1,45 +1,39 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.geometry.Insets?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<GridPane xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1"
-          fx:controller="plugin.javafxtools.controller.DataFormatController"
-          hgap="12" vgap="12" prefWidth="1000" prefHeight="700" styleClass="tool-page">
+<VBox xmlns="http://javafx.com/javafx/23" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="plugin.javafxtools.controller.DataFormatController"
+      spacing="12" prefWidth="1000" prefHeight="700" styleClass="tool-page">
 
-    <padding>
-        <Insets bottom="10" left="10" right="10" top="10"/>
-    </padding>
-
-    <columnConstraints>
-        <ColumnConstraints minWidth="90" prefWidth="110" hgrow="NEVER"/>
-        <ColumnConstraints hgrow="ALWAYS"/>
-    </columnConstraints>
-    <rowConstraints>
-        <RowConstraints vgrow="NEVER"/>
-        <RowConstraints vgrow="ALWAYS"/>
-        <RowConstraints vgrow="ALWAYS"/>
-    </rowConstraints>
-
-    <!-- 第0行 - 格式化类型选择 -->
-    <Label text="格式化类型:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
-    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="0" GridPane.hgrow="ALWAYS" styleClass="toolbar-card">
-        <ComboBox fx:id="formatTypeComboBox" prefWidth="150"/>
-        <Button fx:id="formatButton" text="格式化" onAction="#handleFormat" styleClass="success-button"/>
-        <Button fx:id="clearButton" text="清除" onAction="#handleClear" styleClass="secondary-button"/>
+    <HBox alignment="CENTER_LEFT" styleClass="page-header">
+        <Label text="数据格式化" styleClass="page-title"/>
+        <Pane HBox.hgrow="ALWAYS"/>
+        <Label fx:id="statusLabel" text="等待输入" maxWidth="460" textOverrun="ELLIPSIS"
+               styleClass="status-text"/>
     </HBox>
 
-    <!-- 第1行 - 原始数据输入 -->
-    <Label text="原始数据:" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
-    <TextArea fx:id="rawDataArea" GridPane.columnIndex="1" GridPane.rowIndex="1"
-              GridPane.hgrow="ALWAYS" GridPane.vgrow="ALWAYS"/>
-
-    <!-- 第2行 - 格式化结果 -->
-    <HBox spacing="10" alignment="CENTER_LEFT" GridPane.columnIndex="0" GridPane.rowIndex="2">
-        <Label text="执行日志/响应内容:" styleClass="section-title"/>
-        <Button text="清空日志" onAction="#handleClearLog" styleClass="secondary-button"/>
+    <HBox spacing="8" alignment="CENTER_LEFT" styleClass="toolbar">
+        <Label text="格式" styleClass="field-label"/>
+        <ComboBox fx:id="formatTypeComboBox" prefWidth="120"/>
+        <Button fx:id="formatButton" text="格式化" onAction="#handleFormat" styleClass="primary-button"/>
+        <Button fx:id="copyButton" text="复制结果" onAction="#handleCopyResult"/>
+        <Button fx:id="clearButton" text="清空" onAction="#handleClear"/>
+        <Pane HBox.hgrow="ALWAYS"/>
     </HBox>
-    <TextArea fx:id="formattedDataArea" editable="false" GridPane.columnIndex="1" GridPane.rowIndex="2"
-              GridPane.hgrow="ALWAYS" GridPane.vgrow="ALWAYS" styleClass="log-area"/>
-</GridPane>
+
+    <SplitPane dividerPositions="0.5" VBox.vgrow="ALWAYS">
+        <items>
+            <VBox spacing="7" styleClass="surface">
+                <Label text="原始数据" styleClass="section-title"/>
+                <TextArea fx:id="rawDataArea" VBox.vgrow="ALWAYS" styleClass="code-area"/>
+            </VBox>
+            <VBox spacing="7" styleClass="surface">
+                <Label text="格式化结果" styleClass="section-title"/>
+                <TextArea fx:id="formattedDataArea" editable="false"
+                          VBox.vgrow="ALWAYS" styleClass="code-area"/>
+            </VBox>
+        </items>
+    </SplitPane>
+</VBox>

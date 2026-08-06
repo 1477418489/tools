@@ -1,5 +1,8 @@
 package plugin.javafxtools.model;
 
+import java.util.Objects;
+import java.util.concurrent.ThreadLocalRandom;
+
 /**
  * 域名保活配置项。
  */
@@ -15,9 +18,9 @@ public class KeepAliveConfig {
     private boolean enabled;
 
     /**
-     * 保活执行方式，历史配置为空时默认使用 HTTP。
+     * 保活执行方式。
      */
-    private KeepAliveMethod method = KeepAliveMethod.HTTP;
+    private KeepAliveMethod method;
 
     /**
      * 最小执行间隔。
@@ -41,19 +44,6 @@ public class KeepAliveConfig {
     }
 
     /**
-     * 创建默认 HTTP 保活配置。
-     *
-     * @param domain 域名或 URL
-     * @param enabled 是否启用
-     * @param minInterval 最小间隔
-     * @param maxInterval 最大间隔
-     * @param unit 间隔单位
-     */
-    public KeepAliveConfig(String domain, boolean enabled, int minInterval, int maxInterval, IntervalUnit unit) {
-        this(domain, enabled, KeepAliveMethod.HTTP, minInterval, maxInterval, unit);
-    }
-
-    /**
      * 创建指定方式的保活配置。
      *
      * @param domain 域名或 URL
@@ -67,10 +57,10 @@ public class KeepAliveConfig {
                            int minInterval, int maxInterval, IntervalUnit unit) {
         this.domain = domain;
         this.enabled = enabled;
-        this.method = method == null ? KeepAliveMethod.HTTP : method;
+        this.method = Objects.requireNonNull(method, "method");
         this.minInterval = minInterval;
         this.maxInterval = maxInterval;
-        this.unit = unit;
+        this.unit = Objects.requireNonNull(unit, "unit");
     }
 
     /**
@@ -106,14 +96,14 @@ public class KeepAliveConfig {
      *
      * @return 保活方式
      */
-    public KeepAliveMethod getMethod() { return method == null ? KeepAliveMethod.HTTP : method; }
+    public KeepAliveMethod getMethod() { return method; }
 
     /**
      * 设置保活方式。
      *
      * @param method 保活方式
      */
-    public void setMethod(KeepAliveMethod method) { this.method = method == null ? KeepAliveMethod.HTTP : method; }
+    public void setMethod(KeepAliveMethod method) { this.method = Objects.requireNonNull(method, "method"); }
 
     /**
      * 获取最小执行间隔。
@@ -155,7 +145,7 @@ public class KeepAliveConfig {
      *
      * @param unit 间隔单位
      */
-    public void setUnit(IntervalUnit unit) { this.unit = unit; }
+    public void setUnit(IntervalUnit unit) { this.unit = Objects.requireNonNull(unit, "unit"); }
 
     /**
      * 在最大和最小间隔之间随机计算下次执行延迟。
@@ -163,9 +153,11 @@ public class KeepAliveConfig {
      * @return 下次执行延迟毫秒数
      */
     public long calculateRandomDelay() {
-        int min = Math.min(minInterval, maxInterval);
-        int max = Math.max(minInterval, maxInterval);
-        int randomInterval = min + (int) (Math.random() * (max - min + 1));
+        if (minInterval <= 0 || maxInterval < minInterval || unit == null) {
+            throw new IllegalStateException("保活间隔配置无效");
+        }
+        int randomInterval = (int) ThreadLocalRandom.current()
+                .nextLong(minInterval, (long) maxInterval + 1L);
         return unit.toMillis(randomInterval);
     }
 }

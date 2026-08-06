@@ -3,12 +3,14 @@ package plugin.javafxtools.service;
 import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.TextArea;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Optional;
 
 /**
  * 域名保活管理页签的状态栏、进度和提示弹窗辅助类。
@@ -27,6 +29,10 @@ public class KeepAliveUiSupport {
     private final Label statusLabel;
     private final Label activeCountLabel;
     private final Label lastUpdateLabel;
+
+    private boolean controlsDisabled;
+
+    private boolean selectionAvailable;
 
     /**
      * 创建保活页签 UI 辅助类。
@@ -102,18 +108,18 @@ public class KeepAliveUiSupport {
      * @param disabled 是否禁用
      */
     public void setButtonsDisabled(boolean disabled) {
-        if (addButton != null) {
-            addButton.setDisable(disabled);
-        }
-        if (updateButton != null) {
-            updateButton.setDisable(disabled);
-        }
-        if (removeButton != null) {
-            removeButton.setDisable(disabled);
-        }
-        if (saveButton != null) {
-            saveButton.setDisable(disabled);
-        }
+        controlsDisabled = disabled;
+        applyButtonStates();
+    }
+
+    /**
+     * 根据表格是否有选中项更新修改和删除按钮。
+     *
+     * @param available 是否有选中的配置
+     */
+    public void setSelectionAvailable(boolean available) {
+        selectionAvailable = available;
+        applyButtonStates();
     }
 
     /**
@@ -144,19 +150,19 @@ public class KeepAliveUiSupport {
     }
 
     /**
-     * 显示信息弹窗。
+     * 请求用户确认删除保活配置。
      *
-     * @param title 弹窗标题
-     * @param message 弹窗内容
+     * @param domain 即将删除的地址
+     * @return 用户是否确认
      */
-    public void showInfo(String title, String message) {
-        runOnFxThread(() -> {
-            Alert alert = new Alert(Alert.AlertType.INFORMATION);
-            alert.setTitle(title);
-            alert.setHeaderText(null);
-            alert.setContentText(message);
-            alert.showAndWait();
-        });
+    public boolean confirmRemoval(String domain) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
+                "确定删除保活配置 \"" + domain + "\"？",
+                ButtonType.OK, ButtonType.CANCEL);
+        alert.setTitle("删除配置");
+        alert.setHeaderText(null);
+        Optional<ButtonType> result = alert.showAndWait();
+        return result.isPresent() && result.get() == ButtonType.OK;
     }
 
     /**
@@ -177,15 +183,32 @@ public class KeepAliveUiSupport {
             return;
         }
 
+        statusLabel.getStyleClass().removeAll(
+                "status-text", "feedback-success", "feedback-warning");
+        statusLabel.getStyleClass().add("status-text");
         if (activeCount > 0) {
-            statusLabel.setText("运行中 (" + activeCount + "个域名活跃)");
-            statusLabel.setStyle("-fx-text-fill: #27ae60;");
+            statusLabel.setText("运行中（" + activeCount + " 个域名活跃）");
+            statusLabel.getStyleClass().add("feedback-success");
         } else if (configCount > 0) {
-            statusLabel.setText("就绪 (" + configCount + "个配置)");
-            statusLabel.setStyle("-fx-text-fill: #f39c12;");
+            statusLabel.setText("就绪（" + configCount + " 个配置）");
+            statusLabel.getStyleClass().add("feedback-warning");
         } else {
             statusLabel.setText("就绪");
-            statusLabel.setStyle("-fx-text-fill: #7f8c8d;");
+        }
+    }
+
+    private void applyButtonStates() {
+        if (addButton != null) {
+            addButton.setDisable(controlsDisabled);
+        }
+        if (updateButton != null) {
+            updateButton.setDisable(controlsDisabled || !selectionAvailable);
+        }
+        if (removeButton != null) {
+            removeButton.setDisable(controlsDisabled || !selectionAvailable);
+        }
+        if (saveButton != null) {
+            saveButton.setDisable(controlsDisabled);
         }
     }
 }

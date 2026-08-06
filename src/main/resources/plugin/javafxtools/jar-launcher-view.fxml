@@ -1,64 +1,61 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.geometry.Insets?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<BorderPane xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1"
-            fx:controller="plugin.javafxtools.controller.JarLauncherController"
-            styleClass="tool-page"
-            prefWidth="1000" prefHeight="700">
+<VBox xmlns="http://javafx.com/javafx/23" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="plugin.javafxtools.controller.JarLauncherController"
+      spacing="12" prefWidth="1000" prefHeight="700" styleClass="tool-page">
 
-    <padding>
-        <Insets bottom="10" left="10" right="10" top="10"/>
-    </padding>
+    <HBox alignment="CENTER_LEFT" styleClass="page-header">
+        <Label text="JAR 应用启动" styleClass="page-title"/>
+        <Pane HBox.hgrow="ALWAYS"/>
+        <Label fx:id="projectStatusLabel" text="未选择项目" styleClass="status-badge, status-offline"/>
+    </HBox>
 
-    <!-- 顶部配置区域 -->
-    <top>
-        <VBox spacing="12" BorderPane.alignment="TOP_CENTER" styleClass="toolbar-card">
-            <HBox spacing="20">
-                <!-- 项目选择 -->
-                <VBox spacing="5">
-                    <Label text="选择项目:" />
-                    <ComboBox fx:id="projectComboBox" prefWidth="250" />
-                </VBox>
+    <VBox spacing="10" styleClass="surface">
+        <HBox spacing="10" alignment="BOTTOM_LEFT">
+            <VBox spacing="4" HBox.hgrow="ALWAYS">
+                <Label text="项目" styleClass="field-label"/>
+                <ComboBox fx:id="projectComboBox" promptText="选择项目" maxWidth="Infinity"/>
+            </VBox>
+            <VBox spacing="4">
+                <Label text="运行端口" styleClass="field-label"/>
+                <TextField fx:id="portField" prefWidth="110" promptText="默认端口"
+                           onAction="#handleLaunchAction"/>
+            </VBox>
+            <VBox spacing="4">
+                <Label text="运行环境" styleClass="field-label"/>
+                <TextField fx:id="profileField" prefWidth="140" promptText="默认环境"/>
+            </VBox>
+            <Button fx:id="addProjectButton" text="添加项目" onAction="#handleAddProject" styleClass="primary-button"/>
+            <Button fx:id="editProjectButton" text="编辑" onAction="#handleEditProject"/>
+            <Button fx:id="deleteProjectButton" text="删除" onAction="#handleDeleteProject" styleClass="danger-button"/>
+        </HBox>
 
-                <!-- 端口输入 -->
-                <VBox spacing="5">
-                    <Label text="自定义端口:" />
-                    <TextField fx:id="portField" prefWidth="100" promptText="默认端口"/>
-                </VBox>
+        <Separator/>
 
-                <!-- 环境输入 -->
-                <VBox spacing="5">
-                    <Label text="运行环境:" />
-                    <TextField fx:id="profileField" prefWidth="100" promptText="默认环境"/>
-                </VBox>
-            </HBox>
+        <HBox spacing="8" alignment="CENTER_LEFT">
+            <Button fx:id="launchButton" text="启动应用" onAction="#handleLaunchAction"
+                    styleClass="success-button"/>
+            <Button fx:id="stopButton" text="停止应用" onAction="#handleStopAction"
+                    styleClass="danger-button"/>
+            <Button fx:id="copyButton" text="复制部署文件" onAction="#handleCopyAction"/>
+            <Separator orientation="VERTICAL"/>
+            <TextField fx:id="portNumField" prefWidth="105" promptText="查询端口"
+                       onAction="#queryPort"/>
+            <Button fx:id="portQueryButton" text="查询占用" onAction="#queryPort"/>
+            <Pane HBox.hgrow="ALWAYS"/>
+            <ProgressBar fx:id="progressBar" visible="false" managed="false" prefWidth="180"/>
+        </HBox>
+    </VBox>
 
-            <!-- 操作按钮 -->
-            <HBox spacing="15" alignment="CENTER">
-                <Button text="添加项目" onAction="#handleAddProject" styleClass="success-button" />
-                <Button text="复制文件" onAction="#handleCopyAction" styleClass="secondary-button" />
-                <Button text="编辑项目" onAction="#handleEditProject" styleClass="secondary-button"/>
-                <Button text="启动应用" fx:id="launchButton" onAction="#handleLaunchAction" styleClass="success-button" />
-                <Button text="停止应用" fx:id="stopButton" onAction="#handleStopAction" styleClass="danger-button" />
-                <Button text="删除应用"  onAction="#handleDeleteProject" styleClass="danger-button" />
-                <ProgressBar fx:id="progressBar" visible="false" prefWidth="200"/>
-            </HBox>
-            <!-- 操作按钮 -->
-            <HBox spacing="15" alignment="CENTER">
-                <TextField fx:id="portNumField" prefWidth="100" promptText="端口"/>
-                <Button text="查询端口" onAction="#queryPort" styleClass="secondary-button" />
-            </HBox>
-        </VBox>
-    </top>
-
-    <!-- 日志区域：独立 JAR 通过外部进程启动，仅保留有效执行日志 -->
-    <center>
-        <VBox spacing="8" styleClass="log-panel" BorderPane.alignment="CENTER">
+    <VBox spacing="7" styleClass="log-panel" VBox.vgrow="ALWAYS">
+        <HBox alignment="CENTER_LEFT" styleClass="section-header">
             <Label text="执行日志" styleClass="section-title"/>
-            <TextArea fx:id="logArea" editable="false" styleClass="log-text-area" VBox.vgrow="ALWAYS"/>
-        </VBox>
-    </center>
-</BorderPane>
+            <Pane HBox.hgrow="ALWAYS"/>
+            <Button text="清空" onAction="#handleClearLog" styleClass="compact-button"/>
+        </HBox>
+        <TextArea fx:id="logArea" editable="false" VBox.vgrow="ALWAYS" styleClass="log-text-area"/>
+    </VBox>
+</VBox>

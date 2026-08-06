@@ -2,6 +2,8 @@
 chcp 65001 >nul
 setlocal enabledelayedexpansion
 
+set "PACKAGING_JAVA_HOME=D:\tools\jdk\jdk-25.0.2"
+
 rem Single Windows packaging entry: build a jlink runtime, then package it with jpackage.
 set "PROJECT_DIR=%~dp0"
 set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"
@@ -14,6 +16,12 @@ if not defined RUNTIME_IMAGE set "RUNTIME_IMAGE=%PROJECT_DIR%\target\app"
 if not defined ICON_PATH set "ICON_PATH=%PROJECT_DIR%\target\classes\favicon.ico"
 if not defined OUTPUT_DIR set "OUTPUT_DIR=%PROJECT_DIR%\dist"
 if not defined PACKAGE_TYPE set "PACKAGE_TYPE=app-image"
+
+powershell.exe -NoProfile -NonInteractive -Command "$name=$env:APP_NAME; $invalid=[string]::IsNullOrWhiteSpace($name) -or $name -ne $name.Trim() -or $name.EndsWith('.') -or $name.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0 -or $name -match '^(?i:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$'; if($invalid){exit 1}"
+if errorlevel 1 (
+    echo [ERROR] APP_NAME must be a valid Windows file name without path components.
+    exit /b 1
+)
 
 set "APP_IMAGE_DIR=%OUTPUT_DIR%\%APP_NAME%"
 
@@ -42,7 +50,7 @@ if not defined PACKAGING_JDK if defined JAVA_HOME (
 )
 
 if not defined PACKAGING_JDK (
-    for /d %%J in ("D:\tools\jdk\jdk-23*" "D:\tools\jdk\jdk-24*" "D:\tools\jdk\jdk-25*" "%ProgramFiles%\Java\jdk-23*" "%ProgramFiles%\Java\jdk-24*" "%ProgramFiles%\Java\jdk-25*" "%ProgramFiles%\Eclipse Adoptium\jdk-23*" "%ProgramFiles%\Eclipse Adoptium\jdk-24*" "%ProgramFiles%\Eclipse Adoptium\jdk-25*") do (
+    for /d %%J in ("%ProgramFiles%\Java\jdk-23*" "%ProgramFiles%\Java\jdk-24*" "%ProgramFiles%\Java\jdk-25*" "%ProgramFiles%\Eclipse Adoptium\jdk-23*" "%ProgramFiles%\Eclipse Adoptium\jdk-24*" "%ProgramFiles%\Eclipse Adoptium\jdk-25*") do (
         if not defined PACKAGING_JDK if exist "%%~fJ\bin\jpackage.exe" set "PACKAGING_JDK=%%~fJ"
     )
 )
@@ -129,7 +137,7 @@ for %%F in ("%OUTPUT_DIR%\%APP_NAME%.exe" "%OUTPUT_DIR%\%APP_NAME%-*.exe" "%OUTP
     if exist "%%~fF" del /f /q "%%~fF"
 )
 
-for %%F in ("%OUTPUT_DIR%\%APP_NAME%.exe.md5.txt" "%OUTPUT_DIR%\%APP_NAME%-*.exe.md5.txt" "%OUTPUT_DIR%\%APP_NAME%.msi.md5.txt" "%OUTPUT_DIR%\%APP_NAME%-*.msi.md5.txt") do (
+for %%F in ("%OUTPUT_DIR%\%APP_NAME%.exe.sha256.txt" "%OUTPUT_DIR%\%APP_NAME%-*.exe.sha256.txt" "%OUTPUT_DIR%\%APP_NAME%.msi.sha256.txt" "%OUTPUT_DIR%\%APP_NAME%-*.msi.sha256.txt") do (
     if exist "%%~fF" del /f /q "%%~fF"
 )
 
@@ -173,16 +181,16 @@ if not defined HASH_TARGET (
 )
 
 if defined HASH_TARGET (
-    for /f "skip=1 tokens=1" %%H in ('certutil -hashfile "!HASH_TARGET!" MD5') do (
-        echo %%H>"!HASH_TARGET!.md5.txt"
-        echo [INFO] MD5 saved: !HASH_TARGET!.md5.txt
-        goto after_md5
+    for /f "skip=1 tokens=1" %%H in ('certutil -hashfile "!HASH_TARGET!" SHA256') do (
+        echo %%H>"!HASH_TARGET!.sha256.txt"
+        echo [INFO] SHA-256 saved: !HASH_TARGET!.sha256.txt
+        goto after_hash
     )
 ) else (
-    echo [WARN] No package file found for MD5 generation.
+    echo [WARN] No package file found for SHA-256 generation.
 )
 
-:after_md5
+:after_hash
 echo.
 echo =====================================
 echo Build finished.

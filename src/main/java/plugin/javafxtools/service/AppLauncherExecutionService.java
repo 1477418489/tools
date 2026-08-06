@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Consumer;
 
 /**
@@ -19,17 +20,13 @@ import java.util.function.Consumer;
  */
 public class AppLauncherExecutionService {
     private static final long PROCESS_CHECK_DELAY_MS = 800;
-    private static final long SINGLE_STATUS_CHECK_DELAY_MS = 1500;
-    private static final long EXE_LAUNCH_DELAY_MS = 5000;
-    private static final long SCRIPT_LAUNCH_DELAY_MS = 3000;
-    private static final long DEFAULT_LAUNCH_DELAY_MS = 8000;
+    private static final long BATCH_LAUNCH_GAP_MS = 400;
 
     private final ModuleLogger logger;
     private final AppProcessManager processManager;
     private final AppLauncherStatusService statusService;
     private final ExecutorService backgroundExecutor;
     private final Map<String, AppProcessStatus> processStatusCache;
-    private final Runnable updateAppList;
 
     /**
      * 创建启动项执行服务。
@@ -39,77 +36,105 @@ public class AppLauncherExecutionService {
      * @param statusService 状态检查服务
      * @param backgroundExecutor 后台执行器
      * @param processStatusCache 状态缓存
-     * @param updateAppList 刷新应用列表回调
      */
     public AppLauncherExecutionService(ModuleLogger logger,
                                        AppProcessManager processManager,
                                        AppLauncherStatusService statusService,
                                        ExecutorService backgroundExecutor,
-                                       Map<String, AppProcessStatus> processStatusCache,
-                                       Runnable updateAppList) {
+                                       Map<String, AppProcessStatus> processStatusCache) {
         this.logger = logger;
         this.processManager = processManager;
         this.statusService = statusService;
         this.backgroundExecutor = backgroundExecutor;
         this.processStatusCache = processStatusCache;
-        this.updateAppList = updateAppList;
     }
 
     /**
      * 异步启动单个应用。
      *
      * @param appInfo 应用配置
+     * @param onFinished 完成回调
      */
-    public void launchSingle(AppInfo appInfo) {
-        backgroundExecutor.submit(() -> {
-            restartApplication(appInfo);
-            String checkName = AppLauncherStatusService.resolveCheckName(appInfo);
-            processManager.clearProcessCache(checkName.toLowerCase());
-            if (sleep(SINGLE_STATUS_CHECK_DELAY_MS)) {
-                statusService.forceCheckSingleProcessStatus(appInfo);
-            }
-        });
+    public void launchSingle(AppInfo appInfo, Runnable onFinished) {
+        try {
+            backgroundExecutor.submit(() -> {
+                try {
+                    if (!restartApplication(appInfo)) {
+                        return;
+                    }
+                } catch (RuntimeException e) {
+                    logger.error("启动失败: " + appInfo.getAppPath() + " - " + e.getMessage());
+                } finally {
+                    notifyFinished(onFinished);
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            logger.error("应用启动任务已被拒绝");
+            notifyFinished(onFinished);
+        }
     }
 
     /**
      * 异步批量启动应用。
      *
      * @param appsToLaunch 应用快照
+     * @param onFinished 完成回调
      */
-    public void launchAll(List<AppInfo> appsToLaunch) {
+    public void launchAll(List<AppInfo> appsToLaunch, Runnable onFinished) {
         logger.info("开始批量启动 " + appsToLaunch.size() + " 个应用程序...");
-        processStatusCache.clear();
-        processManager.clearAllProcessCache();
 
-        backgroundExecutor.submit(() -> {
-            int successCount = 0;
-            int totalCount = appsToLaunch.size();
-            List<AppInfo> launchedApps = new ArrayList<>();
-
-            for (int i = 0; i < totalCount; i++) {
-                AppInfo appInfo = appsToLaunch.get(i);
-                int currentIndex = i + 1;
-                logger.info(String.format("启动进度 %d/%d: %s",
-                        currentIndex, totalCount, appInfo.getAppPath()));
+        try {
+            backgroundExecutor.submit(() -> {
                 try {
-                    restartApplication(appInfo);
-                    successCount++;
-                    launchedApps.add(appInfo);
-                    if (!sleep(calculateLaunchDelay(appInfo.getAppPath()))) {
-                        logger.error("批量启动被中断");
-                        break;
+                    int successCount = 0;
+                    int totalCount = appsToLaunch.size();
+                    List<AppInfo> launchedApps = new ArrayList<>();
+                    Map<String, Boolean> initialStates;
+                    try {
+                        initialStates = processManager.captureRunningStates(appsToLaunch);
+                    } catch (IOException e) {
+                        logger.error("无法确认现有进程状态，已取消批量启动: " + e.getMessage());
+                        return;
                     }
-                } catch (RuntimeException e) {
-                    logger.error("启动失败: " + appInfo.getAppPath() + " - " + e.getMessage());
-                }
-            }
 
-            int finalSuccessCount = successCount;
-            Platform.runLater(() -> {
-                logger.info(String.format("批量启动完成: 成功 %d/%d", finalSuccessCount, totalCount));
-                backgroundExecutor.submit(() -> statusService.verifyBatchLaunchStatus(launchedApps));
+                    for (int i = 0; i < totalCount; i++) {
+                        AppInfo appInfo = appsToLaunch.get(i);
+                        int currentIndex = i + 1;
+                        logger.info(String.format("启动进度 %d/%d: %s",
+                                currentIndex, totalCount, appInfo.getAppPath()));
+                        try {
+                            Boolean knownRunning = initialStates.get(appInfo.getAppPath());
+                            if (!restartApplication(appInfo, knownRunning)) {
+                                if (Thread.currentThread().isInterrupted()) {
+                                    logger.info("批量启动已停止");
+                                    break;
+                                }
+                                continue;
+                            }
+                            successCount++;
+                            launchedApps.add(appInfo);
+                            if (currentIndex < totalCount && !sleep(BATCH_LAUNCH_GAP_MS)) {
+                                logger.info("批量启动已停止");
+                                break;
+                            }
+                        } catch (RuntimeException e) {
+                            logger.error("启动失败: " + appInfo.getAppPath() + " - " + e.getMessage());
+                        }
+                    }
+
+                    int finalSuccessCount = successCount;
+                    logger.info(String.format("批量启动完成: 成功 %d/%d", finalSuccessCount, totalCount));
+                    if (!Thread.currentThread().isInterrupted() && !launchedApps.isEmpty()) {
+                        statusService.verifyBatchLaunchStatus(launchedApps);
+                    }
+                } finally {
+                    notifyFinished(onFinished);
+                }
             });
-        });
+        } catch (RejectedExecutionException e) {
+            logger.error("批量启动任务已被拒绝");
+            notifyFinished(onFinished);
+        }
     }
 
     /**
@@ -121,10 +146,15 @@ public class AppLauncherExecutionService {
     public void killProcess(AppInfo appInfo, Consumer<Boolean> onFinished) {
         String checkName = AppLauncherStatusService.resolveCheckName(appInfo);
         logger.info("正在尝试结束进程: " + checkName + " (" + appInfo.getAppPath() + ")");
-        backgroundExecutor.submit(() -> {
-            boolean killed = processManager.killProcess(checkName);
-            Platform.runLater(() -> onFinished.accept(killed));
-        });
+        try {
+            backgroundExecutor.submit(() -> {
+                boolean killed = processManager.killProcess(appInfo.getAppPath(), checkName);
+                Platform.runLater(() -> onFinished.accept(killed));
+            });
+        } catch (RejectedExecutionException e) {
+            logger.error("进程终止任务已被拒绝");
+            Platform.runLater(() -> onFinished.accept(false));
+        }
     }
 
     /**
@@ -133,15 +163,20 @@ public class AppLauncherExecutionService {
      * @param appsToKill 应用快照
      */
     public void killAll(List<AppInfo> appsToKill) {
-        backgroundExecutor.submit(() -> {
-            boolean anyProcessKilled = appsToKill.stream()
-                    .map(appInfo -> processManager.killProcess(AppLauncherStatusService.resolveCheckName(appInfo)))
-                    .reduce(false, Boolean::logicalOr);
+        try {
+            backgroundExecutor.submit(() -> {
+                boolean anyProcessKilled = appsToKill.stream()
+                        .map(appInfo -> processManager.killProcess(appInfo.getAppPath(),
+                                AppLauncherStatusService.resolveCheckName(appInfo)))
+                        .reduce(false, Boolean::logicalOr);
 
-            if (!anyProcessKilled) {
-                logger.info("没有正在运行的进程");
-            }
-        });
+                if (!anyProcessKilled) {
+                    logger.info("没有正在运行的进程");
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            logger.error("批量终止任务已被拒绝");
+        }
     }
 
     /**
@@ -149,47 +184,50 @@ public class AppLauncherExecutionService {
      *
      * @param appInfo 应用配置
      */
-    private void restartApplication(AppInfo appInfo) {
+    private boolean restartApplication(AppInfo appInfo) {
+        return restartApplication(appInfo, null);
+    }
+
+    private boolean restartApplication(AppInfo appInfo, Boolean knownRunning) {
         String path = appInfo.getAppPath();
         String checkName = AppLauncherStatusService.resolveCheckName(appInfo);
-        if (processManager.isProcessRunning(checkName)) {
+        boolean running;
+        try {
+            running = knownRunning != null
+                    ? knownRunning
+                    : processManager.isProcessRunning(path, checkName);
+        } catch (IOException e) {
+            logger.error("无法确认进程状态，已取消启动: " + path + " - " + e.getMessage());
+            return false;
+        }
+        if (running) {
             logger.info("正在停止运行中的进程: " + path);
-            if (processManager.killProcess(checkName)) {
+            if (processManager.killProcess(path, checkName)) {
                 logger.info("成功停止进程: " + path);
                 if (!sleep(PROCESS_CHECK_DELAY_MS)) {
-                    return;
+                    return false;
                 }
             } else {
                 logger.error("停止进程失败: " + path);
-                return;
+                return false;
             }
         }
-        launchApplication(appInfo);
+        return launchApplication(appInfo);
     }
 
-    private void launchApplication(AppInfo appInfo) {
+    private boolean launchApplication(AppInfo appInfo) {
         String path = appInfo.getAppPath();
+        String checkName = AppLauncherStatusService.resolveCheckName(appInfo);
         try {
-            Process process = processManager.startProcess(path);
+            Process process = processManager.startProcess(path, checkName);
             if (process != null) {
                 logger.info("成功启动: " + path);
-                Platform.runLater(updateAppList);
-                logger.info("UI更新完成");
+                return true;
             }
         } catch (IOException e) {
             logger.error("启动失败: " + path + " - " + e.getMessage());
         }
-    }
-
-    private long calculateLaunchDelay(String appPath) {
-        String lowerPath = appPath.toLowerCase();
-        if (lowerPath.endsWith(".exe")) {
-            return EXE_LAUNCH_DELAY_MS;
-        }
-        if (lowerPath.endsWith(".bat") || lowerPath.endsWith(".cmd")) {
-            return SCRIPT_LAUNCH_DELAY_MS;
-        }
-        return DEFAULT_LAUNCH_DELAY_MS;
+        return false;
     }
 
     private boolean sleep(long delayMillis) {
@@ -200,5 +238,9 @@ public class AppLauncherExecutionService {
             Thread.currentThread().interrupt();
             return false;
         }
+    }
+
+    private void notifyFinished(Runnable onFinished) {
+        Platform.runLater(onFinished);
     }
 }

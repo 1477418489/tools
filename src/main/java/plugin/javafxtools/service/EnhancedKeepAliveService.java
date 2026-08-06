@@ -6,6 +6,7 @@ import plugin.javafxtools.model.KeepAliveConfig;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 增强版域名保活服务，支持多域名独立配置、随机间隔和 HTTP/Ping 两种保活方式。
@@ -24,8 +25,12 @@ public class EnhancedKeepAliveService implements ModuleLogger {
     private final Map<String, ScheduledFuture<?>> scheduledFutures = new ConcurrentHashMap<>();
     private final Set<String> activeDomains = ConcurrentHashMap.newKeySet();
     private final Map<String, KeepAliveConfig> configs = new ConcurrentHashMap<>();
+    private final Map<String, Long> scheduleVersions = new HashMap<>();
+    private final AtomicLong versionSequence = new AtomicLong();
+    private final Object scheduleLock = new Object();
     private final KeepAliveLogBuffer logBuffer;
     private final KeepAliveProbeService probeService;
+    private volatile boolean closed;
 
     public EnhancedKeepAliveService(TextArea logArea) {
         this.logBuffer = new KeepAliveLogBuffer(logArea);
@@ -34,7 +39,7 @@ public class EnhancedKeepAliveService implements ModuleLogger {
     }
 
     public void updateConfigs(List<KeepAliveConfig> configList) {
-        if (configList == null) {
+        if (configList == null || closed) {
             return;
         }
 
@@ -67,58 +72,64 @@ public class EnhancedKeepAliveService implements ModuleLogger {
             return;
         }
 
-        stopDomain(domain);
-
-        long initialDelay = (long)(Math.random() * 5000); // 0-5秒随机延迟
-        ScheduledFuture<?> future = scheduler.schedule(() -> {
-            try {
-                executeDomainPing(domain);
-            } catch (Exception e) {
-                // 避免调度线程因单次异常退出
+        long initialDelay = ThreadLocalRandom.current().nextLong(5000L);
+        synchronized (scheduleLock) {
+            if (closed) {
+                return;
             }
-        }, initialDelay, TimeUnit.MILLISECONDS);
-
-        scheduledFutures.put(domain, future);
-        activeDomains.add(domain);
+            cancelScheduledTaskLocked(domain);
+            long version = versionSequence.incrementAndGet();
+            scheduleVersions.put(domain, version);
+            activeDomains.add(domain);
+            scheduleLocked(domain, version, initialDelay);
+        }
 
         info("启动: " + probeService.getDomainName(domain));
     }
 
-    private void executeDomainPing(String domain) {
-        KeepAliveConfig config = configs.get(domain);
+    private void executeDomainPing(String domain, long expectedVersion) {
+        KeepAliveConfig config;
+        synchronized (scheduleLock) {
+            if (!isCurrentScheduleLocked(domain, expectedVersion)) {
+                return;
+            }
+            config = configs.get(domain);
+        }
         if (config == null || !config.isEnabled()) {
             return;
         }
 
-        probeService.pingDomain(config);
-        scheduleNextPing(domain);
+        try {
+            probeService.pingDomain(config);
+        } catch (RuntimeException e) {
+            error("保活任务执行失败: " + probeService.getDomainName(domain)
+                    + " - " + e.getMessage());
+        }
+        scheduleNextPing(domain, expectedVersion);
     }
 
-    private void scheduleNextPing(String domain) {
+    private void scheduleNextPing(String domain, long expectedVersion) {
         KeepAliveConfig config = configs.get(domain);
         if (config == null || !config.isEnabled()) {
             return;
         }
 
-        if (scheduler == null || scheduler.isShutdown()) {
+        long delay;
+        try {
+            delay = config.calculateRandomDelay();
+        } catch (RuntimeException e) {
+            error("无法安排下次保活任务: " + probeService.getDomainName(domain)
+                    + " - " + e.getMessage());
+            stopDomain(domain);
             return;
         }
 
-        long delay = config.calculateRandomDelay();
-        ScheduledFuture<?> existingFuture = scheduledFutures.get(domain);
-        if (existingFuture != null) {
-            existingFuture.cancel(false);
-        }
-
-        ScheduledFuture<?> future = scheduler.schedule(() -> {
-            try {
-                executeDomainPing(domain);
-            } catch (Exception e) {
-                // 避免调度线程因单次异常退出
+        synchronized (scheduleLock) {
+            if (!isCurrentScheduleLocked(domain, expectedVersion)) {
+                return;
             }
-        }, delay, TimeUnit.MILLISECONDS);
-
-        scheduledFutures.put(domain, future);
+            scheduleLocked(domain, expectedVersion, delay);
+        }
 
         if (delay < 300000) { // 5分钟内的任务才记录
             debug("下次访问 [" + probeService.getDomainName(domain) + "] 在 " +
@@ -131,12 +142,17 @@ public class EnhancedKeepAliveService implements ModuleLogger {
             return;
         }
 
-        ScheduledFuture<?> future = scheduledFutures.remove(domain);
-        if (future != null) {
-            future.cancel(false);
+        boolean taskCancelled;
+        boolean wasActive;
+        synchronized (scheduleLock) {
+            scheduleVersions.remove(domain);
+            taskCancelled = cancelScheduledTaskLocked(domain);
+            wasActive = activeDomains.remove(domain);
+        }
+        if (taskCancelled) {
             debug("已取消计划任务: " + probeService.getDomainName(domain));
         }
-        if (activeDomains.remove(domain)) {
+        if (wasActive) {
             info("停止: " + probeService.getDomainName(domain));
         }
     }
@@ -155,20 +171,48 @@ public class EnhancedKeepAliveService implements ModuleLogger {
     }
 
     public void cleanup() {
+        if (closed) {
+            return;
+        }
         info("清理保活服务资源...");
 
-        for (ScheduledFuture<?> future : scheduledFutures.values()) {
-            if (future != null) {
-                future.cancel(true);
+        synchronized (scheduleLock) {
+            if (closed) {
+                return;
             }
+            closed = true;
+            scheduleVersions.clear();
+            for (ScheduledFuture<?> future : scheduledFutures.values()) {
+                if (future != null) {
+                    future.cancel(true);
+                }
+            }
+            scheduledFutures.clear();
+            activeDomains.clear();
+            scheduler.shutdownNow();
         }
-        scheduledFutures.clear();
-
-        activeDomains.clear();
-
-        scheduler.shutdownNow();
         logBuffer.shutdown();
         configs.clear();
+    }
+
+    private void scheduleLocked(String domain, long version, long delay) {
+        ScheduledFuture<?> future = scheduler.schedule(
+                () -> executeDomainPing(domain, version), delay, TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> previous = scheduledFutures.put(domain, future);
+        if (previous != null && previous != future) {
+            previous.cancel(false);
+        }
+    }
+
+    private boolean cancelScheduledTaskLocked(String domain) {
+        ScheduledFuture<?> future = scheduledFutures.remove(domain);
+        return future != null && future.cancel(false);
+    }
+
+    private boolean isCurrentScheduleLocked(String domain, long expectedVersion) {
+        return !closed
+                && activeDomains.contains(domain)
+                && Objects.equals(scheduleVersions.get(domain), expectedVersion);
     }
 
     /**
@@ -256,7 +300,13 @@ public class EnhancedKeepAliveService implements ModuleLogger {
      * 手动触发一次域名访问（用于测试）
      */
     public void testPingDomain(String domain) {
-        scheduler.execute(() -> probeService.pingDomain(configs.get(domain)));
+        synchronized (scheduleLock) {
+            KeepAliveConfig config = configs.get(domain);
+            if (config == null || closed) {
+                return;
+            }
+            scheduler.execute(() -> probeService.pingDomain(config));
+        }
     }
 
     /**

@@ -1,15 +1,23 @@
 package plugin.javafxtools.service;
 
-import javafx.application.Platform;
 import plugin.javafxtools.base.ModuleLogger;
+import plugin.javafxtools.model.AppInfo;
 import plugin.javafxtools.model.AppProcessStatus;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -19,120 +27,144 @@ import java.util.concurrent.TimeUnit;
  */
 public class AppProcessManager {
     private static final int PROCESS_TERMINATE_TIMEOUT_MS = 1500;
-    private static final long PROCESS_CHECK_CACHE_TTL = 2000;
 
     private final ModuleLogger logger;
-    private final ExecutorService backgroundExecutor;
     private final Map<String, AppProcessStatus> processStatusCache;
     private final Runnable scheduleUiUpdate;
-    private final Map<String, Process> managedProcesses = new ConcurrentHashMap<>();
-    private final Map<String, Long> processCheckCache = new ConcurrentHashMap<>();
+    private final Map<String, ManagedProcess> managedProcesses = new ConcurrentHashMap<>();
 
     /**
      * 创建启动项进程管理器。
      *
      * @param logger 日志输出接口
-     * @param backgroundExecutor 后台执行器
      * @param processStatusCache 状态缓存
      * @param scheduleUiUpdate UI 刷新回调
      */
     public AppProcessManager(ModuleLogger logger,
-                             ExecutorService backgroundExecutor,
                              Map<String, AppProcessStatus> processStatusCache,
                              Runnable scheduleUiUpdate) {
         this.logger = logger;
-        this.backgroundExecutor = backgroundExecutor;
         this.processStatusCache = processStatusCache;
         this.scheduleUiUpdate = scheduleUiUpdate;
     }
 
-    public boolean isProcessRunning(String processName) {
-        return isProcessRunning(processName, false);
-    }
-
     /**
-     * 进程运行状态检查，支持强制绕过缓存。
+     * 检查单个进程的运行状态。无法取得系统状态时保留异常语义。
      *
+     * @param appPath 启动项路径
      * @param processName 进程名
-     * @param forceCheck 是否强制检查
      * @return 是否运行中
+     * @throws IOException 无法读取系统进程状态
      */
-    public boolean isProcessRunning(String processName, boolean forceCheck) {
+    public boolean isProcessRunning(String appPath, String processName) throws IOException {
         if (processName == null || processName.trim().isEmpty()) {
             return false;
         }
 
-        if (checkManagedProcesses(processName)) {
+        if (checkManagedProcess(appPath)) {
             return true;
         }
-
-        if (!forceCheck) {
-            String cacheKey = processName.toLowerCase();
-            Long lastCheck = processCheckCache.get(cacheKey);
-            if (lastCheck != null && (System.currentTimeMillis() - lastCheck) < PROCESS_CHECK_CACHE_TTL) {
-                return false;
-            }
-        }
-
-        try {
-            boolean running = WindowsProcessSupport.isProcessRunning(processName);
-            String cacheKey = processName.toLowerCase();
-            if (running) {
-                processCheckCache.remove(cacheKey);
-            } else {
-                processCheckCache.put(cacheKey, System.currentTimeMillis());
-            }
-            return running;
-        } catch (IOException e) {
-            logger.debug("进程检查错误: " + processName + " - " + e.getMessage());
+        if (hasManagedProcessWithName(processName)) {
             return false;
         }
+
+        return WindowsProcessSupport.isProcessRunning(processName);
     }
 
-    public void clearProcessCache(String processName) {
-        if (processName != null) {
-            processCheckCache.remove(processName.toLowerCase());
-            logger.debug("已清理进程缓存: " + processName);
+    /**
+     * 使用一份系统进程快照解析多个启动项的运行状态。
+     *
+     * @param appInfos 要检查的启动项
+     * @return 以应用路径为键的运行状态
+     * @throws IOException 无法获取系统进程快照
+     */
+    public Map<String, Boolean> captureRunningStates(List<AppInfo> appInfos) throws IOException {
+        Map<String, Boolean> result = new LinkedHashMap<>();
+        List<AppInfo> unresolvedApps = new ArrayList<>();
+
+        for (AppInfo appInfo : appInfos) {
+            String appPath = appInfo.getAppPath();
+            String processName = AppLauncherStatusService.resolveCheckName(appInfo);
+            if (checkManagedProcess(appPath)) {
+                result.put(appPath, true);
+            } else if (hasManagedProcessWithName(processName)) {
+                result.put(appPath, false);
+            } else {
+                unresolvedApps.add(appInfo);
+            }
         }
+
+        if (!unresolvedApps.isEmpty()) {
+            Map<String, List<Long>> systemSnapshot = WindowsProcessSupport.captureProcessSnapshot();
+            for (AppInfo appInfo : unresolvedApps) {
+                String processName = AppLauncherStatusService.resolveCheckName(appInfo);
+                result.put(appInfo.getAppPath(), systemSnapshot.containsKey(
+                        WindowsProcessSupport.normalizeImageName(processName)));
+            }
+        }
+
+        return result;
     }
 
-    public void clearAllProcessCache() {
-        processCheckCache.clear();
-        logger.debug("已清理所有进程缓存");
+    /**
+     * 清理已经不属于当前启动项列表的状态缓存，限制长期增删配置后的内存占用。
+     *
+     * @param appInfos 当前启动项快照
+     */
+    public void retainCachesFor(Collection<AppInfo> appInfos) {
+        Set<String> paths = appInfos.stream()
+                .map(AppInfo::getAppPath)
+                .collect(Collectors.toUnmodifiableSet());
+        processStatusCache.keySet().retainAll(paths);
     }
 
     /**
      * 终止进程。
      *
+     * @param appPath 启动项路径
      * @param processName 进程名
      * @return 是否已终止
      */
-    public boolean killProcess(String processName) {
+    public boolean killProcess(String appPath, String processName) {
         if (processName == null || processName.trim().isEmpty()) {
             return false;
         }
 
-        boolean killed = false;
-        for (Map.Entry<String, Process> entry : managedProcesses.entrySet()) {
-            String path = entry.getKey();
-            Process managed = entry.getValue();
-            if ((path.endsWith(processName) || new File(path).getName().equalsIgnoreCase(processName))
-                    && managed != null && managed.isAlive()) {
-                killed |= terminateManagedProcess(path, managed);
+        String key = pathKey(appPath);
+        ManagedProcess managed = key == null ? null : managedProcesses.get(key);
+        if (managed != null) {
+            if (managed.process().isAlive()) {
+                return terminateManagedProcess(key, appPath, managed);
             }
+            managedProcesses.remove(key, managed);
+        }
+        if (hasManagedProcessWithName(processName)) {
+            logger.info("未找到该启动项对应的托管进程，已跳过共享进程名终止: " + processName);
+            return false;
         }
 
         try {
-            killed |= WindowsProcessSupport.killProcessByImageName(processName);
-            processCheckCache.remove(processName.toLowerCase());
+            List<Long> processIds = WindowsProcessSupport.findProcessIdsByImageName(processName);
+            if (processIds.size() > 1) {
+                logger.error("检测到 " + processIds.size() + " 个同名进程，已取消批量终止: "
+                        + processName);
+                return false;
+            }
+            if (processIds.isEmpty()) {
+                return false;
+            }
+            boolean killed = WindowsProcessSupport.killProcessTreeByPid(processIds.getFirst());
             if (killed) {
                 logger.debug("成功终止Windows进程: " + processName);
             }
+            return killed;
         } catch (IOException e) {
             logger.error("系统命令终止进程失败: " + processName + " - " + e.getMessage());
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
         }
-
-        return killed;
     }
 
     /**
@@ -145,7 +177,6 @@ public class AppProcessManager {
         }
         logger.info("解除 " + managedProcesses.size() + " 个托管进程跟踪，外部程序继续运行");
         managedProcesses.clear();
-        processCheckCache.clear();
         logger.info("进程跟踪解除完成，独立进程继续运行");
     }
 
@@ -153,12 +184,16 @@ public class AppProcessManager {
      * 启动外部进程。
      *
      * @param path 进程路径
+     * @param processName 状态检查使用的进程名
      * @return 启动包装进程
      * @throws IOException 启动异常
      */
-    public Process startProcess(String path) throws IOException {
+    public Process startProcess(String path, String processName) throws IOException {
         if (path == null || path.trim().isEmpty()) {
             throw new IllegalArgumentException("进程路径不能为空");
+        }
+        if (processName == null || processName.isBlank()) {
+            throw new IllegalArgumentException("进程名不能为空");
         }
 
         File execFile = new File(path);
@@ -168,34 +203,49 @@ public class AppProcessManager {
 
         ProcessBuilder builder = createProcessBuilder(path);
         builder.directory(execFile.getParentFile());
-        builder.redirectErrorStream(false);
+        builder.redirectOutput(ProcessBuilder.Redirect.DISCARD);
+        builder.redirectError(ProcessBuilder.Redirect.DISCARD);
         builder.environment().remove("JAVA_TOOL_OPTIONS");
 
         Process process = builder.start();
-        managedProcesses.put(path, process);
-        registerManagedProcessExit(path, process);
-        monitorProcessIndependently(path, process);
+        String key = pathKey(path);
+        ManagedProcess managed = new ManagedProcess(processName, process);
+        managedProcesses.put(key, managed);
+        registerManagedProcessExit(key, path, managed);
+        processStatusCache.put(path, new AppProcessStatus(true, 0));
+        scheduleUiUpdate.run();
         logger.debug("成功启动独立进程: " + path + " (PID: " + process.pid() + ")");
         return process;
     }
 
-    private boolean checkManagedProcesses(String processName) {
-        return managedProcesses.entrySet().parallelStream()
-                .anyMatch(entry -> {
-                    String path = entry.getKey();
-                    Process managed = entry.getValue();
-                    return (path.endsWith(processName) ||
-                            new File(path).getName().equalsIgnoreCase(processName)) &&
-                            managed.isAlive();
-                });
+    private boolean checkManagedProcess(String appPath) {
+        String key = pathKey(appPath);
+        ManagedProcess managed = key == null ? null : managedProcesses.get(key);
+        if (managed == null) {
+            return false;
+        }
+        if (managed.process().isAlive()) {
+            return true;
+        }
+        managedProcesses.remove(key, managed);
+        return false;
     }
 
-    private boolean terminateManagedProcess(String path, Process process) {
+    private boolean hasManagedProcessWithName(String processName) {
+        return managedProcesses.values().stream()
+                .anyMatch(managed -> managed.process().isAlive()
+                        && managed.processName().equalsIgnoreCase(processName));
+    }
+
+    private boolean terminateManagedProcess(String key, String path, ManagedProcess managed) {
+        Process process = managed.process();
         try {
             if (WindowsProcessSupport.isWindows()) {
                 boolean killed = WindowsProcessSupport.killProcessTreeByPid(process.pid());
                 if (!killed && process.isAlive()) {
                     process.destroyForcibly();
+                }
+                if (process.isAlive()) {
                     process.waitFor(1000, TimeUnit.MILLISECONDS);
                 }
             } else {
@@ -205,56 +255,32 @@ public class AppProcessManager {
                     process.waitFor(1000, TimeUnit.MILLISECONDS);
                 }
             }
+            if (process.isAlive()) {
+                logger.error("终止托管进程超时: " + path);
+                return false;
+            }
             logger.debug("已终止托管进程: " + path);
             return true;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             process.destroyForcibly();
-            return true;
+            return false;
         } catch (IOException e) {
             logger.error("终止托管进程失败: " + path + " - " + e.getMessage());
             return false;
         } finally {
-            managedProcesses.remove(path, process);
+            if (!process.isAlive()) {
+                managedProcesses.remove(key, managed);
+            }
         }
     }
 
-    private void monitorProcessIndependently(String path, Process process) {
-        backgroundExecutor.submit(() -> {
-            try {
-                logger.info(String.format("独立进程已启动: %s (PID: %d)", path, process.pid()));
-                String procName = new File(path).getName();
-                boolean actuallyRunning = false;
-                for (int i = 0; i < 3; i++) {
-                    Thread.sleep(2000);
-                    actuallyRunning = isProcessRunning(procName, true);
-                    if (actuallyRunning) {
-                        break;
-                    }
-                    logger.debug(String.format("进程检查第%d次: %s 未检测到", i + 1, procName));
-                }
-                if (actuallyRunning) {
-                    logger.info(String.format("进程启动确认成功: %s", path));
-                } else {
-                    logger.info(String.format("进程可能未成功启动: %s", path));
-                }
-                Platform.runLater(scheduleUiUpdate);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                logger.debug("进程监控被中断: " + path);
-            } catch (RuntimeException e) {
-                logger.error("进程监控出错: " + path + " - " + e.getMessage());
-            }
-        });
-    }
-
-    private void registerManagedProcessExit(String path, Process process) {
-        process.onExit().thenRun(() -> {
-            if (managedProcesses.remove(path, process)) {
+    private void registerManagedProcessExit(String key, String path, ManagedProcess managed) {
+        managed.process().onExit().thenRun(() -> {
+            if (managedProcesses.remove(key, managed)) {
                 processStatusCache.put(path, new AppProcessStatus(false, 0));
-                processCheckCache.remove(new File(path).getName().toLowerCase());
                 logger.debug("托管进程已退出: " + path);
-                Platform.runLater(scheduleUiUpdate);
+                scheduleUiUpdate.run();
             }
         });
     }
@@ -265,5 +291,22 @@ public class AppProcessManager {
         }
 
         return new ProcessBuilder(path);
+    }
+
+    private String pathKey(String path) {
+        if (path == null || path.isBlank()) {
+            return null;
+        }
+        try {
+            String normalized = Path.of(path).toAbsolutePath().normalize().toString();
+            return WindowsProcessSupport.isWindows()
+                    ? normalized.toLowerCase(Locale.ROOT)
+                    : normalized;
+        } catch (InvalidPathException e) {
+            return null;
+        }
+    }
+
+    private record ManagedProcess(String processName, Process process) {
     }
 }

@@ -27,13 +27,13 @@
 
 ### 4. 数据格式化
 - **文件**：`data-format-view.fxml`
-- 支持多种数据格式化类型（如 JSON、XML、Base64 等）
+- 支持 JSON、XML 格式化
 - 输入数据、格式化结果分区显示
 - 支持清空日志
 
 ### 5. 字符串工具
 - **文件**：`strData-format-view.fxml`
-- 支持字符串常用操作（如大小写转换、去重、分割等）
+- 支持去除空白字符、大小写转换
 - 输入数据、格式化结果分区显示
 - 支持清空日志
 
@@ -45,12 +45,20 @@
 
 ### 7. 备忘提醒
 - **文件**：`memo-reminder-view.fxml`
-- 支持输入备忘文本、提醒间隔与提醒次数（可设置无限次）
-- 到时桌面弹框提醒，可勾选“已处理”进入下个周期
+- 支持按固定间隔重复提醒，也可指定日期和具体时间创建一次性闹钟
+- 到时主动恢复主窗口并置顶弹框提醒，可勾选“已处理”完成提醒或进入下个周期
 - 未处理可一键稍后 5 分钟再次提醒
-- 提醒任务支持暂停/恢复/删除，并自动持久化到 `userData/memo_reminders.json`
+- 提醒任务支持暂停/恢复/删除，并自动持久化到系统用户数据目录
 
-### 8. 主界面
+### 8. JAR 应用启动器
+- **文件**：`jar-launcher-view.fxml`
+- 支持维护 JAR 项目、复制构建产物、端口查询以及启动/停止应用
+
+### 9. 域名保活
+- **文件**：`keepalive-manager-view.fxml`
+- 支持 HTTP/Ping 探测、随机访问间隔和多域名独立配置
+
+### 10. 主界面
 - **文件**：`main-view.fxml`
 - 采用 TabPane 管理各个功能模块
 - 提供中央系统日志区
@@ -78,26 +86,35 @@
 | strData-format-view.fxml| 字符串工具         |
 | app-launcher-view.fxml | 启动项工具          |
 | memo-reminder-view.fxml| 备忘提醒            |
+| jar-launcher-view.fxml | JAR应用启动器       |
+| keepalive-manager-view.fxml | 域名保活管理  |
 
 ---
 
 ## 运行要求
 
-- JDK 23 及以上（推荐 Java 23+）
-- JavaFX 16 及以上
-- 相关依赖库（如 org.json、Gson 等）
+- JDK 23
+- JavaFX 23.0.1
+- Maven 3.9+
+- Jackson、Gson、Java-WebSocket 等依赖由 Maven 自动管理
+
+运行数据统一保存在 `%LOCALAPPDATA%\FxTools`；非 Windows 系统保存在用户目录下的 `.fxtools`。
 
 ---
 
 ## 运行步骤
-1. 运行仓库根目录 `build-exe.bat`。
-2. 脚本会先执行 `mvn clean javafx:jlink` 生成 jlink 运行时，再执行 `jpackage` 输出 Windows 应用包。
-3. 如需调整应用名、版本、主模块、主类或输出目录，可在执行前设置 `APP_NAME`、`APP_VERSION`、`MAIN_MODULE`、`MAIN_CLASS`、`OUTPUT_DIR` 等环境变量。
-4. 执行前请确保 Maven 可用，并且 `JAVA_HOME` 指向包含 `jpackage.exe` 的完整 JDK，或已将 `jpackage.exe` 加入 `PATH`。
+1. 执行 `mvn clean test` 运行测试。
+2. 运行仓库根目录 `build-exe.bat` 构建 Windows 应用。
+3. 脚本会先执行 `mvn clean javafx:jlink` 生成 jlink 运行时，再执行 `jpackage` 输出 Windows 应用包。
+4. 如需调整应用名、版本、主模块、主类或输出目录，可在执行前设置 `APP_NAME`、`APP_VERSION`、`MAIN_MODULE`、`MAIN_CLASS`、`OUTPUT_DIR` 等环境变量。
+5. 执行前请确保 Maven 可用，并且 `JAVA_HOME` 指向包含 `jpackage.exe` 的完整 JDK，或已将 `jpackage.exe` 加入 `PATH`。
 
 ## 性能优化说明
 - 中央日志区域增加了行数上限与批量裁剪策略，避免长时间运行导致内存持续增长。
 - 日志区域引用改为弱引用，减少界面关闭后对象无法释放的风险。
+- 启动项状态轮询每轮只读取一次系统进程快照，状态未变化时不刷新列表。
+- 批量启动采用短间隔顺序调度，移除了每个应用独占后台线程数秒的重复监控。
+- WebSocket 消息和域名保活日志采用有界批量刷新，空闲时不会持续唤醒日志线程。
 
 ## 贡献/反馈
 

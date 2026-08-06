@@ -33,6 +33,8 @@ public class ToolsApplication extends Application {
      */
     private MainController mainController;
 
+    private boolean resourcesCleaned;
+
     /**
      * 初始化并展示 JavaFX 主舞台。
      *
@@ -49,14 +51,14 @@ public class ToolsApplication extends Application {
             // 获取主控制器实例
             mainController = loader.getController();
             // 配置主舞台
-            primaryStage.setTitle("JavaFX工具集 v1.0");
-            Scene scene = new Scene(root, 1180, 760);
+            primaryStage.setTitle("FxTools");
+            Scene scene = new Scene(root, 1240, 800);
             URL styleUrl = getClass().getResource(GLOBAL_STYLE_PATH);
             if (styleUrl != null) {
                 scene.getStylesheets().add(styleUrl.toExternalForm());
             }
             primaryStage.setScene(scene);
-            primaryStage.setMinWidth(1024);
+            primaryStage.setMinWidth(1040);
             primaryStage.setMinHeight(720);
             primaryStage.setResizable(true);
 
@@ -64,11 +66,6 @@ public class ToolsApplication extends Application {
             if (mainController != null && mainController.getAppLauncherController() != null) {
                 mainController.getAppLauncherController().setPrimaryStage(primaryStage);
             }
-            // 添加关闭事件处理
-            primaryStage.setOnCloseRequest(_ -> {
-                cleanupResources();
-                System.exit(0);
-            });
             // 加载并设置应用图标（支持PNG/ICO等格式）
             URL iconUrl = getClass().getResource(ICON_PATH);
             if (iconUrl != null) {
@@ -82,10 +79,19 @@ public class ToolsApplication extends Application {
     }
 
     /**
+     * JavaFX 运行时退出时释放所有模块资源。
+     */
+    @Override
+    public void stop() {
+        cleanupResources();
+    }
+
+    /**
      * 清理主控制器及其子模块占用的资源。
      */
     private void cleanupResources() {
-        if (mainController != null) {
+        if (!resourcesCleaned && mainController != null) {
+            resourcesCleaned = true;
             mainController.cleanup();
         }
     }

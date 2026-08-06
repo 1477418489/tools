@@ -7,7 +7,7 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.TextField;
 import plugin.javafxtools.model.ProjectConfig;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiPredicate;
@@ -31,7 +31,7 @@ public class JarProjectActionService {
     private final ToIntFunction<ProjectConfig> statusPortResolver;
     private final Consumer<ProjectConfig> runningPortClearer;
     private final Consumer<ProjectConfig> buttonStateUpdater;
-    private final Map<Integer, ProjectConfig> projects = new HashMap<>();
+    private final Map<Integer, ProjectConfig> projects = new LinkedHashMap<>();
 
     private ProjectConfig selectedProject;
 
@@ -78,10 +78,15 @@ public class JarProjectActionService {
      * 加载项目配置并绑定下拉框选择监听。
      */
     public void initialize() {
-        loadProjectsFromJson();
-        refreshProjectItems();
         projectComboBox.getSelectionModel().selectedItemProperty()
                 .addListener((obs, oldVal, newVal) -> selectProject(newVal));
+        loadProjectsFromJson();
+        refreshProjectItems();
+        if (projectComboBox.getItems().isEmpty()) {
+            selectProject(null);
+        } else {
+            projectComboBox.getSelectionModel().selectFirst();
+        }
     }
 
     /**
@@ -104,9 +109,13 @@ public class JarProjectActionService {
 
         int maxId = projects.keySet().stream().mapToInt(Integer::intValue).max().orElse(0);
         newProject.setId(maxId + 1);
-        projects.put(newProject.getId(), newProject);
+        Map<Integer, ProjectConfig> updatedProjects = new LinkedHashMap<>(projects);
+        updatedProjects.put(newProject.getId(), newProject);
+        if (!commitProjects(updatedProjects)) {
+            return;
+        }
         refreshProjectItems();
-        saveProjectsToJson();
+        projectComboBox.getSelectionModel().select(newProject);
         logger.accept("已添加新项目: " + newProject.getName());
     }
 
@@ -126,10 +135,13 @@ public class JarProjectActionService {
         }
 
         editedProject.setId(selectedProject.getId());
-        projects.put(editedProject.getId(), editedProject);
+        Map<Integer, ProjectConfig> updatedProjects = new LinkedHashMap<>(projects);
+        updatedProjects.put(editedProject.getId(), editedProject);
+        if (!commitProjects(updatedProjects)) {
+            return;
+        }
         refreshProjectItems();
         projectComboBox.getSelectionModel().select(editedProject);
-        saveProjectsToJson();
         logger.accept("已更新项目: " + editedProject.getName());
     }
 
@@ -152,7 +164,11 @@ public class JarProjectActionService {
             return;
         }
 
-        projects.remove(projectToDelete.getId());
+        Map<Integer, ProjectConfig> updatedProjects = new LinkedHashMap<>(projects);
+        updatedProjects.remove(projectToDelete.getId());
+        if (!commitProjects(updatedProjects)) {
+            return;
+        }
         refreshProjectItems();
         projectComboBox.getSelectionModel().clearSelection();
         selectedProject = null;
@@ -160,7 +176,6 @@ public class JarProjectActionService {
         portField.clear();
         profileField.clear();
         buttonStateUpdater.accept(null);
-        saveProjectsToJson();
         logger.accept("已删除项目: " + projectToDelete.getName());
     }
 
@@ -169,8 +184,14 @@ public class JarProjectActionService {
         projects.putAll(projectStore.loadProjects());
     }
 
-    private void saveProjectsToJson() {
-        projectStore.saveProjects(projects.values());
+    private boolean commitProjects(Map<Integer, ProjectConfig> updatedProjects) {
+        if (!projectStore.saveProjects(updatedProjects.values())) {
+            errorReporter.accept("项目配置保存失败，界面未做更改");
+            return false;
+        }
+        projects.clear();
+        projects.putAll(updatedProjects);
+        return true;
     }
 
     private void refreshProjectItems() {

@@ -4,6 +4,7 @@ import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.TextArea;
+import plugin.javafxtools.util.LogTextTrimmer;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -16,6 +17,8 @@ import java.util.Optional;
  */
 public class JarLauncherUiSupport {
     private static final int MAX_LOG_LINES = 800;
+    private static final int MAX_LOG_CHARACTERS = 1_000_000;
+    private static final int LOG_TRIM_TARGET_CHARACTERS = 750_000;
     private static final DateTimeFormatter LOG_TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     private final TextArea logArea;
@@ -53,6 +56,7 @@ public class JarLauncherUiSupport {
         Runnable showAlert = () -> {
             Alert alert = new Alert(Alert.AlertType.ERROR);
             alert.setTitle("错误");
+            alert.setHeaderText(null);
             alert.setContentText(message);
             alert.showAndWait();
         };
@@ -85,6 +89,8 @@ public class JarLauncherUiSupport {
         }
         trimLogs();
         logArea.appendText(line);
+        LogTextTrimmer.trimToMaxCharacters(
+                logArea, MAX_LOG_CHARACTERS, LOG_TRIM_TARGET_CHARACTERS);
         logArea.setScrollTop(Double.MAX_VALUE);
     }
 

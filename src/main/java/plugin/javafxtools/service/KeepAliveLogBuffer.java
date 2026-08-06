@@ -8,8 +8,10 @@ import plugin.javafxtools.util.TimeUtils;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 域名保活服务的批量日志缓冲和 UI 刷新。
@@ -23,8 +25,9 @@ public class KeepAliveLogBuffer implements ModuleLogger {
 
     private final Queue<String> logQueue = new ConcurrentLinkedQueue<>();
     private final ScheduledExecutorService logExecutor;
-    private volatile boolean logProcessing = false;
-    private TextArea logArea;
+    private final AtomicBoolean logProcessing = new AtomicBoolean();
+    private final AtomicBoolean flushScheduled = new AtomicBoolean();
+    private volatile TextArea logArea;
 
     /**
      * 创建日志缓冲器。
@@ -40,8 +43,6 @@ public class KeepAliveLogBuffer implements ModuleLogger {
             t.setPriority(Thread.MIN_PRIORITY);
             return t;
         });
-        logExecutor.scheduleWithFixedDelay(this::flushLogs,
-                LOG_FLUSH_INTERVAL, LOG_FLUSH_INTERVAL, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -61,10 +62,7 @@ public class KeepAliveLogBuffer implements ModuleLogger {
 
         logQueue.offer(formattedMessage);
         trimLogQueue();
-
-        if (logQueue.size() > LOG_BATCH_SIZE * 2) {
-            flushLogs();
-        }
+        scheduleFlush(logQueue.size() > LOG_BATCH_SIZE * 2 ? 0 : LOG_FLUSH_INTERVAL);
     }
 
     /**
@@ -93,63 +91,84 @@ public class KeepAliveLogBuffer implements ModuleLogger {
      * 停止日志刷新并释放 UI 引用。
      */
     public void shutdown() {
+        logArea = null;
         logExecutor.shutdownNow();
         logQueue.clear();
-        logArea = null;
+        logProcessing.set(false);
+        flushScheduled.set(false);
     }
 
     private void flushLogs() {
-        if (logProcessing || !isLogAreaAvailable() || logQueue.isEmpty()) {
+        flushScheduled.set(false);
+        if (logArea == null || logQueue.isEmpty() || !logProcessing.compareAndSet(false, true)) {
             return;
         }
 
-        logProcessing = true;
+        StringBuilder batch = new StringBuilder();
+        int count = 0;
+        while (count < LOG_BATCH_SIZE) {
+            String log = logQueue.poll();
+            if (log == null) {
+                break;
+            }
+            batch.append(log);
+            count++;
+        }
+
+        if (batch.isEmpty()) {
+            logProcessing.set(false);
+            return;
+        }
+
+        String logsToAppend = batch.toString();
         try {
-            StringBuilder batch = new StringBuilder();
-            int count = 0;
-
-            while (count < LOG_BATCH_SIZE && !logQueue.isEmpty()) {
-                String log = logQueue.poll();
-                if (log != null) {
-                    batch.append(log);
-                    count++;
+            Platform.runLater(() -> {
+                try {
+                    appendToLogArea(logsToAppend);
+                } finally {
+                    logProcessing.set(false);
+                    if (!logQueue.isEmpty()) {
+                        scheduleFlush(0);
+                    }
                 }
-            }
+            });
+        } catch (IllegalStateException e) {
+            logProcessing.set(false);
+        }
+    }
 
-            if (batch.length() > 0) {
-                String logsToAppend = batch.toString();
-                Platform.runLater(() -> appendToLogArea(logsToAppend));
-            }
-        } finally {
-            logProcessing = false;
+    private void scheduleFlush(long delayMillis) {
+        if (logArea == null || logExecutor.isShutdown()
+                || !flushScheduled.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            logExecutor.schedule(this::flushLogs, delayMillis, TimeUnit.MILLISECONDS);
+        } catch (RejectedExecutionException e) {
+            flushScheduled.set(false);
         }
     }
 
     private void appendToLogArea(String message) {
-        if (!isLogAreaAvailable()) {
+        TextArea area = logArea;
+        if (area == null || area.getScene() == null) {
             return;
         }
 
         try {
-            String currentText = logArea.getText();
+            String currentText = area.getText();
             if (currentText.length() > 10000) {
                 int cutIndex = currentText.indexOf('\n', 2000);
                 if (cutIndex > 0) {
-                    logArea.deleteText(0, cutIndex + 1);
+                    area.deleteText(0, cutIndex + 1);
                 }
             }
 
-            logArea.appendText(message);
-            if (Math.random() < 0.3) {
-                logArea.setScrollTop(Double.MAX_VALUE);
-            }
+            area.appendText(message);
+            area.setScrollTop(Double.MAX_VALUE);
         } catch (Exception e) {
             // Ignore UI log append failures while the tab is being torn down.
         }
-    }
-
-    private boolean isLogAreaAvailable() {
-        return logArea != null && logArea.getScene() != null;
     }
 
     private void trimLogQueue() {

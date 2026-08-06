@@ -1,58 +1,55 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.geometry.Insets?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<VBox xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1"
+<VBox xmlns="http://javafx.com/javafx/23" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="plugin.javafxtools.controller.MainController"
-      spacing="12" prefWidth="1180" prefHeight="760" styleClass="app-shell">
+      spacing="0" prefWidth="1240" prefHeight="800" styleClass="app-shell">
 
-    <padding>
-        <Insets bottom="10" left="10" right="10" top="10"/>
-    </padding>
+    <HBox alignment="CENTER_LEFT" styleClass="app-header">
+        <Label text="FxTools" styleClass="brand-title"/>
+        <Pane HBox.hgrow="ALWAYS"/>
+        <Label text="本地运行" styleClass="status-badge, status-online"/>
+    </HBox>
 
-    <SplitPane orientation="VERTICAL" fx:id="mainSplitPane" VBox.vgrow="ALWAYS" styleClass="main-split-pane">
-        <items>
-            <!-- 主选项卡 -->
-            <TabPane fx:id="tabPane" styleClass="toolbox-tab-pane">
-                <tabs>
-                    <Tab text="启动项工具">
-                        <fx:include fx:id="appLauncherTab" source="app-launcher-view.fxml"/>
-                    </Tab>
-                    <!-- HTTP请求调度器：<fx:include> 的 fx:id + "Controller" = 控制器字段名 -->
-                    <Tab text="HTTP请求">
-                        <fx:include fx:id="httpRequestTab" source="http-request-view.fxml"/>
-                    </Tab>
-                    <Tab text="WebSocket">
-                        <fx:include fx:id="webSocketTab" source="websocket-view.fxml"/>
-                    </Tab>
-                    <Tab text="网络工具">
-                        <fx:include fx:id="networkToolsTab" source="network-tools-view.fxml"/>
-                    </Tab>
-                    <Tab text="数据格式化">
-                        <fx:include fx:id="dataFormatTab" source="data-format-view.fxml"/>
-                    </Tab>
-                    <Tab text="字符串工具">
-                        <fx:include fx:id="strDataFormatTab" source="strData-format-view.fxml"/>
-                    </Tab>
-                    <Tab text="JAR应用启动器">
-                        <fx:include fx:id="jarLauncherTab" source="jar-launcher-view.fxml"/>
-                    </Tab>
-                    <Tab text="备忘提醒">
-                        <fx:include fx:id="memoReminderTab" source="memo-reminder-view.fxml"/>
-                    </Tab>
-                    <Tab text="域名保活">
-                        <fx:include fx:id="keepAliveTab" source="keepalive-manager-view.fxml"/>
-                    </Tab>
-                </tabs>
-            </TabPane>
+    <TabPane fx:id="tabPane" tabClosingPolicy="UNAVAILABLE"
+             styleClass="toolbox-tab-pane" VBox.vgrow="ALWAYS">
+        <tabs>
+            <Tab text="启动项">
+                <fx:include fx:id="appLauncherTab" source="app-launcher-view.fxml"/>
+            </Tab>
+            <Tab text="HTTP 请求">
+                <fx:include fx:id="httpRequestTab" source="http-request-view.fxml"/>
+            </Tab>
+            <Tab text="WebSocket">
+                <fx:include fx:id="webSocketTab" source="websocket-view.fxml"/>
+            </Tab>
+            <Tab text="网络查询">
+                <fx:include fx:id="networkToolsTab" source="network-tools-view.fxml"/>
+            </Tab>
+            <Tab text="数据格式化">
+                <fx:include fx:id="dataFormatTab" source="data-format-view.fxml"/>
+            </Tab>
+            <Tab text="字符串处理">
+                <fx:include fx:id="strDataFormatTab" source="strData-format-view.fxml"/>
+            </Tab>
+            <Tab text="JAR 启动">
+                <fx:include fx:id="jarLauncherTab" source="jar-launcher-view.fxml"/>
+            </Tab>
+            <Tab text="备忘提醒">
+                <fx:include fx:id="memoReminderTab" source="memo-reminder-view.fxml"/>
+            </Tab>
+            <Tab text="域名保活">
+                <fx:include fx:id="keepAliveTab" source="keepalive-manager-view.fxml"/>
+            </Tab>
+        </tabs>
+    </TabPane>
 
-            <!-- 系统日志区域：通过 SplitPane 可上下拖动调整高度 -->
-            <VBox spacing="8" minHeight="120" prefHeight="180" styleClass="system-log-panel">
-                <Label text="系统日志" styleClass="section-title"/>
-                <TextArea fx:id="centralLogArea" editable="false" VBox.vgrow="ALWAYS" styleClass="log-area"/>
-            </VBox>
-        </items>
-    </SplitPane>
+    <TitledPane fx:id="systemLogPane" text="系统日志" expanded="false" animated="false"
+                collapsible="true" styleClass="system-log-pane">
+        <content>
+            <TextArea fx:id="centralLogArea" editable="false" prefHeight="150" styleClass="log-area"/>
+        </content>
+    </TitledPane>
 </VBox>

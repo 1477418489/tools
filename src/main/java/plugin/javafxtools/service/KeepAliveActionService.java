@@ -7,6 +7,7 @@ import plugin.javafxtools.model.KeepAliveConfig;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
@@ -78,23 +79,27 @@ public class KeepAliveActionService {
      * 异步加载保活配置文件。
      */
     public void loadConfigsAsync() {
-        backgroundExecutor.submit(() -> {
-            try {
-                List<KeepAliveConfig> loadedList = configStore.loadConfigs();
-                uiSupport.runOnFxThread(() -> {
-                    configList.setAll(loadedList);
-                    List<KeepAliveConfig> snapshot = new ArrayList<>(configList);
-                    backgroundExecutor.submit(() -> updateServiceConfigs(snapshot));
-                    infoLogger.accept("成功加载 " + configList.size() + " 条配置");
-                    uiSupport.setButtonsDisabled(false);
-                });
-            } catch (Exception e) {
-                uiSupport.runOnFxThread(() -> {
-                    errorLogger.accept("加载配置文件失败: " + e.getMessage());
-                    uiSupport.setButtonsDisabled(false);
-                });
-            }
-        });
+        try {
+            backgroundExecutor.submit(() -> {
+                try {
+                    List<KeepAliveConfig> loadedList = configStore.loadConfigs();
+                    updateServiceConfigs(loadedList);
+                    uiSupport.runOnFxThread(() -> {
+                        configList.setAll(loadedList);
+                        infoLogger.accept("成功加载 " + configList.size() + " 条配置");
+                        uiSupport.setButtonsDisabled(false);
+                    });
+                } catch (Exception e) {
+                    uiSupport.runOnFxThread(() -> {
+                        errorLogger.accept("加载配置文件失败: " + e.getMessage());
+                        uiSupport.setButtonsDisabled(false);
+                    });
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            errorLogger.accept("配置加载服务已关闭");
+            uiSupport.setButtonsDisabled(false);
+        }
     }
 
     /**
@@ -110,30 +115,40 @@ public class KeepAliveActionService {
         if (!validateInterval() || !validateUrl(domain)) {
             return;
         }
+        if (domainExists(domain, null)) {
+            uiSupport.showWarning("该保活地址已存在");
+            return;
+        }
 
         if (!beginUpdate()) {
             return;
         }
 
         KeepAliveConfig config = formSupport.readConfigFromForm();
-        configList.add(config);
         List<KeepAliveConfig> snapshot = new ArrayList<>(configList);
+        snapshot.add(config);
 
-        backgroundExecutor.submit(() -> {
-            try {
-                updateServiceConfigs(snapshot);
-                configStore.saveConfigs(snapshot);
+        try {
+            backgroundExecutor.submit(() -> {
+                try {
+                    configStore.saveConfigs(snapshot);
+                    updateServiceConfigs(snapshot);
 
-                uiSupport.runOnFxThread(() -> {
-                    formSupport.clearInputFields();
-                    afterOperation.accept("添加");
-                });
-            } catch (Exception e) {
-                uiSupport.runOnFxThread(() -> errorLogger.accept("添加配置失败: " + e.getMessage()));
-            } finally {
-                isUpdating.set(false);
-            }
-        });
+                    uiSupport.runOnFxThread(() -> {
+                        configList.setAll(snapshot);
+                        formSupport.clearInputFields();
+                        infoLogger.accept("已添加配置: " + domain);
+                        afterOperation.accept("添加");
+                    });
+                } catch (Exception e) {
+                    uiSupport.runOnFxThread(() -> errorLogger.accept("添加配置失败: " + e.getMessage()));
+                } finally {
+                    finishUpdate();
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            finishRejectedUpdate();
+        }
     }
 
     /**
@@ -155,40 +170,39 @@ public class KeepAliveActionService {
         if (!validateInterval() || !validateUrl(domain)) {
             return;
         }
+        if (domainExists(domain, selectedConfig)) {
+            uiSupport.showWarning("该保活地址已存在");
+            return;
+        }
 
         if (!beginUpdate()) {
             return;
         }
 
-        KeepAliveConfig formConfig = formSupport.readConfigFromForm();
-        selectedConfig.setDomain(formConfig.getDomain());
-        selectedConfig.setEnabled(formConfig.isEnabled());
-        selectedConfig.setMethod(formConfig.getMethod());
-        selectedConfig.setMinInterval(formConfig.getMinInterval());
-        selectedConfig.setMaxInterval(formConfig.getMaxInterval());
-        selectedConfig.setUnit(formConfig.getUnit());
-
         int selectedIndex = configTableView.getSelectionModel().getSelectedIndex();
-        if (selectedIndex >= 0) {
-            configTableView.getItems().set(selectedIndex, selectedConfig);
-        }
-
         List<KeepAliveConfig> snapshot = new ArrayList<>(configList);
-        backgroundExecutor.submit(() -> {
-            try {
-                updateServiceConfigs(snapshot);
-                configStore.saveConfigs(snapshot);
+        snapshot.set(selectedIndex, formSupport.readConfigFromForm());
+        try {
+            backgroundExecutor.submit(() -> {
+                try {
+                    configStore.saveConfigs(snapshot);
+                    updateServiceConfigs(snapshot);
 
-                uiSupport.runOnFxThread(() -> {
-                    infoLogger.accept("已更新配置: " + domain);
-                    afterOperation.accept("修改");
-                });
-            } catch (Exception e) {
-                uiSupport.runOnFxThread(() -> errorLogger.accept("更新配置失败: " + e.getMessage()));
-            } finally {
-                isUpdating.set(false);
-            }
-        });
+                    uiSupport.runOnFxThread(() -> {
+                        configList.setAll(snapshot);
+                        configTableView.getSelectionModel().select(selectedIndex);
+                        infoLogger.accept("已更新配置: " + domain);
+                        afterOperation.accept("修改");
+                    });
+                } catch (Exception e) {
+                    uiSupport.runOnFxThread(() -> errorLogger.accept("更新配置失败: " + e.getMessage()));
+                } finally {
+                    finishUpdate();
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            finishRejectedUpdate();
+        }
     }
 
     /**
@@ -200,31 +214,44 @@ public class KeepAliveActionService {
             uiSupport.showWarning("请选择要删除的配置");
             return;
         }
+        if (!uiSupport.confirmRemoval(selectedConfig.getDomain())) {
+            return;
+        }
 
         if (!beginUpdate()) {
             return;
         }
 
         String domain = selectedConfig.getDomain();
-        configList.remove(selectedConfig);
         List<KeepAliveConfig> snapshot = new ArrayList<>(configList);
+        int selectedIndex = configTableView.getSelectionModel().getSelectedIndex();
+        snapshot.remove(selectedIndex);
 
-        backgroundExecutor.submit(() -> {
-            try {
-                updateServiceConfigs(snapshot);
-                configStore.saveConfigs(snapshot);
+        try {
+            backgroundExecutor.submit(() -> {
+                try {
+                    configStore.saveConfigs(snapshot);
+                    updateServiceConfigs(snapshot);
 
-                uiSupport.runOnFxThread(() -> {
-                    infoLogger.accept("已删除配置: " + domain);
-                    formSupport.clearInputFields();
-                    afterOperation.accept("删除");
-                });
-            } catch (Exception e) {
-                uiSupport.runOnFxThread(() -> errorLogger.accept("删除配置失败: " + e.getMessage()));
-            } finally {
-                isUpdating.set(false);
-            }
-        });
+                    uiSupport.runOnFxThread(() -> {
+                        configList.setAll(snapshot);
+                        if (!snapshot.isEmpty()) {
+                            configTableView.getSelectionModel().select(
+                                    Math.min(selectedIndex, snapshot.size() - 1));
+                        }
+                        infoLogger.accept("已删除配置: " + domain);
+                        formSupport.clearInputFields();
+                        afterOperation.accept("删除");
+                    });
+                } catch (Exception e) {
+                    uiSupport.runOnFxThread(() -> errorLogger.accept("删除配置失败: " + e.getMessage()));
+                } finally {
+                    finishUpdate();
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            finishRejectedUpdate();
+        }
     }
 
     /**
@@ -235,30 +262,30 @@ public class KeepAliveActionService {
             return;
         }
 
-        uiSupport.showProgress(true);
         List<KeepAliveConfig> snapshot = new ArrayList<>(configList);
 
-        backgroundExecutor.submit(() -> {
-            try {
-                updateServiceConfigs(snapshot);
-                configStore.saveConfigs(snapshot);
+        try {
+            backgroundExecutor.submit(() -> {
+                try {
+                    configStore.saveConfigs(snapshot);
+                    updateServiceConfigs(snapshot);
 
-                uiSupport.runOnFxThread(() -> {
-                    uiSupport.showProgress(false);
-                    infoLogger.accept("已保存所有配置");
-                    uiSupport.showInfo("保存成功", "配置已成功保存到文件");
-                    afterOperation.accept("保存");
-                });
-            } catch (Exception e) {
-                uiSupport.runOnFxThread(() -> {
-                    uiSupport.showProgress(false);
-                    errorLogger.accept("保存失败: " + e.getMessage());
-                    uiSupport.showWarning("保存失败: " + e.getMessage());
-                });
-            } finally {
-                isUpdating.set(false);
-            }
-        });
+                    uiSupport.runOnFxThread(() -> {
+                        infoLogger.accept("已保存所有配置");
+                        afterOperation.accept("保存");
+                    });
+                } catch (Exception e) {
+                    uiSupport.runOnFxThread(() -> {
+                        errorLogger.accept("保存失败: " + e.getMessage());
+                        uiSupport.showWarning("保存失败: " + e.getMessage());
+                    });
+                } finally {
+                    finishUpdate();
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            finishRejectedUpdate();
+        }
     }
 
     private boolean validateInterval() {
@@ -279,15 +306,37 @@ public class KeepAliveActionService {
 
     private boolean beginUpdate() {
         if (isUpdating.compareAndSet(false, true)) {
+            uiSupport.setButtonsDisabled(true);
+            uiSupport.showProgress(true);
             return true;
         }
         uiSupport.showWarning("请等待当前操作完成");
         return false;
     }
 
+    private boolean domainExists(String domain, KeepAliveConfig ignoredConfig) {
+        return configList.stream()
+                .filter(config -> config != ignoredConfig)
+                .map(KeepAliveConfig::getDomain)
+                .anyMatch(domain::equals);
+    }
+
     private void updateServiceConfigs(List<KeepAliveConfig> configs) {
         if (keepAliveService != null) {
             keepAliveService.updateConfigs(configs);
         }
+    }
+
+    private void finishUpdate() {
+        isUpdating.set(false);
+        uiSupport.runOnFxThread(() -> {
+            uiSupport.showProgress(false);
+            uiSupport.setButtonsDisabled(false);
+        });
+    }
+
+    private void finishRejectedUpdate() {
+        errorLogger.accept("配置保存服务已关闭");
+        finishUpdate();
     }
 }

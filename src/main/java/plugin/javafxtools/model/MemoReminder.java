@@ -15,6 +15,11 @@ public class MemoReminder {
     private String content;
 
     /**
+     * 提醒调度方式。
+     */
+    private ReminderScheduleMode scheduleMode;
+
+    /**
      * 提醒间隔数量。
      */
     private int interval;
@@ -62,11 +67,32 @@ public class MemoReminder {
     public MemoReminder(long id, String content, int interval, IntervalUnit unit, int totalTimes) {
         this.id = id;
         this.content = content;
+        this.scheduleMode = ReminderScheduleMode.INTERVAL;
         this.interval = interval;
         this.unit = unit;
         this.totalTimes = totalTimes;
         this.remainingTimes = totalTimes <= 0 ? -1 : totalTimes;
         this.active = true;
+    }
+
+    /**
+     * 创建指定时间的一次性提醒。
+     *
+     * @param id 提醒唯一标识
+     * @param content 提醒内容
+     * @param triggerEpochMillis 触发时间戳，单位为毫秒
+     * @return 一次性提醒
+     */
+    public static MemoReminder atTime(long id, String content, long triggerEpochMillis) {
+        MemoReminder reminder = new MemoReminder();
+        reminder.id = id;
+        reminder.content = content;
+        reminder.scheduleMode = ReminderScheduleMode.AT_TIME;
+        reminder.totalTimes = 1;
+        reminder.remainingTimes = 1;
+        reminder.nextTriggerEpochMillis = triggerEpochMillis;
+        reminder.active = true;
+        return reminder;
     }
 
     /**
@@ -96,6 +122,20 @@ public class MemoReminder {
      * @param content 提醒内容
      */
     public void setContent(String content) { this.content = content; }
+
+    /**
+     * 获取提醒调度方式。
+     *
+     * @return 调度方式
+     */
+    public ReminderScheduleMode getScheduleMode() { return scheduleMode; }
+
+    /**
+     * 设置提醒调度方式。
+     *
+     * @param scheduleMode 调度方式
+     */
+    public void setScheduleMode(ReminderScheduleMode scheduleMode) { this.scheduleMode = scheduleMode; }
 
     /**
      * 获取提醒间隔数量。
@@ -187,6 +227,9 @@ public class MemoReminder {
      * @return 间隔毫秒数
      */
     public long intervalMillis() {
+        if (scheduleMode != ReminderScheduleMode.INTERVAL || unit == null) {
+            throw new IllegalStateException("仅间隔提醒支持计算周期");
+        }
         return unit.toMillis(interval);
     }
 
@@ -204,7 +247,10 @@ public class MemoReminder {
      *
      * @return 间隔展示文本
      */
-    public String getDisplayInterval() {
+    public String getDisplaySchedule() {
+        if (scheduleMode == ReminderScheduleMode.AT_TIME) {
+            return "指定时间";
+        }
         return interval + unit.getDisplayName();
     }
 }

@@ -56,4 +56,44 @@ public final class LogTextTrimmer {
         }
         return deleteIndex;
     }
+
+    /**
+     * 按字符数限制文本区域，优先从完整行边界删除旧内容。
+     *
+     * @param area 日志文本区域
+     * @param maxCharacters 触发裁剪的最大字符数
+     * @param targetCharacters 裁剪后目标字符数
+     */
+    public static void trimToMaxCharacters(TextArea area,
+                                           int maxCharacters,
+                                           int targetCharacters) {
+        if (area == null) {
+            return;
+        }
+        int trimIndex = findCharacterTrimIndex(
+                area.getText(), maxCharacters, targetCharacters);
+        if (trimIndex > 0) {
+            area.deleteText(0, trimIndex);
+        }
+    }
+
+    static int findCharacterTrimIndex(String text,
+                                      int maxCharacters,
+                                      int targetCharacters) {
+        if (text == null || text.length() <= maxCharacters
+                || targetCharacters <= 0 || targetCharacters >= maxCharacters) {
+            return 0;
+        }
+
+        int minimumTrimIndex = text.length() - targetCharacters;
+        int nextLine = text.indexOf('\n', minimumTrimIndex);
+        if (nextLine >= 0) {
+            return nextLine + 1;
+        }
+        if (minimumTrimIndex < text.length()
+                && Character.isLowSurrogate(text.charAt(minimumTrimIndex))) {
+            return minimumTrimIndex + 1;
+        }
+        return minimumTrimIndex;
+    }
 }

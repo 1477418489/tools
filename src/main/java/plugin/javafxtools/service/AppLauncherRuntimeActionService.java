@@ -6,6 +6,9 @@ import plugin.javafxtools.model.AppInfo;
 
 import java.util.List;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
@@ -23,6 +26,8 @@ public class AppLauncherRuntimeActionService {
     private final IntSupplier selectedIndexSupplier;
     private final Supplier<List<AppInfo>> appInfosSnapshotSupplier;
     private final Runnable updateAppList;
+    private final Consumer<Boolean> launchStateConsumer;
+    private final AtomicBoolean launchInProgress = new AtomicBoolean();
 
     /**
      * 创建运行时动作服务。
@@ -35,6 +40,7 @@ public class AppLauncherRuntimeActionService {
      * @param selectedIndexSupplier 选中索引读取器
      * @param appInfosSnapshotSupplier 应用配置快照读取器
      * @param updateAppList 列表刷新回调
+     * @param launchStateConsumer 长操作运行状态回调
      */
     public AppLauncherRuntimeActionService(ModuleLogger logger,
                                            AppLauncherExecutionService executionService,
@@ -43,7 +49,8 @@ public class AppLauncherRuntimeActionService {
                                            AppLauncherUiRefreshService uiRefreshService,
                                            IntSupplier selectedIndexSupplier,
                                            Supplier<List<AppInfo>> appInfosSnapshotSupplier,
-                                           Runnable updateAppList) {
+                                           Runnable updateAppList,
+                                           Consumer<Boolean> launchStateConsumer) {
         this.logger = logger;
         this.executionService = executionService;
         this.statusService = statusService;
@@ -52,6 +59,7 @@ public class AppLauncherRuntimeActionService {
         this.selectedIndexSupplier = selectedIndexSupplier;
         this.appInfosSnapshotSupplier = appInfosSnapshotSupplier;
         this.updateAppList = updateAppList;
+        this.launchStateConsumer = launchStateConsumer;
     }
 
     /**
@@ -59,8 +67,8 @@ public class AppLauncherRuntimeActionService {
      */
     public void launchSingle() {
         AppInfo selectedApp = selectedApp("请先选择要启动的应用程序");
-        if (selectedApp != null) {
-            executionService.launchSingle(selectedApp);
+        if (selectedApp != null && beginLaunch()) {
+            executionService.launchSingle(selectedApp, this::finishLaunch);
         }
     }
 
@@ -73,7 +81,9 @@ public class AppLauncherRuntimeActionService {
             logger.error("应用程序列表为空");
             return;
         }
-        executionService.launchAll(appInfos);
+        if (beginLaunch()) {
+            executionService.launchAll(appInfos, this::finishLaunch);
+        }
     }
 
     /**
@@ -109,13 +119,18 @@ public class AppLauncherRuntimeActionService {
             return;
         }
 
-        backgroundExecutor.submit(() -> {
-            try {
-                statusService.lightweightStatusCheck(appInfosSnapshotSupplier.get());
-            } finally {
-                uiRefreshService.finishUpdate();
-            }
-        });
+        try {
+            backgroundExecutor.submit(() -> {
+                try {
+                    statusService.lightweightStatusCheck(appInfosSnapshotSupplier.get());
+                } finally {
+                    uiRefreshService.finishUpdate();
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            uiRefreshService.finishUpdate();
+            logger.error("状态刷新任务已被拒绝");
+        }
     }
 
     private AppInfo selectedApp(String missingSelectionMessage) {
@@ -131,5 +146,20 @@ public class AppLauncherRuntimeActionService {
             return null;
         }
         return appInfos.get(selectedIndex);
+    }
+
+    private boolean beginLaunch() {
+        if (!launchInProgress.compareAndSet(false, true)) {
+            logger.info("启动操作正在进行中，请稍候");
+            return false;
+        }
+        launchStateConsumer.accept(true);
+        return true;
+    }
+
+    private void finishLaunch() {
+        launchInProgress.set(false);
+        launchStateConsumer.accept(false);
+        updateAppList.run();
     }
 }

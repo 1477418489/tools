@@ -1,45 +1,42 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.geometry.Insets?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<GridPane xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1"
-          fx:controller="plugin.javafxtools.controller.WebSocketController"
-          hgap="12" vgap="12" prefWidth="1000" prefHeight="700" styleClass="tool-page">
+<VBox xmlns="http://javafx.com/javafx/23" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="plugin.javafxtools.controller.WebSocketController"
+      spacing="12" prefWidth="1000" prefHeight="700" styleClass="tool-page">
 
-    <padding>
-        <Insets bottom="10" left="10" right="10" top="10"/>
-    </padding>
-
-    <columnConstraints>
-        <ColumnConstraints minWidth="120" prefWidth="140" hgrow="NEVER"/>
-        <ColumnConstraints hgrow="ALWAYS"/>
-    </columnConstraints>
-    <rowConstraints>
-        <RowConstraints vgrow="NEVER"/>
-        <RowConstraints vgrow="ALWAYS"/>
-        <RowConstraints vgrow="NEVER"/>
-    </rowConstraints>
-
-    <!-- 第0行 - 服务器地址 -->
-    <Label text="WebSocket服务器:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
-    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="0" GridPane.hgrow="ALWAYS" styleClass="toolbar-card">
-        <TextField fx:id="wsUrlField" HBox.hgrow="ALWAYS"/>
-        <Button fx:id="wsConnectButton" text="连接" onAction="#handleWsConnect" styleClass="success-button"/>
-        <Button fx:id="wsDisconnectButton" text="断开" onAction="#handleWsDisconnect" styleClass="danger-button"/>
+    <HBox alignment="CENTER_LEFT" styleClass="page-header">
+        <Label text="WebSocket 客户端" styleClass="page-title"/>
+        <Pane HBox.hgrow="ALWAYS"/>
+        <Label fx:id="wsStatusLabel" text="未连接" styleClass="status-badge, status-offline"/>
     </HBox>
 
-    <!-- 第1行 - 消息记录 -->
-    <Label text="消息记录:" GridPane.columnIndex="0" GridPane.rowIndex="1" styleClass="section-title"/>
-    <TextArea fx:id="wsMessageArea" editable="false" GridPane.columnIndex="1" GridPane.rowIndex="1"
-              GridPane.hgrow="ALWAYS" GridPane.vgrow="ALWAYS" styleClass="log-area"/>
-
-    <!-- 第2行 - 消息发送 -->
-    <Label text="发送消息:" GridPane.columnIndex="0" GridPane.rowIndex="2"/>
-    <HBox spacing="10" GridPane.columnIndex="1" GridPane.rowIndex="2" GridPane.hgrow="ALWAYS" styleClass="toolbar-card">
-        <TextField fx:id="wsMessageField" HBox.hgrow="ALWAYS" onAction="#handleWsSend"/>
-        <Button fx:id="wsSendButton" text="发送" onAction="#handleWsSend"/>
-        <Button fx:id="wsClearButton" text="清除" onAction="#handleWsClear" styleClass="secondary-button"/>
+    <HBox spacing="8" alignment="CENTER_LEFT" styleClass="toolbar">
+        <TextField fx:id="wsUrlField" promptText="ws:// 或 wss://"
+                   onAction="#handleWsConnect" HBox.hgrow="ALWAYS"/>
+        <Button fx:id="wsConnectButton" text="连接" onAction="#handleWsConnect"
+                styleClass="primary-button"/>
+        <Button fx:id="wsDisconnectButton" text="断开" onAction="#handleWsDisconnect"
+                styleClass="danger-button"/>
     </HBox>
-</GridPane>
+
+    <VBox spacing="7" styleClass="surface" VBox.vgrow="ALWAYS">
+        <HBox alignment="CENTER_LEFT" styleClass="section-header">
+            <Label text="消息记录" styleClass="section-title"/>
+            <Pane HBox.hgrow="ALWAYS"/>
+            <Button fx:id="wsClearButton" text="清空" onAction="#handleWsClear"
+                    styleClass="compact-button"/>
+        </HBox>
+        <TextArea fx:id="wsMessageArea" editable="false" wrapText="true"
+                  VBox.vgrow="ALWAYS" styleClass="log-area"/>
+    </VBox>
+
+    <HBox spacing="8" alignment="CENTER_LEFT" styleClass="toolbar">
+        <TextField fx:id="wsMessageField" promptText="输入消息，按 Enter 发送"
+                   HBox.hgrow="ALWAYS" onAction="#handleWsSend"/>
+        <Button fx:id="wsSendButton" text="发送" onAction="#handleWsSend"
+                styleClass="primary-button"/>
+    </HBox>
+</VBox>

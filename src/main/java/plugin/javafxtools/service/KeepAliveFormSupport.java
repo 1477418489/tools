@@ -12,11 +12,13 @@ import javafx.scene.control.SelectionMode;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableCell;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import plugin.javafxtools.model.IntervalUnit;
 import plugin.javafxtools.model.KeepAliveConfig;
 import plugin.javafxtools.model.KeepAliveMethod;
+import plugin.javafxtools.util.HttpUrlSupport;
 
 /**
  * 域名保活配置表格、表单控件的初始化和取值。
@@ -143,7 +145,7 @@ public class KeepAliveFormSupport {
      */
     public void clearInputFields() {
         domainField.clear();
-        enabledCheckBox.setSelected(false);
+        enabledCheckBox.setSelected(true);
         methodComboBox.setValue(KeepAliveMethod.HTTP);
         minIntervalSpinner.getValueFactory().setValue(10);
         maxIntervalSpinner.getValueFactory().setValue(30);
@@ -157,7 +159,7 @@ public class KeepAliveFormSupport {
      * @return 是否有效
      */
     public boolean isValidUrl(String url) {
-        return url != null && (url.startsWith("http://") || url.startsWith("https://"));
+        return HttpUrlSupport.isValid(url);
     }
 
     private void setupTableView() {
@@ -166,16 +168,26 @@ public class KeepAliveFormSupport {
 
         enabledColumn.setCellValueFactory(cellData ->
                 new SimpleBooleanProperty(cellData.getValue().isEnabled()));
+        enabledColumn.setCellFactory(column -> new TableCell<>() {
+            @Override
+            protected void updateItem(Boolean enabled, boolean empty) {
+                super.updateItem(enabled, empty);
+                setText(empty ? null : Boolean.TRUE.equals(enabled) ? "启用" : "停用");
+                getStyleClass().removeAll("status-active", "status-muted");
+                if (!empty) {
+                    getStyleClass().add(Boolean.TRUE.equals(enabled) ? "status-active" : "status-muted");
+                }
+            }
+        });
 
         methodColumn.setCellValueFactory(cellData ->
                 new SimpleObjectProperty<>(cellData.getValue().getMethod()));
 
         intervalColumn.setCellValueFactory(cellData -> {
             KeepAliveConfig config = cellData.getValue();
-            String intervalRange = String.format("%d-%d %s",
+            String intervalRange = String.format("%d-%d",
                     config.getMinInterval(),
-                    config.getMaxInterval(),
-                    config.getUnit().getDisplayName());
+                    config.getMaxInterval());
             return new SimpleStringProperty(intervalRange);
         });
 
@@ -184,6 +196,7 @@ public class KeepAliveFormSupport {
 
         configTableView.setItems(configList);
         configTableView.setFixedCellSize(35);
+        configTableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         configTableView.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
     }
 
@@ -211,9 +224,17 @@ public class KeepAliveFormSupport {
         maxIntervalSpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(
                 1, 1000, 30));
 
+        enabledCheckBox.setSelected(true);
+
         minIntervalSpinner.valueProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal > maxIntervalSpinner.getValue()) {
                 maxIntervalSpinner.getValueFactory().setValue(newVal);
+            }
+        });
+
+        maxIntervalSpinner.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal < minIntervalSpinner.getValue()) {
+                minIntervalSpinner.getValueFactory().setValue(newVal);
             }
         });
     }

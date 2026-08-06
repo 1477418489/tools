@@ -1,15 +1,25 @@
 package plugin.javafxtools.controller;
 
+import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.KeyCode;
 import plugin.javafxtools.base.BaseController;
+
+import java.util.Locale;
+import java.util.regex.Pattern;
 
 /**
  * 字符串工具控制器
  */
 public class StrDataFormatController extends BaseController {
+    private static final Pattern WHITESPACE_PATTERN =
+            Pattern.compile("\\s+", Pattern.UNICODE_CHARACTER_CLASS);
 
     /**
      * 字符串处理类型选择框。
@@ -41,6 +51,12 @@ public class StrDataFormatController extends BaseController {
     @FXML
     private Button clearButton;
 
+    @FXML
+    private Button copyButton;
+
+    @FXML
+    private Label statusLabel;
+
     /**
      * 获取当前模块日志输出区域。
      *
@@ -48,7 +64,7 @@ public class StrDataFormatController extends BaseController {
      */
     @Override
     public TextArea getLogArea() {
-        return formattedDataArea;
+        return null;
     }
 
     /**
@@ -57,13 +73,22 @@ public class StrDataFormatController extends BaseController {
     @FXML
     public void initialize() {
         // 初始化格式化类型选项
-        formatTypeComboBox.getItems().addAll("普通", "转大写", "转小写");
-        formatTypeComboBox.setValue("普通");
+        formatTypeComboBox.getItems().addAll("去除空白", "去除首尾空白", "转大写", "转小写");
+        formatTypeComboBox.setValue("去除空白");
 
         // 设置提示文本
-        rawDataArea.setPromptText("在此输入要格式化的数据...");
-        formattedDataArea.setPromptText("格式化结果将显示在这里...");
-        info("数据格式化工具控制器模块初始化完成");
+        rawDataArea.setPromptText("输入或粘贴需要处理的文本");
+        formattedDataArea.setPromptText("处理结果将在这里显示");
+        rawDataArea.textProperty().addListener((observable, oldValue, newValue) -> updateButtonStates());
+        formattedDataArea.textProperty().addListener((observable, oldValue, newValue) -> updateButtonStates());
+        rawDataArea.setOnKeyPressed(event -> {
+            if (event.isControlDown() && event.getCode() == KeyCode.ENTER) {
+                handleFormat();
+                event.consume();
+            }
+        });
+        updateButtonStates();
+        setStatus("READY", "等待输入");
     }
 
     /**
@@ -71,8 +96,8 @@ public class StrDataFormatController extends BaseController {
      */
     @FXML
     private void handleFormat() {
-        String rawData = rawDataArea.getText().trim();
-        if (rawData.isEmpty()) {
+        String rawData = rawDataArea.getText();
+        if (rawData == null || rawData.isBlank()) {
             error("请输入要格式化的数据");
             return;
         }
@@ -80,28 +105,46 @@ public class StrDataFormatController extends BaseController {
         try {
             String formatted;
             switch (type) {
-                case "普通" -> {
-                    // 去除多余空格
-                    formatted = rawData.replaceAll("\\s+", "");
-                    info("格式化成功,数量:" + formatted.length());
+                case "去除空白" -> {
+                    formatted = WHITESPACE_PATTERN.matcher(rawData).replaceAll("");
+                    info("处理完成，共 " + formatted.length() + " 个字符");
+                }
+                case "去除首尾空白" -> {
+                    formatted = rawData.strip();
+                    info("处理完成，共 " + formatted.length() + " 个字符");
                 }
                 case "转大写" -> {
-                    formatted = rawData.toUpperCase();
-                    info("格式化成功,数量:" + formatted.length());
+                    formatted = rawData.toUpperCase(Locale.ROOT);
+                    info("处理完成，共 " + formatted.length() + " 个字符");
                 }
                 case "转小写" -> {
-                    formatted = rawData.toLowerCase();
-                    info("格式化成功,数量:" + formatted.length());
+                    formatted = rawData.toLowerCase(Locale.ROOT);
+                    info("处理完成，共 " + formatted.length() + " 个字符");
                 }
                 case null, default -> formatted = rawData;
             }
             formattedDataArea.setText(formatted);
         } catch (Exception e) {
-            formattedDataArea.setText(type + "格式化错误: " + e.getMessage());
-            error(type + "格式化失败: " + e.getMessage());
+            formattedDataArea.clear();
+            error(type + "处理失败: " + e.getMessage());
         }
     }
 
+    /**
+     * 将纯处理结果复制到系统剪贴板。
+     */
+    @FXML
+    private void handleCopyResult() {
+        String result = formattedDataArea.getText();
+        if (result == null || result.isBlank()) {
+            error("当前没有可复制的结果");
+            return;
+        }
+        ClipboardContent content = new ClipboardContent();
+        content.putString(result);
+        Clipboard.getSystemClipboard().setContent(content);
+        info("结果已复制到剪贴板");
+    }
 
     /**
      * 处理清除按钮点击事件
@@ -110,6 +153,42 @@ public class StrDataFormatController extends BaseController {
     private void handleClear() {
         rawDataArea.clear();
         formattedDataArea.clear();
-        info("已清除输入和格式化结果");
+        setStatus("READY", "等待输入");
+        rawDataArea.requestFocus();
+    }
+
+    /**
+     * 页面使用独立状态标签反馈操作，避免日志污染处理结果。
+     */
+    @Override
+    public void log(String level, String message) {
+        setStatus(level, message);
+    }
+
+    private void updateButtonStates() {
+        formatButton.setDisable(rawDataArea.getText() == null || rawDataArea.getText().isBlank());
+        copyButton.setDisable(formattedDataArea.getText() == null || formattedDataArea.getText().isBlank());
+    }
+
+    private void setStatus(String level, String message) {
+        Runnable update = () -> {
+            if (statusLabel == null) {
+                return;
+            }
+            statusLabel.setText(message);
+            statusLabel.getStyleClass().removeAll(
+                    "status-text", "feedback-text", "feedback-success", "feedback-error");
+            statusLabel.getStyleClass().add("feedback-text");
+            if ("ERROR".equals(level)) {
+                statusLabel.getStyleClass().add("feedback-error");
+            } else if ("INFO".equals(level)) {
+                statusLabel.getStyleClass().add("feedback-success");
+            }
+        };
+        if (Platform.isFxApplicationThread()) {
+            update.run();
+        } else {
+            Platform.runLater(update);
+        }
     }
 }

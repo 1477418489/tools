@@ -1,6 +1,7 @@
 package plugin.javafxtools.controller;
 
 import javafx.application.Platform;
+import javafx.collections.ListChangeListener;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.stage.Stage;
@@ -33,7 +34,8 @@ public class AppLauncherController extends BaseController {
     // 记录最后选中的索引
     private volatile int lastSelectedIndex = -1;
 
-    private static final int PROCESS_CHECK_INTERVAL_MS = 1000 * 10;
+    private static final long PROCESS_CHECK_INTERVAL_SECONDS = 30;
+    private static final long PROCESS_STATUS_CACHE_TTL_MILLIS = 25_000;
 
     // FXML注入的UI组件
     @FXML
@@ -47,6 +49,12 @@ public class AppLauncherController extends BaseController {
             killProcessButton, removeButton, clearButton, refreshStatusButton;
 
     @FXML
+    private Button moveUpButton, moveDownButton;
+
+    @FXML
+    private Label appCountLabel;
+
+    @FXML
     private TextArea logArea;
 
     // 数据存储 - 使用线程安全的集合
@@ -55,6 +63,8 @@ public class AppLauncherController extends BaseController {
     private volatile Map<String, String> launcherProcessMap = new ConcurrentHashMap<>();
 
     private volatile Stage primaryStage;
+
+    private boolean launchOperationRunning;
 
     // 优化的状态检查执行器
     private final ScheduledExecutorService statusCheckExecutor =
@@ -71,7 +81,7 @@ public class AppLauncherController extends BaseController {
             new AppLauncherUiRefreshService(this::refreshListViewOptimized);
 
     private final AppProcessManager processManager =
-            new AppProcessManager(this, backgroundExecutor, processStatusCache, uiRefreshService::scheduleUpdate);
+            new AppProcessManager(this, processStatusCache, uiRefreshService::scheduleUpdate);
 
     private final AppLauncherStatusService statusService =
             new AppLauncherStatusService(this, processManager, processStatusCache,
@@ -81,13 +91,13 @@ public class AppLauncherController extends BaseController {
 
     private final AppLauncherExecutionService executionService =
             new AppLauncherExecutionService(this, processManager, statusService,
-                    backgroundExecutor, processStatusCache, this::updateAppList);
+                    backgroundExecutor, processStatusCache);
 
     private AppLauncherListViewSupport listViewSupport;
 
     private final AppLauncherListActionService listActionService =
             new AppLauncherListActionService(this, appInfos, () -> launcherProcessMap,
-                    this::updateAppList, this::saveAppInfosAsync,
+                    this::updateAppList, this::saveAppInfos,
                     index -> listViewSupport.selectAndFocus(index),
                     removed -> executionService.killProcess(removed, killed -> {
                         if (killed) {
@@ -98,11 +108,13 @@ public class AppLauncherController extends BaseController {
 
     private final AppLauncherLifecycleService lifecycleService =
             new AppLauncherLifecycleService(this, processManager, appInfos, processStatusCache,
-                    () -> launcherProcessMap, uiRefreshService, statusCheckExecutor, backgroundExecutor);
+                    () -> launcherProcessMap, uiRefreshService, statusCheckExecutor,
+                    backgroundExecutor);
 
     private final AppLauncherRuntimeActionService runtimeActionService =
             new AppLauncherRuntimeActionService(this, executionService, statusService, backgroundExecutor,
-                    uiRefreshService, this::selectedIndex, this::snapshotAppInfos, this::updateAppList);
+                    uiRefreshService, this::selectedIndex, this::snapshotAppInfos, this::updateAppList,
+                    this::setLaunchOperationRunning);
 
     /**
      * 设置主舞台
@@ -132,13 +144,16 @@ public class AppLauncherController extends BaseController {
      */
     @FXML
     public void initialize() {
+        disableListActionsUntilLoaded();
+        appPathField.textProperty().addListener(
+                (observable, oldValue, newValue) -> updateActionButtonStates());
         // 优化的定期状态检查任务
         statusCheckExecutor.scheduleWithFixedDelay(() -> {
             if (!appInfos.isEmpty()) {
                 statusService.checkAllProcessStatus(
-                        snapshotAppInfos(), PROCESS_CHECK_INTERVAL_MS * 2L, backgroundExecutor);
+                        snapshotAppInfos(), PROCESS_STATUS_CACHE_TTL_MILLIS);
             }
-        }, 1000, PROCESS_CHECK_INTERVAL_MS, TimeUnit.MILLISECONDS);
+        }, PROCESS_CHECK_INTERVAL_SECONDS, PROCESS_CHECK_INTERVAL_SECONDS, TimeUnit.SECONDS);
 
         backgroundExecutor.submit(() -> {
             launcherProcessMap = appStore.loadProcessMap();
@@ -158,6 +173,11 @@ public class AppLauncherController extends BaseController {
             listViewSupport = new AppLauncherListViewSupport(this, appListView, processStatusCache,
                     () -> lastSelectedIndex, index -> lastSelectedIndex = index);
             listViewSupport.initialize();
+            appListView.getSelectionModel().selectedItemProperty().addListener(
+                    (observable, oldValue, newValue) -> updateActionButtonStates());
+            appListView.getItems().addListener(
+                    (ListChangeListener<AppInfo>) change -> updateActionButtonStates());
+            updateActionButtonStates();
 
             // 异步加载应用信息
             backgroundExecutor.submit(() -> {
@@ -173,8 +193,16 @@ public class AppLauncherController extends BaseController {
      * 优化的ListView刷新方法
      */
     private void refreshListViewOptimized() {
-        if (listViewSupport != null) {
-            listViewSupport.refresh();
+        Runnable refresh = () -> {
+            if (listViewSupport != null) {
+                listViewSupport.refresh();
+                updateActionButtonStates();
+            }
+        };
+        if (Platform.isFxApplicationThread()) {
+            refresh.run();
+        } else {
+            Platform.runLater(refresh);
         }
     }
 
@@ -267,8 +295,15 @@ public class AppLauncherController extends BaseController {
      * 高度优化的应用列表更新方法
      */
     private void updateAppList() {
+        List<AppInfo> snapshot = snapshotAppInfos();
+        processManager.retainCachesFor(snapshot);
         if (listViewSupport != null) {
-            listViewSupport.updateList(snapshotAppInfos());
+            listViewSupport.updateList(snapshot);
+            if (Platform.isFxApplicationThread()) {
+                updateActionButtonStates();
+            } else {
+                Platform.runLater(this::updateActionButtonStates);
+            }
         }
     }
 
@@ -276,24 +311,88 @@ public class AppLauncherController extends BaseController {
      * 加载应用信息
      */
     private void loadAppInfos() {
-        List<AppInfo> loadedAppInfos = appStore.loadAppInfos(launcherProcessMap);
+        List<AppInfo> loadedAppInfos = appStore.loadAppInfos();
         appInfos.clear();
         appInfos.addAll(loadedAppInfos);
         updateAppList();
         info("已加载 " + appInfos.size() + " 个应用程序路径");
+        if (!loadedAppInfos.isEmpty()) {
+            statusService.checkAllProcessStatus(
+                    loadedAppInfos, PROCESS_STATUS_CACHE_TTL_MILLIS);
+        }
     }
 
-    /**
-     * 异步保存应用信息
-     */
-    private void saveAppInfosAsync() {
-        List<AppInfo> appInfoSnapshot = snapshotAppInfos();
-        backgroundExecutor.submit(() -> appStore.saveAppInfos(appInfoSnapshot));
+    private boolean saveAppInfos(List<AppInfo> updatedAppInfos) {
+        return appStore.saveAppInfos(updatedAppInfos);
     }
 
     private List<AppInfo> snapshotAppInfos() {
         synchronized (appInfos) {
             return new ArrayList<>(appInfos);
+        }
+    }
+
+    private void disableListActionsUntilLoaded() {
+        addButton.setDisable(true);
+        launchSingleButton.setDisable(true);
+        launchAllButton.setDisable(true);
+        killProcessButton.setDisable(true);
+        removeButton.setDisable(true);
+        clearButton.setDisable(true);
+        refreshStatusButton.setDisable(true);
+        moveUpButton.setDisable(true);
+        moveDownButton.setDisable(true);
+    }
+
+    private void updateActionButtonStates() {
+        if (appListView == null) {
+            return;
+        }
+        int itemCount = appListView.getItems().size();
+        int selectedIndex = appListView.getSelectionModel().getSelectedIndex();
+        AppInfo selected = appListView.getSelectionModel().getSelectedItem();
+        AppProcessStatus selectedStatus = selected == null
+                ? null
+                : processStatusCache.get(selected.getAppPath());
+        boolean selectedRunning = selectedStatus != null && selectedStatus.isRunning();
+        boolean hasSelection = selectedIndex >= 0;
+        boolean hasItems = itemCount > 0;
+
+        appPathField.setDisable(launchOperationRunning);
+        browseButton.setDisable(launchOperationRunning);
+        addButton.setDisable(launchOperationRunning
+                || listViewSupport == null
+                || appPathField.getText() == null
+                || appPathField.getText().isBlank());
+        launchSingleButton.setDisable(launchOperationRunning || !hasSelection || selectedRunning);
+        killProcessButton.setDisable(launchOperationRunning || !hasSelection || !selectedRunning);
+        removeButton.setDisable(launchOperationRunning || !hasSelection);
+        moveUpButton.setDisable(launchOperationRunning || !hasSelection || selectedIndex == 0);
+        moveDownButton.setDisable(
+                launchOperationRunning || !hasSelection || selectedIndex >= itemCount - 1);
+        launchAllButton.setDisable(launchOperationRunning || !hasItems);
+        clearButton.setDisable(launchOperationRunning || !hasItems);
+        refreshStatusButton.setDisable(launchOperationRunning || !hasItems);
+        long runningCount = appListView.getItems().stream()
+                .map(AppInfo::getAppPath)
+                .map(processStatusCache::get)
+                .filter(Objects::nonNull)
+                .filter(AppProcessStatus::isRunning)
+                .count();
+        appCountLabel.setText(runningCount + " 运行中 · " + itemCount + " 个");
+        appCountLabel.getStyleClass().removeAll("status-online", "status-offline");
+        appCountLabel.getStyleClass().add(runningCount > 0 ? "status-online" : "status-offline");
+    }
+
+    private void setLaunchOperationRunning(boolean running) {
+        Runnable update = () -> {
+            launchOperationRunning = running;
+            updateActionButtonStates();
+        };
+        if (Platform.isFxApplicationThread()) {
+            update.run();
+        } else {
+            Platform.runLater(update);
         }
     }
 }

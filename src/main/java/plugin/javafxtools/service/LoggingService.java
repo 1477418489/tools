@@ -19,6 +19,8 @@ public class LoggingService {
      * 单个日志区域保留的最大日志行数。
      */
     private static final int MAX_LOG_LINES = 800;
+    private static final int MAX_LOG_CHARACTERS = 1_000_000;
+    private static final int LOG_TRIM_TARGET_CHARACTERS = 750_000;
 
     /**
      * 中央日志区域弱引用列表，避免控制器释放后仍被服务持有。
@@ -71,6 +73,12 @@ public class LoggingService {
         String formattedMessage = String.format("[%s][%s] %s",
                 TimeUtils.formatDateTime(new Date()), level, message);
 
+        if ("ERROR".equals(level)) {
+            System.err.println(formattedMessage);
+        } else {
+            System.out.println(formattedMessage);
+        }
+
         Platform.runLater(() -> {
             synchronized (this) {
                 cleanupReleasedAreas();
@@ -103,6 +111,8 @@ public class LoggingService {
         if (area != null && area.getScene() != null) {
             LogTextTrimmer.trimToMaxLines(area, MAX_LOG_LINES, 100);
             area.appendText(message + "\n");
+            LogTextTrimmer.trimToMaxCharacters(
+                    area, MAX_LOG_CHARACTERS, LOG_TRIM_TARGET_CHARACTERS);
             area.setScrollTop(Double.MAX_VALUE);
         }
     }

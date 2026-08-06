@@ -1,16 +1,23 @@
 package plugin.javafxtools.controller;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import javafx.application.Platform;
 import javafx.fxml.FXML;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.KeyCode;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
 import org.w3c.dom.Document;
 import org.xml.sax.InputSource;
 import plugin.javafxtools.base.BaseController;
 
+import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.OutputKeys;
@@ -56,10 +63,19 @@ public class DataFormatController extends BaseController {
     @FXML
     private Button clearButton;
 
+    @FXML
+    private Button copyButton;
+
+    @FXML
+    private Label statusLabel;
+
     /**
      * JSON 解析和格式化处理器。
      */
-    private final ObjectMapper jsonMapper = new ObjectMapper();
+    private final ObjectMapper jsonMapper = new ObjectMapper()
+            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+            .enable(DeserializationFeature.USE_BIG_INTEGER_FOR_INTS)
+            .enable(SerializationFeature.INDENT_OUTPUT);
 
     /**
      * 获取当前模块日志输出区域。
@@ -68,7 +84,7 @@ public class DataFormatController extends BaseController {
      */
     @Override
     public TextArea getLogArea() {
-        return formattedDataArea;
+        return null;
     }
 
     /**
@@ -80,13 +96,18 @@ public class DataFormatController extends BaseController {
         formatTypeComboBox.getItems().addAll("JSON", "XML");
         formatTypeComboBox.setValue("JSON");
 
-        // 配置JSON美化输出
-        jsonMapper.enable(SerializationFeature.INDENT_OUTPUT);
-
-        // 设置提示文本
-        rawDataArea.setPromptText("在此输入要格式化的JSON或XML数据...");
-        formattedDataArea.setPromptText("格式化结果将显示在这里...");
-        info("数据格式化工具控制器模块初始化完成");
+        rawDataArea.setPromptText("粘贴 JSON 或 XML 数据");
+        formattedDataArea.setPromptText("格式化结果将在这里显示");
+        rawDataArea.textProperty().addListener((observable, oldValue, newValue) -> updateButtonStates());
+        formattedDataArea.textProperty().addListener((observable, oldValue, newValue) -> updateButtonStates());
+        rawDataArea.setOnKeyPressed(event -> {
+            if (event.isControlDown() && event.getCode() == KeyCode.ENTER) {
+                handleFormat();
+                event.consume();
+            }
+        });
+        updateButtonStates();
+        setStatus("READY", "等待输入");
     }
 
     /**
@@ -112,12 +133,28 @@ public class DataFormatController extends BaseController {
             }
             formattedDataArea.setText(formatted);
         } catch (JsonProcessingException e) {
-            formattedDataArea.setText("JSON格式错误: " + e.getMessage());
+            formattedDataArea.clear();
             error("JSON格式化失败: " + e.getMessage());
         } catch (Exception e) {
-            formattedDataArea.setText(type + "格式化错误: " + e.getMessage());
+            formattedDataArea.clear();
             error(type + "格式化失败: " + e.getMessage());
         }
+    }
+
+    /**
+     * 将纯格式化结果复制到系统剪贴板。
+     */
+    @FXML
+    private void handleCopyResult() {
+        String result = formattedDataArea.getText();
+        if (result == null || result.isBlank()) {
+            error("当前没有可复制的结果");
+            return;
+        }
+        ClipboardContent content = new ClipboardContent();
+        content.putString(result);
+        Clipboard.getSystemClipboard().setContent(content);
+        info("结果已复制到剪贴板");
     }
 
     /**
@@ -146,6 +183,10 @@ public class DataFormatController extends BaseController {
         factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
         factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
         factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+        factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+        factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+        factory.setXIncludeAware(false);
+        factory.setExpandEntityReferences(false);
 
         // 解析XML字符串
         DocumentBuilder builder = factory.newDocumentBuilder();
@@ -153,6 +194,8 @@ public class DataFormatController extends BaseController {
 
         // 配置转换器
         TransformerFactory transformerFactory = TransformerFactory.newInstance();
+        transformerFactory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+        transformerFactory.setAttribute(XMLConstants.ACCESS_EXTERNAL_STYLESHEET, "");
         Transformer transformer = transformerFactory.newTransformer();
         transformer.setOutputProperty(OutputKeys.INDENT, "yes");
         transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "4");
@@ -173,6 +216,42 @@ public class DataFormatController extends BaseController {
     private void handleClear() {
         rawDataArea.clear();
         formattedDataArea.clear();
-        info("已清除输入和格式化结果");
+        setStatus("READY", "等待输入");
+        rawDataArea.requestFocus();
+    }
+
+    /**
+     * 页面使用独立状态标签反馈操作，避免日志污染格式化结果。
+     */
+    @Override
+    public void log(String level, String message) {
+        setStatus(level, message);
+    }
+
+    private void updateButtonStates() {
+        formatButton.setDisable(rawDataArea.getText() == null || rawDataArea.getText().isBlank());
+        copyButton.setDisable(formattedDataArea.getText() == null || formattedDataArea.getText().isBlank());
+    }
+
+    private void setStatus(String level, String message) {
+        Runnable update = () -> {
+            if (statusLabel == null) {
+                return;
+            }
+            statusLabel.setText(message);
+            statusLabel.getStyleClass().removeAll(
+                    "status-text", "feedback-text", "feedback-success", "feedback-error");
+            statusLabel.getStyleClass().add("feedback-text");
+            if ("ERROR".equals(level)) {
+                statusLabel.getStyleClass().add("feedback-error");
+            } else if ("INFO".equals(level)) {
+                statusLabel.getStyleClass().add("feedback-success");
+            }
+        };
+        if (Platform.isFxApplicationThread()) {
+            update.run();
+        } else {
+            Platform.runLater(update);
+        }
     }
 }

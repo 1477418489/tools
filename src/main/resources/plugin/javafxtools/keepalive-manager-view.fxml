@@ -1,145 +1,90 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.geometry.Insets?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<VBox xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1"
+<VBox xmlns="http://javafx.com/javafx/23" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="plugin.javafxtools.controller.KeepAliveManagerController"
-      spacing="12" styleClass="tool-page">
+      spacing="12" prefWidth="1000" prefHeight="700" styleClass="tool-page">
 
-    <padding>
-        <Insets bottom="10" left="10" right="10" top="10"/>
-    </padding>
-
-    <!-- 标题 -->
-    <Label text="域名保活管理" styleClass="page-title"/>
-
-    <!-- 主内容区域 -->
-    <HBox spacing="15" VBox.vgrow="ALWAYS">
-        <!-- 左侧：配置表格 -->
-        <VBox spacing="8" prefWidth="480" maxWidth="480" styleClass="content-card">
-            <HBox alignment="CENTER_LEFT" spacing="5">
-                <Label text="域名配置列表" styleClass="sub-title"/>
-                <Pane HBox.hgrow="ALWAYS"/>
-                <Label fx:id="configCountLabel" text="0 条配置" styleClass="hint-text"/>
-            </HBox>
-
-            <TableView fx:id="configTableView" VBox.vgrow="ALWAYS">
-                <columns>
-                    <TableColumn fx:id="domainColumn" text="域名" prefWidth="170"/>
-                    <TableColumn fx:id="enabledColumn" text="状态" prefWidth="55"/>
-                    <TableColumn fx:id="methodColumn" text="方式" prefWidth="75"/>
-                    <TableColumn fx:id="intervalColumn" text="间隔" prefWidth="105"/>
-                    <TableColumn fx:id="unitColumn" text="单位" prefWidth="55"/>
-                </columns>
-                <placeholder>
-                    <VBox alignment="CENTER" spacing="8">
-                        <Label text="暂无配置" styleClass="sub-title"/>
-                        <Label text="点击下方按钮添加域名配置" styleClass="hint-text"/>
-                    </VBox>
-                </placeholder>
-            </TableView>
-        </VBox>
-
-        <!-- 右侧：编辑区域 -->
-        <VBox spacing="12" prefWidth="380" maxWidth="380" styleClass="content-card">
-            <Label text="配置编辑器" styleClass="sub-title"/>
-
-            <!-- 配置编辑表单 -->
-            <VBox spacing="12">
-                <VBox spacing="10">
-                    <!-- 域名 -->
-                    <VBox spacing="4">
-                        <Label text="域名地址" styleClass="sub-title"/>
-                        <TextField fx:id="domainField" promptText="https://example.com"/>
-                    </VBox>
-
-                    <!-- 启用状态 -->
-                    <CheckBox fx:id="enabledCheckBox" text="启用保活服务"/>
-
-                    <!-- 保活方式 -->
-                    <VBox spacing="4">
-                        <Label text="保活方式" styleClass="sub-title"/>
-                        <ComboBox fx:id="methodComboBox" prefWidth="140">
-                            <tooltip>
-                                <Tooltip text="选择保活执行方式"/>
-                            </tooltip>
-                        </ComboBox>
-                    </VBox>
-
-                    <!-- 时间间隔设置 -->
-                    <VBox spacing="4">
-                        <Label text="访问间隔" styleClass="sub-title"/>
-                        <HBox spacing="6" alignment="CENTER_LEFT">
-                            <Spinner fx:id="minIntervalSpinner" prefWidth="70">
-                                <tooltip>
-                                    <Tooltip text="最小间隔时间"/>
-                                </tooltip>
-                            </Spinner>
-                            <Label text="至"/>
-                            <Spinner fx:id="maxIntervalSpinner" prefWidth="70">
-                                <tooltip>
-                                    <Tooltip text="最大间隔时间"/>
-                                </tooltip>
-                            </Spinner>
-                            <ComboBox fx:id="unitComboBox" prefWidth="90">
-                                <tooltip>
-                                    <Tooltip text="选择时间单位"/>
-                                </tooltip>
-                            </ComboBox>
-                        </HBox>
-                        <Label text="系统会在设定的时间范围内随机访问" styleClass="hint-text"/>
-                    </VBox>
-                </VBox>
-
-                <!-- 操作按钮 -->
-                <HBox spacing="8" alignment="CENTER">
-                    <Button fx:id="addButton" text="添加" onAction="#handleAdd" styleClass="success-button">
-                        <tooltip>
-                            <Tooltip text="添加新的域名保活配置"/>
-                        </tooltip>
-                    </Button>
-                    <Button fx:id="updateButton" text="更新" onAction="#handleUpdate" styleClass="secondary-button">
-                        <tooltip>
-                            <Tooltip text="更新选中的配置"/>
-                        </tooltip>
-                    </Button>
-                    <Button fx:id="removeButton" text="删除" onAction="#handleRemove" styleClass="danger-button">
-                        <tooltip>
-                            <Tooltip text="删除选中的配置"/>
-                        </tooltip>
-                    </Button>
-                </HBox>
-
-                <!-- 保存按钮 -->
-                <Button fx:id="saveButton" text="保存配置" onAction="#handleSave" styleClass="warning-button">
-                    <tooltip>
-                        <Tooltip text="保存所有配置到文件"/>
-                    </tooltip>
-                </Button>
-            </VBox>
-        </VBox>
+    <HBox alignment="CENTER_LEFT" styleClass="page-header">
+        <Label text="域名保活" styleClass="page-title"/>
+        <Pane HBox.hgrow="ALWAYS"/>
+        <Label fx:id="configCountLabel" text="0 条配置" styleClass="status-badge, status-offline"/>
     </HBox>
 
-    <!-- 日志区域 -->
-    <VBox spacing="8" styleClass="log-panel">
-        <HBox alignment="CENTER_LEFT" spacing="4">
-            <Label text="系统日志" styleClass="sub-title"/>
-            <Pane HBox.hgrow="ALWAYS"/>
-            <Button text="清空" onAction="#handleClearLogs" styleClass="secondary-button"/>
-        </HBox>
+    <SplitPane dividerPositions="0.6" VBox.vgrow="ALWAYS">
+        <items>
+            <VBox spacing="7" styleClass="surface">
+                <Label text="域名配置" styleClass="section-title"/>
+                <TableView fx:id="configTableView" VBox.vgrow="ALWAYS">
+                    <columns>
+                        <TableColumn fx:id="domainColumn" text="域名" prefWidth="210"/>
+                        <TableColumn fx:id="enabledColumn" text="状态" prefWidth="60"/>
+                        <TableColumn fx:id="methodColumn" text="方式" prefWidth="80"/>
+                        <TableColumn fx:id="intervalColumn" text="间隔" prefWidth="135"/>
+                        <TableColumn fx:id="unitColumn" text="单位" prefWidth="65"/>
+                    </columns>
+                    <placeholder>
+                        <VBox alignment="CENTER" styleClass="empty-state">
+                            <Label text="暂无配置" styleClass="sub-title"/>
+                        </VBox>
+                    </placeholder>
+                </TableView>
+            </VBox>
 
-        <TextArea fx:id="logArea"
-                  promptText="等待操作..."
-                  wrapText="true"
-                  editable="false"
-                  prefHeight="180"
-                  styleClass="log-area"/>
-    </VBox>
+            <VBox spacing="12" styleClass="surface">
+                <Label text="配置编辑器" styleClass="section-title"/>
 
-    <!-- 状态栏 -->
-    <HBox spacing="12" alignment="CENTER_LEFT" styleClass="status-bar">
+                <VBox spacing="4">
+                    <Label text="域名地址" styleClass="field-label"/>
+                    <TextField fx:id="domainField" promptText="https://example.com" onAction="#handleAdd"/>
+                </VBox>
+
+                <HBox spacing="12" alignment="CENTER_LEFT">
+                    <CheckBox fx:id="enabledCheckBox" text="启用保活"/>
+                    <Pane HBox.hgrow="ALWAYS"/>
+                    <Label text="保活方式" styleClass="field-label"/>
+                    <ComboBox fx:id="methodComboBox" prefWidth="120"/>
+                </HBox>
+
+                <VBox spacing="4">
+                    <Label text="访问间隔" styleClass="field-label"/>
+                    <HBox spacing="7" alignment="CENTER_LEFT">
+                        <Spinner fx:id="minIntervalSpinner" prefWidth="82"/>
+                        <Label text="至"/>
+                        <Spinner fx:id="maxIntervalSpinner" prefWidth="82"/>
+                        <ComboBox fx:id="unitComboBox" prefWidth="100"/>
+                    </HBox>
+                </VBox>
+
+                <Separator/>
+
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <Button fx:id="addButton" text="添加" onAction="#handleAdd" styleClass="primary-button"/>
+                    <Button fx:id="updateButton" text="更新选中" onAction="#handleUpdate"/>
+                    <Button fx:id="removeButton" text="删除选中" onAction="#handleRemove"
+                            styleClass="danger-button"/>
+                    <Pane HBox.hgrow="ALWAYS"/>
+                    <Button fx:id="saveButton" text="保存全部" onAction="#handleSave"/>
+                </HBox>
+            </VBox>
+        </items>
+    </SplitPane>
+
+    <TitledPane text="执行日志" expanded="false" animated="false" styleClass="system-log-pane">
+        <content>
+            <VBox spacing="6">
+                <HBox alignment="CENTER_RIGHT">
+                    <Button text="清空" onAction="#handleClearLogs" styleClass="compact-button"/>
+                </HBox>
+                <TextArea fx:id="logArea" promptText="等待操作" wrapText="true"
+                          editable="false" prefHeight="120" styleClass="log-area"/>
+            </VBox>
+        </content>
+    </TitledPane>
+
+    <HBox spacing="10" alignment="CENTER_LEFT" styleClass="status-bar">
         <Label fx:id="statusLabel" text="就绪" styleClass="status-text"/>
         <Separator orientation="VERTICAL"/>
         <Label fx:id="activeCountLabel" text="活跃: 0" styleClass="status-active"/>
@@ -147,6 +92,6 @@
         <Label fx:id="lastUpdateLabel" text="最后更新: --" styleClass="status-muted"/>
         <Pane HBox.hgrow="ALWAYS"/>
         <ProgressIndicator fx:id="progressIndicator" visible="false" managed="false"
-                           prefWidth="14" prefHeight="14"/>
+                           prefWidth="16" prefHeight="16"/>
     </HBox>
 </VBox>

@@ -5,8 +5,18 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class JarPortProcessServiceTest {
+    @Test
+    void validatesPortRange() {
+        assertTrue(JarPortProcessService.isValidPort(1));
+        assertTrue(JarPortProcessService.isValidPort(65535));
+        assertFalse(JarPortProcessService.isValidPort(0));
+        assertFalse(JarPortProcessService.isValidPort(65536));
+    }
+
     @Test
     void formatProcessDetailsIncludesNameAndCommandLineWhenAvailable() {
         List<String> wmicLines = List.of(

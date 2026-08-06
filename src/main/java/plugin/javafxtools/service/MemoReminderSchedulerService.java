@@ -8,15 +8,21 @@ import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableView;
 import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
+import javafx.stage.Window;
 import plugin.javafxtools.model.MemoReminder;
+import plugin.javafxtools.model.ReminderScheduleMode;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 /**
@@ -28,27 +34,33 @@ public class MemoReminderSchedulerService {
     private static final long SNOOZE_MILLIS = 5 * 60_000L;
 
     private final ConcurrentMap<Long, ScheduledFuture<?>> scheduledTasks = new ConcurrentHashMap<>();
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1, r -> {
+    private final ConcurrentMap<Long, Dialog<ButtonType>> openDialogs = new ConcurrentHashMap<>();
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "memo-reminder-scheduler");
         t.setDaemon(true);
         return t;
     });
     private final TableView<MemoReminder> reminderTable;
-    private final Runnable persistAction;
+    private final BooleanSupplier persistAction;
+    private final Runnable stateRefreshAction;
     private final Consumer<String> infoLogger;
+    private volatile boolean closed;
 
     /**
      * 创建提醒调度服务。
      *
      * @param reminderTable 提醒表格
      * @param persistAction 持久化回调
+     * @param stateRefreshAction 状态刷新回调
      * @param infoLogger 信息日志回调
      */
     public MemoReminderSchedulerService(TableView<MemoReminder> reminderTable,
-                                        Runnable persistAction,
+                                        BooleanSupplier persistAction,
+                                        Runnable stateRefreshAction,
                                         Consumer<String> infoLogger) {
         this.reminderTable = reminderTable;
         this.persistAction = persistAction;
+        this.stateRefreshAction = stateRefreshAction;
         this.infoLogger = infoLogger;
     }
 
@@ -58,15 +70,11 @@ public class MemoReminderSchedulerService {
      * @param reminder 要调度的提醒
      */
     public void scheduleReminder(MemoReminder reminder) {
-        if (!reminder.isActive() || reminder.getRemainingTimes() == 0) {
+        if (closed || !reminder.isActive() || reminder.getRemainingTimes() == 0) {
             return;
         }
-        cancelTask(reminder.getId());
-
-        long delay = Math.max(1000L, reminder.getNextTriggerEpochMillis() - System.currentTimeMillis());
-        ScheduledFuture<?> future =
-                scheduler.schedule(() -> showReminderDialog(reminder), delay, TimeUnit.MILLISECONDS);
-        scheduledTasks.put(reminder.getId(), future);
+        long delay = Math.max(0L, reminder.getNextTriggerEpochMillis() - System.currentTimeMillis());
+        scheduleAfter(reminder, delay);
     }
 
     /**
@@ -85,71 +93,188 @@ public class MemoReminderSchedulerService {
      * 清理提醒调度任务和后台线程。
      */
     public void cleanup() {
+        closed = true;
         scheduledTasks.values().forEach(task -> task.cancel(false));
         scheduledTasks.clear();
         scheduler.shutdownNow();
+        closeOpenDialogs();
     }
 
     private void showReminderDialog(MemoReminder reminder) {
-        Platform.runLater(() -> {
-            if (!reminder.isActive()) {
-                return;
-            }
-            Dialog<ButtonType> dialog = new Dialog<>();
-            dialog.setTitle("备忘提醒");
-            dialog.setHeaderText("提醒内容");
+        if (closed || openDialogs.containsKey(reminder.getId())) {
+            return;
+        }
+        try {
+            Platform.runLater(() -> {
+                if (closed || !reminder.isActive()
+                        || !reminderTable.getItems().contains(reminder)
+                        || openDialogs.containsKey(reminder.getId())) {
+                    return;
+                }
+                Dialog<ButtonType> dialog = new Dialog<>();
+                dialog.setTitle("备忘提醒");
+                dialog.setHeaderText(reminder.getScheduleMode() == ReminderScheduleMode.AT_TIME
+                        ? "定时闹钟"
+                        : "周期提醒");
+                dialog.getDialogPane().getStyleClass().add("reminder-dialog");
+                configureDialogWindow(dialog);
 
-            Label contentLabel = new Label(reminder.getContent());
-            contentLabel.setWrapText(true);
-            CheckBox doneBox = new CheckBox("已处理，进入下个周期提醒（消耗1次）");
-            VBox box = new VBox(10, contentLabel, doneBox);
-            dialog.getDialogPane().setContent(box);
-            ButtonType confirm = new ButtonType("确认", ButtonBar.ButtonData.OK_DONE);
-            ButtonType snooze = new ButtonType("稍后5分钟", ButtonBar.ButtonData.OTHER);
-            dialog.getDialogPane().getButtonTypes().setAll(confirm, snooze, ButtonType.CLOSE);
+                Label contentLabel = new Label(reminder.getContent());
+                contentLabel.setWrapText(true);
+                contentLabel.getStyleClass().add("reminder-dialog-content");
+                CheckBox doneBox = new CheckBox(
+                        reminder.getScheduleMode() == ReminderScheduleMode.AT_TIME
+                                ? "已处理，完成此闹钟"
+                                : "已处理，进入下个周期提醒（消耗1次）");
+                VBox box = new VBox(10, contentLabel, doneBox);
+                dialog.getDialogPane().setContent(box);
+                ButtonType confirm = new ButtonType("确认", ButtonBar.ButtonData.OK_DONE);
+                ButtonType snooze = new ButtonType("稍后5分钟", ButtonBar.ButtonData.OTHER);
+                dialog.getDialogPane().getButtonTypes().setAll(
+                        confirm, snooze, ButtonType.CLOSE);
 
-            Optional<ButtonType> result = dialog.showAndWait();
-            handleDialogResult(reminder, result.orElse(ButtonType.CLOSE), doneBox.isSelected());
-        });
+                openDialogs.put(reminder.getId(), dialog);
+                try {
+                    Optional<ButtonType> result = dialog.showAndWait();
+                    handleDialogResult(
+                            reminder, result.orElse(ButtonType.CLOSE), doneBox.isSelected());
+                } finally {
+                    openDialogs.remove(reminder.getId(), dialog);
+                }
+            });
+        } catch (IllegalStateException ignored) {
+            // JavaFX 运行时正在关闭，不再展示提醒。
+        }
     }
 
     private void handleDialogResult(MemoReminder reminder, ButtonType buttonType, boolean checkedDone) {
-        if (buttonType.getButtonData() == ButtonBar.ButtonData.OTHER) {
-            reminder.setNextTriggerEpochMillis(System.currentTimeMillis() + SNOOZE_MILLIS);
-            scheduleReminder(reminder);
-            infoLogger.accept("提醒已稍后5分钟: " + reminder.getContent());
-            persistAndRefresh();
+        if (closed || !reminderTable.getItems().contains(reminder)) {
+            cancelTask(reminder.getId());
             return;
         }
 
-        if (checkedDone) {
-            handleDoneReminder(reminder);
+        ReminderState previousState = ReminderState.capture(reminder);
+        String successMessage;
+        ButtonBar.ButtonData buttonData = buttonType.getButtonData();
+        if (shouldCompleteReminder(buttonData, checkedDone)) {
+            successMessage = updateDoneReminder(reminder);
         } else {
             reminder.setNextTriggerEpochMillis(System.currentTimeMillis() + SNOOZE_MILLIS);
-            scheduleReminder(reminder);
-            infoLogger.accept("未勾选处理，已自动稍后5分钟提醒: " + reminder.getContent());
+            successMessage = buttonData == ButtonBar.ButtonData.OTHER
+                    ? "提醒已稍后5分钟: " + reminder.getContent()
+                    : "提醒未确认处理，已稍后5分钟: " + reminder.getContent();
         }
-        persistAndRefresh();
+
+        if (!persistAction.getAsBoolean()) {
+            previousState.restore(reminder);
+            reminder.setNextTriggerEpochMillis(System.currentTimeMillis() + SNOOZE_MILLIS);
+            scheduleReminder(reminder);
+            refreshState();
+            return;
+        }
+
+        if (reminder.isActive() && reminder.getRemainingTimes() != 0) {
+            scheduleReminder(reminder);
+        } else {
+            cancelTask(reminder.getId());
+        }
+        infoLogger.accept(successMessage);
+        refreshState();
     }
 
-    private void handleDoneReminder(MemoReminder reminder) {
+    static boolean shouldCompleteReminder(ButtonBar.ButtonData buttonData, boolean checkedDone) {
+        return buttonData == ButtonBar.ButtonData.OK_DONE && checkedDone;
+    }
+
+    private String updateDoneReminder(MemoReminder reminder) {
+        boolean completed = advanceAfterCompletion(reminder, System.currentTimeMillis());
+        if (completed) {
+            return "提醒已完成: " + reminder.getContent();
+        }
+        return "提醒确认，已进入下个周期: " + reminder.getContent();
+    }
+
+    static boolean advanceAfterCompletion(MemoReminder reminder, long currentTimeMillis) {
         if (reminder.getRemainingTimes() > 0) {
             reminder.setRemainingTimes(reminder.getRemainingTimes() - 1);
         }
         if (reminder.getRemainingTimes() == 0) {
             reminder.setActive(false);
-            cancelTask(reminder.getId());
-            infoLogger.accept("提醒已完成: " + reminder.getContent());
-            return;
+            return true;
         }
 
-        reminder.setNextTriggerEpochMillis(System.currentTimeMillis() + reminder.intervalMillis());
-        scheduleReminder(reminder);
-        infoLogger.accept("提醒确认，已进入下个周期: " + reminder.getContent());
+        if (reminder.getScheduleMode() == ReminderScheduleMode.AT_TIME) {
+            reminder.setRemainingTimes(0);
+            reminder.setActive(false);
+            return true;
+        }
+
+        reminder.setNextTriggerEpochMillis(currentTimeMillis + reminder.intervalMillis());
+        return false;
     }
 
-    private void persistAndRefresh() {
-        persistAction.run();
+    private void scheduleAfter(MemoReminder reminder, long delayMillis) {
+        cancelTask(reminder.getId());
+        if (closed || scheduler.isShutdown()) {
+            return;
+        }
+        try {
+            ScheduledFuture<?> future = scheduler.schedule(
+                    () -> showReminderDialog(reminder), delayMillis, TimeUnit.MILLISECONDS);
+            scheduledTasks.put(reminder.getId(), future);
+        } catch (RejectedExecutionException ignored) {
+            // 页面关闭期间无需重新创建提醒任务。
+        }
+    }
+
+    private void refreshState() {
         reminderTable.refresh();
+        stateRefreshAction.run();
+    }
+
+    private void configureDialogWindow(Dialog<ButtonType> dialog) {
+        Window owner = reminderTable.getScene() == null
+                ? null
+                : reminderTable.getScene().getWindow();
+        if (owner != null) {
+            dialog.initOwner(owner);
+        }
+        dialog.setOnShown(event -> {
+            if (owner instanceof Stage ownerStage) {
+                ownerStage.setIconified(false);
+                ownerStage.toFront();
+            }
+            if (dialog.getDialogPane().getScene().getWindow() instanceof Stage dialogStage) {
+                dialogStage.setAlwaysOnTop(true);
+                dialogStage.toFront();
+                dialogStage.requestFocus();
+            }
+        });
+    }
+
+    private void closeOpenDialogs() {
+        Runnable closeAction = () -> List.copyOf(openDialogs.values()).forEach(Dialog::close);
+        if (Platform.isFxApplicationThread()) {
+            closeAction.run();
+            return;
+        }
+        try {
+            Platform.runLater(closeAction);
+        } catch (IllegalStateException ignored) {
+            openDialogs.clear();
+        }
+    }
+
+    private record ReminderState(int remainingTimes, long nextTriggerEpochMillis, boolean active) {
+        private static ReminderState capture(MemoReminder reminder) {
+            return new ReminderState(reminder.getRemainingTimes(),
+                    reminder.getNextTriggerEpochMillis(), reminder.isActive());
+        }
+
+        private void restore(MemoReminder reminder) {
+            reminder.setRemainingTimes(remainingTimes);
+            reminder.setNextTriggerEpochMillis(nextTriggerEpochMillis);
+            reminder.setActive(active);
+        }
     }
 }

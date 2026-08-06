@@ -63,6 +63,9 @@ public class AppLauncherLifecycleService {
         logger.info("开始清理资源...");
         uiRefreshService.reset();
 
+        shutdownExecutorGracefully("StatusCheck", statusCheckExecutor, 3);
+        shutdownExecutorGracefully("Background", backgroundExecutor, 5);
+
         logger.info("保留独立启动的进程继续运行，仅解除进程跟踪");
         try {
             processManager.detachManagedProcessesOnly();
@@ -73,9 +76,6 @@ public class AppLauncherLifecycleService {
         appInfos.clear();
         processStatusCache.clear();
         launcherProcessMapSupplier.get().clear();
-
-        shutdownExecutorGracefully("StatusCheck", statusCheckExecutor, 3);
-        shutdownExecutorGracefully("Background", backgroundExecutor, 5);
 
         logger.info("资源清理完成，独立进程将继续运行");
     }

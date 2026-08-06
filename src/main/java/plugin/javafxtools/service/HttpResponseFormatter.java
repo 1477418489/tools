@@ -2,6 +2,7 @@ package plugin.javafxtools.service;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonParser;
 
 /**
  * HTTP 响应体格式化和日志长度控制。
@@ -10,6 +11,7 @@ import com.google.gson.GsonBuilder;
  */
 public class HttpResponseFormatter {
     private static final int MAX_RESPONSE_LOG_CHARS = 20_000;
+    private static final Gson PRETTY_GSON = new GsonBuilder().setPrettyPrinting().create();
 
     /**
      * 根据响应格式配置生成展示用响应体。
@@ -51,9 +53,7 @@ public class HttpResponseFormatter {
      */
     public String tryPrettyJson(String json) {
         try {
-            Gson prettyGson = new GsonBuilder().setPrettyPrinting().create();
-            Object obj = prettyGson.fromJson(json, Object.class);
-            return prettyGson.toJson(obj);
+            return PRETTY_GSON.toJson(JsonParser.parseString(json));
         } catch (Exception ignore) {
             return null;
         }

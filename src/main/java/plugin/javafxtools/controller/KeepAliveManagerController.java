@@ -122,6 +122,9 @@ public class KeepAliveManagerController extends BaseController {
 
         uiSupport.setupInitialUi(logArea);
         formSupport.initialize();
+        configTableView.getSelectionModel().selectedItemProperty().addListener(
+                (observable, oldValue, newValue) -> uiSupport.setSelectionAvailable(newValue != null));
+        uiSupport.setSelectionAvailable(false);
         actionService.loadConfigsAsync();
         updateUIStatus();
         configList.addListener((ListChangeListener<KeepAliveConfig>) change -> updateUIStatus());

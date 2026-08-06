@@ -10,13 +10,17 @@ import plugin.javafxtools.base.ModuleLogger;
 import plugin.javafxtools.model.AppInfo;
 
 import java.io.File;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -29,7 +33,7 @@ public class AppLauncherListActionService {
     private final List<AppInfo> appInfos;
     private final Supplier<Map<String, String>> launcherProcessMapSupplier;
     private final Runnable updateAppList;
-    private final Runnable saveAppInfos;
+    private final Predicate<List<AppInfo>> saveAppInfos;
     private final IntConsumer selectAndFocus;
     private final Consumer<AppInfo> killRemovedApp;
     private final Consumer<List<AppInfo>> killAllApps;
@@ -50,7 +54,7 @@ public class AppLauncherListActionService {
                                         List<AppInfo> appInfos,
                                         Supplier<Map<String, String>> launcherProcessMapSupplier,
                                         Runnable updateAppList,
-                                        Runnable saveAppInfos,
+                                        Predicate<List<AppInfo>> saveAppInfos,
                                         IntConsumer selectAndFocus,
                                         Consumer<AppInfo> killRemovedApp,
                                         Consumer<List<AppInfo>> killAllApps) {
@@ -103,18 +107,24 @@ public class AppLauncherListActionService {
             return;
         }
 
-        File file = new File(appPath);
+        File file = new File(appPath).getAbsoluteFile();
         if (!file.exists()) {
             logger.error("指定路径不存在: " + appPath);
             return;
         }
-
-        if (containsAppPath(appPath)) {
-            logger.info("应用程序已存在: " + appPath);
+        if (!file.isFile()) {
+            logger.error("指定路径不是文件: " + appPath);
             return;
         }
 
-        String launcherName = file.getName().toLowerCase();
+        String normalizedPath = file.toPath().normalize().toString();
+
+        if (containsAppPath(normalizedPath)) {
+            logger.info("应用程序已存在: " + normalizedPath);
+            return;
+        }
+
+        String launcherName = file.getName().toLowerCase(Locale.ROOT);
         String defaultProcessName = launcherProcessMapSupplier.get()
                 .getOrDefault(launcherName, launcherName);
         Optional<String> processName = askProcessName(defaultProcessName);
@@ -123,10 +133,13 @@ public class AppLauncherListActionService {
             return;
         }
 
-        appInfos.add(new AppInfo(appPath, processName.get()));
-        updateAppList.run();
-        saveAppInfos.run();
-        logger.info("已添加应用程序: " + appPath + " [检测进程名: " + processName.get() + "]");
+        List<AppInfo> updatedAppInfos = snapshotAppInfos();
+        updatedAppInfos.add(new AppInfo(normalizedPath, processName.get()));
+        if (!commitAppInfos(updatedAppInfos)) {
+            return;
+        }
+        logger.info("已添加应用程序: " + normalizedPath
+                + " [检测进程名: " + processName.get() + "]");
         appPathField.clear();
     }
 
@@ -136,21 +149,23 @@ public class AppLauncherListActionService {
      * @param selectedIndex 选中索引
      */
     public void remove(int selectedIndex) {
-        if (selectedIndex < 0) {
+        List<AppInfo> updatedAppInfos = snapshotAppInfos();
+        if (selectedIndex < 0 || selectedIndex >= updatedAppInfos.size()) {
             logger.error("请先选择要移除的应用程序");
             return;
         }
 
-        AppInfo removed = appInfos.get(selectedIndex);
+        AppInfo removed = updatedAppInfos.get(selectedIndex);
         if (!confirmRemove(removed)) {
             logger.info("用户取消了移除操作");
             return;
         }
 
-        appInfos.remove(selectedIndex);
-        updateAppList.run();
+        updatedAppInfos.remove(selectedIndex);
+        if (!commitAppInfos(updatedAppInfos)) {
+            return;
+        }
         logger.info("已从列表移除: " + removed.getAppPath());
-        saveAppInfos.run();
         killRemovedApp.accept(removed);
     }
 
@@ -164,9 +179,11 @@ public class AppLauncherListActionService {
     public int moveUp(int selectedIndex, int lastSelectedIndex) {
         int effectiveIndex = resolveSelectedIndex(selectedIndex, lastSelectedIndex);
         if (effectiveIndex > 0) {
-            Collections.swap(appInfos, effectiveIndex, effectiveIndex - 1);
-            updateAppList.run();
-            saveAppInfos.run();
+            List<AppInfo> updatedAppInfos = snapshotAppInfos();
+            Collections.swap(updatedAppInfos, effectiveIndex, effectiveIndex - 1);
+            if (!commitAppInfos(updatedAppInfos)) {
+                return lastSelectedIndex;
+            }
 
             int newSelectedIndex = effectiveIndex - 1;
             selectAndFocus.accept(newSelectedIndex);
@@ -192,9 +209,11 @@ public class AppLauncherListActionService {
     public int moveDown(int selectedIndex, int lastSelectedIndex) {
         int effectiveIndex = resolveSelectedIndex(selectedIndex, lastSelectedIndex);
         if (effectiveIndex >= 0 && effectiveIndex < appInfos.size() - 1) {
-            Collections.swap(appInfos, effectiveIndex, effectiveIndex + 1);
-            updateAppList.run();
-            saveAppInfos.run();
+            List<AppInfo> updatedAppInfos = snapshotAppInfos();
+            Collections.swap(updatedAppInfos, effectiveIndex, effectiveIndex + 1);
+            if (!commitAppInfos(updatedAppInfos)) {
+                return lastSelectedIndex;
+            }
 
             int newSelectedIndex = effectiveIndex + 1;
             selectAndFocus.accept(newSelectedIndex);
@@ -202,7 +221,7 @@ public class AppLauncherListActionService {
             return newSelectedIndex;
         }
 
-        if (effectiveIndex == appInfos.size() - 1) {
+        if (effectiveIndex >= 0 && effectiveIndex == appInfos.size() - 1) {
             logger.info("已经是最后一个，无法下移");
         } else {
             logger.error("请先选择要移动的应用程序");
@@ -219,21 +238,56 @@ public class AppLauncherListActionService {
             return;
         }
 
-        List<AppInfo> appsToKill = new ArrayList<>(appInfos);
-        appInfos.clear();
-        updateAppList.run();
-        saveAppInfos.run();
+        List<AppInfo> appsToKill = snapshotAppInfos();
+        if (!commitAppInfos(List.of())) {
+            return;
+        }
         logger.info("已清除所有应用程序路径");
         killAllApps.accept(appsToKill);
     }
 
     private boolean containsAppPath(String appPath) {
-        for (AppInfo appInfo : appInfos) {
-            if (appInfo.getAppPath().equals(appPath)) {
+        for (AppInfo appInfo : snapshotAppInfos()) {
+            if (samePath(appInfo.getAppPath(), appPath)) {
                 return true;
             }
         }
         return false;
+    }
+
+    private boolean commitAppInfos(List<AppInfo> updatedAppInfos) {
+        List<AppInfo> snapshot = List.copyOf(updatedAppInfos);
+        if (!saveAppInfos.test(snapshot)) {
+            logger.error("应用配置保存失败，列表未做更改");
+            return false;
+        }
+        synchronized (appInfos) {
+            appInfos.clear();
+            appInfos.addAll(snapshot);
+        }
+        updateAppList.run();
+        return true;
+    }
+
+    private List<AppInfo> snapshotAppInfos() {
+        synchronized (appInfos) {
+            return new ArrayList<>(appInfos);
+        }
+    }
+
+    private boolean samePath(String first, String second) {
+        if (first == null || second == null) {
+            return false;
+        }
+        try {
+            Path firstPath = Path.of(first).toAbsolutePath().normalize();
+            Path secondPath = Path.of(second).toAbsolutePath().normalize();
+            return WindowsProcessSupport.isWindows()
+                    ? firstPath.toString().equalsIgnoreCase(secondPath.toString())
+                    : firstPath.equals(secondPath);
+        } catch (InvalidPathException e) {
+            return false;
+        }
     }
 
     private Optional<String> askProcessName(String defaultProcessName) {
@@ -243,7 +297,8 @@ public class AppLauncherListActionService {
         dialog.setContentText("进程名：");
 
         Optional<String> result = dialog.showAndWait();
-        return result.map(value -> value.isEmpty() ? defaultProcessName : value);
+        return result.map(String::trim)
+                .map(value -> value.isEmpty() ? defaultProcessName : value);
     }
 
     private boolean confirmRemove(AppInfo removed) {

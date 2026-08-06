@@ -2,11 +2,12 @@ package plugin.javafxtools.service;
 
 import plugin.javafxtools.model.KeepAliveConfig;
 import plugin.javafxtools.model.KeepAliveMethod;
+import plugin.javafxtools.util.HttpUrlSupport;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
@@ -17,11 +18,7 @@ import java.util.function.Consumer;
 public class KeepAliveProbeService {
     private static final int CONNECT_TIMEOUT = 8000;
     private static final int READ_TIMEOUT = 10000;
-    private static final String[] USER_AGENTS = {
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/120.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0"
-    };
+    private static final String USER_AGENT = "JavaFxTools-KeepAlive/1.0";
 
     private final Consumer<String> infoLogger;
     private final Consumer<String> warnLogger;
@@ -54,7 +51,7 @@ public class KeepAliveProbeService {
 
         String domain = config.getDomain();
         if (config.getMethod() == KeepAliveMethod.PING) {
-            pingDomainByWindowsCommand(domain);
+            pingDomainByAddress(domain);
             return;
         }
 
@@ -68,15 +65,21 @@ public class KeepAliveProbeService {
      * @return 简化后的域名
      */
     public String getDomainName(String url) {
+        if (url == null || url.isBlank()) {
+            return "";
+        }
         try {
-            URL parsedUrl = new URL(url);
+            URL parsedUrl = parseUrl(url);
             String host = parsedUrl.getHost();
+            if (host == null || host.isBlank()) {
+                return abbreviate(url);
+            }
             if (host.startsWith("www.")) {
                 host = host.substring(4);
             }
-            return host.length() > 20 ? host.substring(0, 17) + "..." : host;
+            return abbreviate(host);
         } catch (Exception e) {
-            return url.length() > 20 ? url.substring(0, 17) + "..." : url;
+            return abbreviate(url);
         }
     }
 
@@ -85,20 +88,18 @@ public class KeepAliveProbeService {
         try {
             HttpURLConnection connection = null;
             try {
-                URL url = new URL(domain);
+                URL url = parseUrl(domain);
                 connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("GET");
-                connection.setRequestProperty("User-Agent", randomUserAgent());
+                connection.setRequestProperty("User-Agent", USER_AGENT);
                 connection.setConnectTimeout(CONNECT_TIMEOUT);
                 connection.setReadTimeout(READ_TIMEOUT);
-                connection.setRequestProperty("Accept", "text/html");
+                connection.setRequestProperty("Accept", "*/*");
                 connection.setRequestProperty("Cache-Control", "no-cache");
-
-                Thread.sleep((long) (Math.random() * 1000));
 
                 int responseCode = connection.getResponseCode();
                 long responseTime = System.currentTimeMillis() - startTime;
-                if (responseCode == HttpURLConnection.HTTP_OK) {
+                if (responseCode >= 200 && responseCode < 300) {
                     infoLogger.accept("✓ " + getDomainName(domain) + " (" + responseTime + "ms)");
                 } else {
                     warnLogger.accept("⚠ " + getDomainName(domain) + " (" + responseCode + ", " + responseTime + "ms)");
@@ -112,65 +113,43 @@ public class KeepAliveProbeService {
             long responseTime = System.currentTimeMillis() - startTime;
             errorLogger.accept("✗ " + getDomainName(domain)
                     + " (" + e.getClass().getSimpleName() + ", " + responseTime + "ms)");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } catch (Exception e) {
-            // Preserve previous behavior: unexpected probe failures should not break scheduling.
+        } catch (RuntimeException e) {
+            errorLogger.accept("探测失败: " + getDomainName(domain)
+                    + " (" + e.getClass().getSimpleName() + ")");
         }
     }
 
-    private void pingDomainByWindowsCommand(String domain) {
+    private void pingDomainByAddress(String domain) {
         long startTime = System.currentTimeMillis();
-        Process process = null;
         try {
             String host = getPingHost(domain);
-            ProcessBuilder builder = new ProcessBuilder(
-                    "ping.exe",
-                    "-n", "1",
-                    "-w", String.valueOf(CONNECT_TIMEOUT),
-                    host
-            );
-            builder.redirectErrorStream(true);
-            builder.redirectOutput(ProcessBuilder.Redirect.DISCARD);
-
-            process = builder.start();
-            boolean finished = process.waitFor(CONNECT_TIMEOUT + 2000L, TimeUnit.MILLISECONDS);
+            boolean reachable = InetAddress.getByName(host).isReachable(CONNECT_TIMEOUT);
             long responseTime = System.currentTimeMillis() - startTime;
-            if (!finished) {
-                process.destroyForcibly();
-                errorLogger.accept("✗ Ping " + getDomainName(domain) + " (超时, " + responseTime + "ms)");
-                return;
-            }
-
-            int exitCode = process.exitValue();
-            if (exitCode == 0) {
+            if (reachable) {
                 infoLogger.accept("✓ Ping " + getDomainName(domain) + " (" + responseTime + "ms)");
             } else {
-                warnLogger.accept("⚠ Ping " + getDomainName(domain)
-                        + " (退出码 " + exitCode + ", " + responseTime + "ms)");
+                warnLogger.accept("⚠ Ping " + getDomainName(domain) + " (不可达, " + responseTime + "ms)");
             }
         } catch (IOException e) {
             long responseTime = System.currentTimeMillis() - startTime;
             errorLogger.accept("✗ Ping " + getDomainName(domain)
                     + " (" + e.getClass().getSimpleName() + ", " + responseTime + "ms)");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } finally {
-            if (process != null && process.isAlive()) {
-                process.destroyForcibly();
-            }
         }
     }
 
     private String getPingHost(String domain) throws IOException {
-        String host = new URL(domain).getHost();
+        String host = parseUrl(domain).getHost();
         if (host == null || host.trim().isEmpty()) {
             throw new IOException("无法解析Ping主机名");
         }
         return host;
     }
 
-    private String randomUserAgent() {
-        return USER_AGENTS[(int) (Math.random() * USER_AGENTS.length)];
+    private URL parseUrl(String value) throws IOException {
+        return HttpUrlSupport.toUrl(value);
+    }
+
+    private String abbreviate(String value) {
+        return value.length() > 20 ? value.substring(0, 17) + "..." : value;
     }
 }
