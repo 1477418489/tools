@@ -17,13 +17,6 @@
     -fx-padding: 0;
 }
 
-.app-header {
-    -fx-min-height: 58;
-    -fx-padding: 0 20;
-    -fx-background-color: #ffffff;
-    -fx-border-color: transparent transparent #e1e6ed transparent;
-}
-
 .brand-title {
     -fx-font-size: 19px;
     -fx-font-weight: 800;
@@ -92,53 +85,42 @@
 /* ===== Navigation ===== */
 .toolbox-tab-pane {
     -fx-background-color: transparent;
-    -fx-tab-min-height: 42px;
-    -fx-tab-max-height: 42px;
+    -fx-tab-min-height: 0;
+    -fx-tab-max-height: 0;
 }
 
-.toolbox-tab-pane .tab-header-area {
-    -fx-padding: 0 16 0 16;
-    -fx-background-color: #ffffff;
+.toolbox-tab-pane > .tab-header-area {
+    -fx-min-height: 0;
+    -fx-pref-height: 0;
+    -fx-max-height: 0;
+    -fx-padding: 0;
 }
 
-.toolbox-tab-pane .tab-header-background {
-    -fx-background-color: #ffffff;
+.toolbox-tab-pane > .tab-header-area .tab-header-background {
+    -fx-min-height: 0;
+    -fx-pref-height: 0;
+    -fx-max-height: 0;
+    -fx-background-color: transparent;
 }
 
-.toolbox-tab-pane .headers-region {
+.toolbox-tab-pane > .tab-header-area .headers-region {
+    -fx-min-height: 0;
+    -fx-pref-height: 0;
+    -fx-max-height: 0;
     -fx-background-color: transparent;
     -fx-padding: 0;
 }
 
-.toolbox-tab-pane .tab {
+.toolbox-tab-pane > .tab-header-area .tab {
     -fx-background-color: transparent;
     -fx-background-radius: 0;
-    -fx-border-color: transparent transparent transparent transparent;
-    -fx-border-width: 0 0 2 0;
-    -fx-padding: 8 12 7 12;
+    -fx-border-color: transparent;
+    -fx-padding: 0;
     -fx-focus-color: transparent;
     -fx-faint-focus-color: transparent;
 }
 
-.toolbox-tab-pane .tab:hover {
-    -fx-background-color: #f5f7fa;
-}
-
-.toolbox-tab-pane .tab:selected {
-    -fx-background-color: #ffffff;
-    -fx-border-color: transparent transparent #2161d1 transparent;
-}
-
-.toolbox-tab-pane .tab .tab-label {
-    -fx-text-fill: #475467;
-    -fx-font-weight: 600;
-}
-
-.toolbox-tab-pane .tab:selected .tab-label {
-    -fx-text-fill: #1849a9;
-}
-
-.toolbox-tab-pane .tab-content-area {
+.toolbox-tab-pane > .tab-content-area {
     -fx-background-color: #f4f6f8;
     -fx-background-radius: 0;
     -fx-border-color: transparent;

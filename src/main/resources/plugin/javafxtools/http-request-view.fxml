@@ -69,6 +69,9 @@
             <ColumnConstraints percentWidth="44" hgrow="ALWAYS" fillWidth="true"/>
             <ColumnConstraints percentWidth="56" hgrow="ALWAYS" fillWidth="true"/>
         </columnConstraints>
+        <rowConstraints>
+            <RowConstraints percentHeight="100" vgrow="ALWAYS" fillHeight="true"/>
+        </rowConstraints>
         <VBox spacing="7" styleClass="surface" GridPane.columnIndex="0">
             <Label text="请求内容" styleClass="section-title"/>
             <TabPane fx:id="requestEditorPane" tabClosingPolicy="UNAVAILABLE"

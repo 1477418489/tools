@@ -11,6 +11,8 @@ import javafx.scene.control.MenuItem;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.ToggleButton;
+import javafx.scene.control.ToggleGroup;
 import javafx.stage.Stage;
 import javafx.stage.FileChooser;
 import plugin.javafxtools.base.BaseController;
@@ -48,12 +50,32 @@ public class MainController {
     @FXML private Tab httpRequestTab;
     @FXML private Tab webSocketTab;
     @FXML private Tab networkToolsTab;
+    @FXML private Tab processPortTab;
+    @FXML private Tab devEnvironmentTab;
+    @FXML private Tab fileAnalysisTab;
     @FXML private Tab dataFormatTab;
     @FXML private Tab strDataFormatTab;
+    @FXML private Tab base64Tab;
     @FXML private Tab jarLauncherTab;
     @FXML private Tab memoReminderTab;
     @FXML private Tab keepAliveTab;
     @FXML private Tab windowsPowerTab;
+    @FXML private ToggleButton appLauncherNavButton;
+    @FXML private ToggleButton httpRequestNavButton;
+    @FXML private ToggleButton webSocketNavButton;
+    @FXML private ToggleButton networkToolsNavButton;
+    @FXML private ToggleButton processPortNavButton;
+    @FXML private ToggleButton devEnvironmentNavButton;
+    @FXML private ToggleButton fileAnalysisNavButton;
+    @FXML private ToggleButton dataFormatNavButton;
+    @FXML private ToggleButton strDataFormatNavButton;
+    @FXML private ToggleButton base64NavButton;
+    @FXML private ToggleButton jarLauncherNavButton;
+    @FXML private ToggleButton memoReminderNavButton;
+    @FXML private ToggleButton keepAliveNavButton;
+    @FXML private ToggleButton windowsPowerNavButton;
+    @FXML private Label activeSectionLabel;
+    @FXML private Label activeModuleLabel;
     @FXML private CheckMenuItem closeToTrayMenuItem;
     @FXML private CheckMenuItem reminderSoundMenuItem;
     @FXML private CheckMenuItem startupMenuItem;
@@ -71,6 +93,7 @@ public class MainController {
     });
     private final Map<Tab, ModuleDefinition> moduleDefinitions = new LinkedHashMap<>();
     private final Map<Tab, ControllerBinding> loadedModules = new LinkedHashMap<>();
+    private final Map<ToggleButton, Tab> navigationTabs = new LinkedHashMap<>();
 
     private TextArea centralLogArea;
     private volatile AppSettings appSettings = AppSettings.defaults();
@@ -88,6 +111,7 @@ public class MainController {
         ensureAppDataDirectoryExists();
         loadSettings();
         registerModules();
+        configureNavigation();
 
         loadModule(memoReminderTab);
         loadModule(keepAliveTab);
@@ -95,6 +119,7 @@ public class MainController {
         tabPane.getSelectionModel().selectedItemProperty().addListener(
                 (observable, previous, selected) -> {
                     loadModule(selected);
+                    synchronizeNavigation(selected);
                     updateAppLauncherActivity();
                 });
         loggingService.info("主控制器初始化完成");
@@ -261,20 +286,62 @@ public class MainController {
     }
 
     private void registerModules() {
-        register(appLauncherTab, "启动项", "app-launcher-view.fxml");
-        register(httpRequestTab, "HTTP 请求", "http-request-view.fxml");
-        register(webSocketTab, "WebSocket", "websocket-view.fxml");
-        register(networkToolsTab, "网络查询", "network-tools-view.fxml");
-        register(dataFormatTab, "数据格式化", "data-format-view.fxml");
-        register(strDataFormatTab, "字符串处理", "strData-format-view.fxml");
-        register(jarLauncherTab, "JAR 启动", "jar-launcher-view.fxml");
-        register(memoReminderTab, "备忘提醒", "memo-reminder-view.fxml");
-        register(keepAliveTab, "域名保活", "keepalive-manager-view.fxml");
-        register(windowsPowerTab, "电源计划", "windows-power-view.fxml");
+        register(appLauncherTab, "启动与运行", "启动项", "app-launcher-view.fxml");
+        register(jarLauncherTab, "启动与运行", "JAR 启动", "jar-launcher-view.fxml");
+        register(windowsPowerTab, "启动与运行", "电源计划", "windows-power-view.fxml");
+        register(httpRequestTab, "网络与接口", "HTTP 请求", "http-request-view.fxml");
+        register(webSocketTab, "网络与接口", "WebSocket", "websocket-view.fxml");
+        register(networkToolsTab, "网络与接口", "网络诊断", "network-tools-view.fxml");
+        register(keepAliveTab, "网络与接口", "域名保活", "keepalive-manager-view.fxml");
+        register(processPortTab, "系统与开发", "进程与端口", "process-port-view.fxml");
+        register(devEnvironmentTab, "系统与开发", "环境体检", "dev-environment-view.fxml");
+        register(fileAnalysisTab, "系统与开发", "文件分析", "file-analysis-view.fxml");
+        register(dataFormatTab, "数据与效率", "数据格式化", "data-format-view.fxml");
+        register(strDataFormatTab, "数据与效率", "字符串处理", "strData-format-view.fxml");
+        register(base64Tab, "数据与效率", "Base64 编解码", "base64-view.fxml");
+        register(memoReminderTab, "数据与效率", "备忘提醒", "memo-reminder-view.fxml");
     }
 
-    private void register(Tab tab, String name, String resource) {
-        moduleDefinitions.put(tab, new ModuleDefinition(name, resource));
+    private void register(Tab tab, String section, String name, String resource) {
+        moduleDefinitions.put(tab, new ModuleDefinition(section, name, resource));
+    }
+
+    private void configureNavigation() {
+        navigationTabs.put(appLauncherNavButton, appLauncherTab);
+        navigationTabs.put(jarLauncherNavButton, jarLauncherTab);
+        navigationTabs.put(windowsPowerNavButton, windowsPowerTab);
+        navigationTabs.put(httpRequestNavButton, httpRequestTab);
+        navigationTabs.put(webSocketNavButton, webSocketTab);
+        navigationTabs.put(networkToolsNavButton, networkToolsTab);
+        navigationTabs.put(keepAliveNavButton, keepAliveTab);
+        navigationTabs.put(processPortNavButton, processPortTab);
+        navigationTabs.put(devEnvironmentNavButton, devEnvironmentTab);
+        navigationTabs.put(fileAnalysisNavButton, fileAnalysisTab);
+        navigationTabs.put(dataFormatNavButton, dataFormatTab);
+        navigationTabs.put(strDataFormatNavButton, strDataFormatTab);
+        navigationTabs.put(base64NavButton, base64Tab);
+        navigationTabs.put(memoReminderNavButton, memoReminderTab);
+
+        ToggleGroup navigationGroup = new ToggleGroup();
+        navigationTabs.forEach((button, tab) -> {
+            button.setToggleGroup(navigationGroup);
+            button.setOnAction(event -> {
+                if (!button.isSelected()) {
+                    button.setSelected(true);
+                }
+                tabPane.getSelectionModel().select(tab);
+            });
+        });
+        synchronizeNavigation(tabPane.getSelectionModel().getSelectedItem());
+    }
+
+    private void synchronizeNavigation(Tab selectedTab) {
+        navigationTabs.forEach((button, tab) -> button.setSelected(tab == selectedTab));
+        ModuleDefinition definition = moduleDefinitions.get(selectedTab);
+        if (definition != null) {
+            activeSectionLabel.setText(definition.section());
+            activeModuleLabel.setText(definition.name());
+        }
     }
 
     private void loadModule(Tab tab) {
@@ -406,7 +473,7 @@ public class MainController {
                 ? exception.getClass().getSimpleName() : message;
     }
 
-    private record ModuleDefinition(String name, String resource) {
+    private record ModuleDefinition(String section, String name, String resource) {
     }
 
     private record ControllerBinding(String name, Object controller, Runnable cleanupAction) {

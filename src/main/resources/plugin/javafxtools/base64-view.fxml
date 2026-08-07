@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns="http://javafx.com/javafx/23" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="plugin.javafxtools.controller.Base64Controller"
+      spacing="12" styleClass="tool-page, accent-violet">
+    <HBox alignment="CENTER_LEFT" styleClass="page-header">
+        <Label text="Base64 编解码" styleClass="page-title"/>
+        <Pane HBox.hgrow="ALWAYS"/>
+        <Label fx:id="statusLabel" text="就绪" styleClass="status-badge, status-offline"/>
+    </HBox>
+
+    <HBox spacing="8" alignment="CENTER_LEFT" styleClass="toolbar-card">
+        <ComboBox fx:id="variantComboBox" prefWidth="168"/>
+        <Label text="字符编码" styleClass="field-label"/>
+        <ComboBox fx:id="encodingComboBox" prefWidth="150"/>
+        <Separator orientation="VERTICAL"/>
+        <Button fx:id="encodeButton" text="编码 →" onAction="#handleEncode"
+                styleClass="primary-button"/>
+        <Button fx:id="decodeButton" text="解码 →" onAction="#handleDecode"
+                styleClass="success-button"/>
+        <Pane HBox.hgrow="ALWAYS"/>
+        <Button text="粘贴" onAction="#handlePaste"/>
+        <Button fx:id="swapButton" text="结果转为输入" onAction="#handleSwap"/>
+        <Button fx:id="copyButton" text="复制结果" onAction="#handleCopy"/>
+        <Button fx:id="clearButton" text="清空" onAction="#handleClear"
+                styleClass="danger-button"/>
+    </HBox>
+
+    <GridPane hgap="12" VBox.vgrow="ALWAYS">
+        <columnConstraints>
+            <ColumnConstraints percentWidth="50" fillWidth="true"/>
+            <ColumnConstraints percentWidth="50" fillWidth="true"/>
+        </columnConstraints>
+        <rowConstraints>
+            <RowConstraints percentHeight="100" vgrow="ALWAYS" fillHeight="true"/>
+        </rowConstraints>
+        <VBox spacing="8" styleClass="surface, codec-panel" GridPane.columnIndex="0">
+            <HBox alignment="CENTER_LEFT">
+                <Label text="输入" styleClass="section-title"/>
+                <Pane HBox.hgrow="ALWAYS"/>
+                <Label fx:id="inputCountLabel" text="0 字符" styleClass="editor-counter"/>
+            </HBox>
+            <TextArea fx:id="inputArea" wrapText="true" promptText="输入文本或 Base64 内容"
+                      styleClass="code-area, codec-area" VBox.vgrow="ALWAYS"/>
+        </VBox>
+        <VBox spacing="8" styleClass="surface, codec-panel" GridPane.columnIndex="1">
+            <HBox alignment="CENTER_LEFT">
+                <Label text="结果" styleClass="section-title"/>
+                <Pane HBox.hgrow="ALWAYS"/>
+                <Label fx:id="outputCountLabel" text="0 字符" styleClass="editor-counter"/>
+            </HBox>
+            <TextArea fx:id="outputArea" editable="false" wrapText="true"
+                      promptText="处理结果" styleClass="code-area, codec-area"
+                      VBox.vgrow="ALWAYS"/>
+        </VBox>
+    </GridPane>
+</VBox>

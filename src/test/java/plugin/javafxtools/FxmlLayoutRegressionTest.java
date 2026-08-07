@@ -58,13 +58,34 @@ class FxmlLayoutRegressionTest {
     }
 
     @Test
-    void mainViewDeclaresLazyModuleTabsAndRuntimeSettings() throws IOException {
+    void mainViewUsesGroupedSidebarNavigationWithLazyModuleTabs() throws IOException {
         String fxml = readFxml("main-view.fxml");
 
         assertFalse(fxml.contains("<fx:include"));
+        assertTrue(fxml.contains("styleClass=\"app-sidebar\""));
+        assertTrue(fxml.contains("fx:id=\"activeSectionLabel\""));
+        assertTrue(fxml.contains("fx:id=\"activeModuleLabel\""));
+        assertTrue(fxml.contains("fx:id=\"appLauncherNavButton\""));
+        assertTrue(fxml.contains("fx:id=\"httpRequestNavButton\""));
+        assertTrue(fxml.contains("fx:id=\"jarLauncherNavButton\""));
+        assertTrue(fxml.contains("fx:id=\"memoReminderNavButton\""));
+        assertTrue(fxml.contains("fx:id=\"windowsPowerNavButton\""));
+        assertTrue(fxml.contains("fx:id=\"processPortNavButton\""));
+        assertTrue(fxml.contains("fx:id=\"devEnvironmentNavButton\""));
+        assertTrue(fxml.contains("fx:id=\"fileAnalysisNavButton\""));
+        assertTrue(fxml.contains("fx:id=\"base64NavButton\""));
+        assertTrue(fxml.contains("styleClass=\"sidebar-scroll\""));
         assertTrue(fxml.contains("fx:id=\"appLauncherTab\""));
         assertTrue(fxml.contains("fx:id=\"memoReminderTab\""));
         assertTrue(fxml.contains("fx:id=\"windowsPowerTab\""));
+        assertFalse(fxml.contains("styleClass=\"app-header\""));
+    }
+
+    @Test
+    void mainViewKeepsRuntimeSettingsInTheWorkspaceCommandBar() throws IOException {
+        String fxml = readFxml("main-view.fxml");
+
+        assertTrue(fxml.contains("styleClass=\"workspace-header\""));
         assertTrue(fxml.contains("fx:id=\"closeToTrayMenuItem\""));
         assertTrue(fxml.contains("fx:id=\"reminderSoundMenuItem\""));
         assertTrue(fxml.contains("fx:id=\"startupMenuItem\""));
@@ -74,14 +95,33 @@ class FxmlLayoutRegressionTest {
     }
 
     @Test
+    void hiddenModuleTabsDoNotHideNestedEditorOrPowerTabs() throws IOException {
+        String structuralTheme = Files.readString(Path.of(
+                "src", "main", "resources", "css", "styles.css"));
+        String visualTheme = Files.readString(Path.of(
+                "src", "main", "resources", "css", "modern-light.css"));
+
+        for (String theme : List.of(structuralTheme, visualTheme)) {
+            assertTrue(theme.contains(".toolbox-tab-pane > .tab-header-area"));
+            assertTrue(theme.contains(".toolbox-tab-pane > .tab-content-area"));
+            assertFalse(theme.contains(".toolbox-tab-pane .tab-header-area"));
+            assertFalse(theme.contains(".toolbox-tab-pane .tab-content-area"));
+        }
+    }
+
+    @Test
     void everyLazyModuleResourceIsAvailableOnTheRuntimeClasspath() {
         for (String resource : List.of(
                 "app-launcher-view.fxml",
                 "http-request-view.fxml",
                 "websocket-view.fxml",
                 "network-tools-view.fxml",
+                "process-port-view.fxml",
+                "dev-environment-view.fxml",
+                "file-analysis-view.fxml",
                 "data-format-view.fxml",
                 "strData-format-view.fxml",
+                "base64-view.fxml",
                 "jar-launcher-view.fxml",
                 "memo-reminder-view.fxml",
                 "keepalive-manager-view.fxml",
@@ -136,6 +176,7 @@ class FxmlLayoutRegressionTest {
         assertTrue(fxml.contains("fx:id=\"sendOnceButton\""));
         assertTrue(fxml.contains("onAction=\"#handleSendOnceButton\""));
         assertTrue(fxml.contains("GridPane.columnIndex=\"1\""));
+        assertTrue(fxml.contains("<RowConstraints percentHeight=\"100\""));
     }
 
     @Test
@@ -145,6 +186,27 @@ class FxmlLayoutRegressionTest {
         assertTrue(fxml.contains("fx:id=\"wsMessageViewer\""));
         assertTrue(fxml.contains("inlineContent=\"true\""));
         assertTrue(fxml.contains("VBox.vgrow=\"ALWAYS\""));
+    }
+
+    @Test
+    void networkDiagnosticsSupportsDomainsIpsPortsAndStructuredResults() throws IOException {
+        String fxml = readFxml("network-tools-view.fxml");
+
+        assertTrue(fxml.contains("fx:id=\"hostField\""));
+        assertTrue(fxml.contains("fx:id=\"portComboBox\""));
+        assertTrue(fxml.contains("fx:id=\"timeoutComboBox\""));
+        assertTrue(fxml.contains("onAction=\"#handleCheckAll\""));
+        assertTrue(fxml.contains("onAction=\"#handleResolve\""));
+        assertTrue(fxml.contains("onAction=\"#handlePortCheck\""));
+        assertTrue(fxml.contains("onAction=\"#handleIpLookup\""));
+        assertTrue(fxml.contains("onAction=\"#handlePublicIpLookup\""));
+        assertTrue(fxml.contains("onAction=\"#handleCancel\""));
+        assertTrue(fxml.contains("fx:id=\"addressListView\""));
+        assertTrue(fxml.contains("fx:id=\"detailArea\""));
+        assertTrue(fxml.contains("fx:id=\"ipInfoTab\""));
+        assertTrue(fxml.contains("fx:id=\"ipLocationValueLabel\""));
+        assertTrue(fxml.contains("fx:id=\"ipNetworkValueLabel\""));
+        assertFalse(fxml.contains("fx:id=\"lookupResultArea\""));
     }
 
     @Test
@@ -222,6 +284,10 @@ class FxmlLayoutRegressionTest {
                 "keepalive-manager-view.fxml",
                 "memo-reminder-view.fxml",
                 "network-tools-view.fxml",
+                "process-port-view.fxml",
+                "dev-environment-view.fxml",
+                "file-analysis-view.fxml",
+                "base64-view.fxml",
                 "strData-format-view.fxml",
                 "websocket-view.fxml",
                 "windows-power-view.fxml");
@@ -232,6 +298,33 @@ class FxmlLayoutRegressionTest {
             assertTrue(fxml.contains("styleClass=\"page-header\""), view);
             assertTrue(fxml.contains("styleClass=\"page-title\""), view);
         }
+    }
+
+    @Test
+    void newSystemToolsExposeBoundedOnDemandActions() throws IOException {
+        String processView = readFxml("process-port-view.fxml");
+        assertTrue(processView.contains("onAction=\"#handleRefresh\""));
+        assertTrue(processView.contains("onAction=\"#handleTerminateSelected\""));
+        assertTrue(processView.contains("fx:id=\"processTable\""));
+        assertTrue(processView.contains("fx:id=\"portTable\""));
+
+        String environmentView = readFxml("dev-environment-view.fxml");
+        assertTrue(environmentView.contains("onAction=\"#handleInspect\""));
+        assertTrue(environmentView.contains("fx:id=\"resultTable\""));
+
+        String fileView = readFxml("file-analysis-view.fxml");
+        assertTrue(fileView.contains("onAction=\"#handleSelectFile\""));
+        assertTrue(fileView.contains("fx:id=\"sha256Field\""));
+        assertTrue(fileView.contains("fx:id=\"lockStatusLabel\""));
+        assertTrue(fileView.contains("fx:id=\"copySha256Button\""));
+        assertTrue(fileView.contains("fx:id=\"copySha1Button\""));
+        assertTrue(fileView.contains("fx:id=\"copyMd5Button\""));
+
+        String base64View = readFxml("base64-view.fxml");
+        assertTrue(base64View.contains("onAction=\"#handleEncode\""));
+        assertTrue(base64View.contains("onAction=\"#handleDecode\""));
+        assertTrue(base64View.contains("fx:id=\"variantComboBox\""));
+        assertTrue(base64View.contains("fx:id=\"encodingComboBox\""));
     }
 
     private static void assertActionHandlersExist(Element element,

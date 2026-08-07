@@ -53,10 +53,10 @@ public class ToolsApplication extends Application {
             mainController = loader.getController();
             // 配置主舞台
             primaryStage.setTitle("FxTools");
-            Scene scene = new Scene(root, 1240, 800);
+            Scene scene = new Scene(root, 1320, 820);
             FxTheme.apply(scene);
             primaryStage.setScene(scene);
-            primaryStage.setMinWidth(1040);
+            primaryStage.setMinWidth(1180);
             primaryStage.setMinHeight(720);
             primaryStage.setResizable(true);
 

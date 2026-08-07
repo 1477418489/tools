@@ -4,54 +4,19 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ee1c44d2-bcb9-434c-ac67-b5e91efd8462" name="更改" comment="init4">
-      <change afterPath="$PROJECT_DIR$/.idea/go.imports.xml" afterDir="false" />
+    <list default="true" id="ee1c44d2-bcb9-434c-ac67-b5e91efd8462" name="更改" comment="init5">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/module-info.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/module-info.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/ToolsApplication.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/ToolsApplication.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/base/BaseController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/base/BaseController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/AppLauncherController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/AppLauncherController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/HttpRequestController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/HttpRequestController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/JarLauncherController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/JarLauncherController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/KeepAliveManagerController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/KeepAliveManagerController.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/MainController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/MainController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/MemoReminderController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/MemoReminderController.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/NetworkToolsController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/NetworkToolsController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/WebSocketController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/WebSocketController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/model/HttpRequestResult.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/model/HttpRequestResult.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/AppLauncherListActionService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/AppLauncherListActionService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/EnhancedKeepAliveService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/EnhancedKeepAliveService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/HttpRequestService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/HttpRequestService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/HttpResponseFormatter.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/HttpResponseFormatter.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/HttpSchedulerService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/HttpSchedulerService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarFileService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarFileService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarLaunchService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarLaunchService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarLauncherUiSupport.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarLauncherUiSupport.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarPortProcessService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarPortProcessService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarProjectActionService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarProjectActionService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarProjectDialogService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarProjectDialogService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/KeepAliveLogBuffer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/KeepAliveLogBuffer.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/KeepAliveUiSupport.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/KeepAliveUiSupport.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/LoggingService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/LoggingService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/MemoReminderSchedulerService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/MemoReminderSchedulerService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/util/TimeUtils.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/util/TimeUtils.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/SystemTrayService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/SystemTrayService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/css/modern-light.css" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/css/modern-light.css" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/resources/css/styles.css" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/css/styles.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/app-launcher-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/app-launcher-view.fxml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/data-format-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/data-format-view.fxml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/http-request-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/http-request-view.fxml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/jar-launcher-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/jar-launcher-view.fxml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/keepalive-manager-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/keepalive-manager-view.fxml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/main-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/main-view.fxml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/memo-reminder-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/memo-reminder-view.fxml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/network-tools-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/network-tools-view.fxml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/strData-format-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/strData-format-view.fxml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/websocket-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/websocket-view.fxml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/FxmlLayoutRegressionTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/FxmlLayoutRegressionTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/HttpResponseFormatterTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/HttpResponseFormatterTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/HttpSchedulerServiceTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/HttpSchedulerServiceTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/JarFileServiceTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/JarFileServiceTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/JarPortProcessServiceTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/JarPortProcessServiceTest.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -242,7 +207,8 @@
     <MESSAGE value="init2" />
     <MESSAGE value="init3" />
     <MESSAGE value="init4" />
-    <option name="LAST_COMMIT_MESSAGE" value="init4" />
+    <MESSAGE value="init5" />
+    <option name="LAST_COMMIT_MESSAGE" value="init5" />
     <option name="NON_MODAL_COMMIT_POSTPONE_SLOW_CHECKS" value="false" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">

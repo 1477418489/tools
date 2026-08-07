@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns="http://javafx.com/javafx/23" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="plugin.javafxtools.controller.FileAnalysisController"
+      spacing="12" styleClass="tool-page, accent-amber">
+    <HBox alignment="CENTER_LEFT" styleClass="page-header">
+        <Label text="文件分析" styleClass="page-title"/>
+        <Pane HBox.hgrow="ALWAYS"/>
+        <Label fx:id="statusLabel" text="请选择文件" styleClass="status-badge, status-offline"/>
+    </HBox>
+
+    <HBox spacing="8" alignment="CENTER_LEFT" styleClass="toolbar-card">
+        <TextField fx:id="filePathField" editable="false" promptText="选择本地文件"
+                   maxWidth="Infinity" HBox.hgrow="ALWAYS"/>
+        <Button fx:id="selectButton" text="选择文件" onAction="#handleSelectFile"
+                styleClass="primary-button"/>
+        <Button fx:id="analyzeButton" text="重新分析" onAction="#handleAnalyze"/>
+        <Button fx:id="cancelButton" text="取消" onAction="#handleCancel"
+                styleClass="danger-button"/>
+    </HBox>
+
+    <GridPane hgap="10" styleClass="metric-strip">
+        <columnConstraints>
+            <ColumnConstraints percentWidth="28" fillWidth="true"/>
+            <ColumnConstraints percentWidth="20" fillWidth="true"/>
+            <ColumnConstraints percentWidth="27" fillWidth="true"/>
+            <ColumnConstraints percentWidth="25" fillWidth="true"/>
+        </columnConstraints>
+        <VBox spacing="3" styleClass="surface, metric-tile" GridPane.columnIndex="0">
+            <Label text="文件" styleClass="metric-label"/>
+            <Label fx:id="fileNameLabel" text="--" textOverrun="CENTER_ELLIPSIS"
+                   styleClass="metric-value"/>
+        </VBox>
+        <VBox spacing="3" styleClass="surface, metric-tile" GridPane.columnIndex="1">
+            <Label text="大小" styleClass="metric-label"/>
+            <Label fx:id="fileSizeLabel" text="--" styleClass="metric-value"/>
+        </VBox>
+        <VBox spacing="3" styleClass="surface, metric-tile" GridPane.columnIndex="2">
+            <Label text="内容类型" styleClass="metric-label"/>
+            <Label fx:id="fileTypeLabel" text="--" textOverrun="CENTER_ELLIPSIS"
+                   styleClass="metric-value"/>
+        </VBox>
+        <VBox spacing="3" styleClass="surface, metric-tile" GridPane.columnIndex="3">
+            <Label text="文本编码" styleClass="metric-label"/>
+            <Label fx:id="encodingLabel" text="--" textOverrun="CENTER_ELLIPSIS"
+                   styleClass="metric-value"/>
+        </VBox>
+    </GridPane>
+
+    <GridPane hgap="12" VBox.vgrow="ALWAYS">
+        <columnConstraints>
+            <ColumnConstraints percentWidth="40" fillWidth="true"/>
+            <ColumnConstraints percentWidth="60" fillWidth="true"/>
+        </columnConstraints>
+        <rowConstraints>
+            <RowConstraints percentHeight="100" vgrow="ALWAYS" fillHeight="true"/>
+        </rowConstraints>
+        <VBox spacing="12" styleClass="surface, file-inspection-panel"
+              GridPane.columnIndex="0">
+            <Label text="文件状态" styleClass="section-title"/>
+            <GridPane hgap="12" vgap="12">
+                <columnConstraints>
+                    <ColumnConstraints minWidth="72" prefWidth="72" halignment="RIGHT"/>
+                    <ColumnConstraints hgrow="ALWAYS" fillWidth="true"/>
+                </columnConstraints>
+                <Label text="修改时间" styleClass="field-label" GridPane.rowIndex="0"/>
+                <Label fx:id="modifiedLabel" text="--" wrapText="true"
+                       GridPane.columnIndex="1" GridPane.rowIndex="0"/>
+                <Label text="访问权限" styleClass="field-label" GridPane.rowIndex="1"/>
+                <Label fx:id="accessLabel" text="--"
+                       GridPane.columnIndex="1" GridPane.rowIndex="1"/>
+                <Label text="占用线索" styleClass="field-label" GridPane.rowIndex="2"/>
+                <Label fx:id="lockStatusLabel" text="未检测"
+                       styleClass="status-badge, status-offline"
+                       GridPane.columnIndex="1" GridPane.rowIndex="2"/>
+            </GridPane>
+            <VBox spacing="4" styleClass="status-bar">
+                <Label text="占用探测" styleClass="field-label"/>
+                <Label fx:id="lockDetailLabel" text="等待读取文件占用线索"
+                       wrapText="true" styleClass="analysis-detail"/>
+            </VBox>
+            <VBox spacing="4" styleClass="status-bar">
+                <Label text="编码判断" styleClass="field-label"/>
+                <Label fx:id="encodingDetailLabel" text="等待分析"
+                       wrapText="true" styleClass="analysis-detail"/>
+            </VBox>
+            <Pane VBox.vgrow="ALWAYS"/>
+        </VBox>
+
+        <VBox spacing="13" styleClass="surface, file-hash-panel"
+              GridPane.columnIndex="1">
+            <Label text="文件摘要" styleClass="section-title"/>
+            <VBox spacing="5">
+                <Label text="SHA-256" styleClass="field-label"/>
+                <HBox spacing="7">
+                    <TextField fx:id="sha256Field" editable="false" styleClass="hash-field"
+                               maxWidth="Infinity" HBox.hgrow="ALWAYS"/>
+                    <Button fx:id="copySha256Button" text="复制"
+                            onAction="#handleCopySha256"/>
+                </HBox>
+            </VBox>
+            <VBox spacing="5">
+                <Label text="SHA-1" styleClass="field-label"/>
+                <HBox spacing="7">
+                    <TextField fx:id="sha1Field" editable="false" styleClass="hash-field"
+                               maxWidth="Infinity" HBox.hgrow="ALWAYS"/>
+                    <Button fx:id="copySha1Button" text="复制"
+                            onAction="#handleCopySha1"/>
+                </HBox>
+            </VBox>
+            <VBox spacing="5">
+                <Label text="MD5" styleClass="field-label"/>
+                <HBox spacing="7">
+                    <TextField fx:id="md5Field" editable="false" styleClass="hash-field"
+                               maxWidth="Infinity" HBox.hgrow="ALWAYS"/>
+                    <Button fx:id="copyMd5Button" text="复制"
+                            onAction="#handleCopyMd5"/>
+                </HBox>
+            </VBox>
+            <Pane VBox.vgrow="ALWAYS"/>
+            <Label text="MD5 与 SHA-1 仅用于文件比对；安全校验请优先使用 SHA-256。"
+                   wrapText="true" styleClass="analysis-footnote"/>
+        </VBox>
+    </GridPane>
+</VBox>
