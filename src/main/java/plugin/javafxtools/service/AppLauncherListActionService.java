@@ -8,6 +8,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import plugin.javafxtools.base.ModuleLogger;
 import plugin.javafxtools.model.AppInfo;
+import plugin.javafxtools.util.FxTheme;
 
 import java.io.File;
 import java.nio.file.InvalidPathException;
@@ -292,6 +293,7 @@ public class AppLauncherListActionService {
 
     private Optional<String> askProcessName(String defaultProcessName) {
         TextInputDialog dialog = new TextInputDialog(defaultProcessName);
+        FxTheme.apply(dialog);
         dialog.setTitle("设置检测进程名");
         dialog.setHeaderText("请输入检测进程名（通常为实际进程名）");
         dialog.setContentText("进程名：");
@@ -303,6 +305,7 @@ public class AppLauncherListActionService {
 
     private boolean confirmRemove(AppInfo removed) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        FxTheme.apply(alert);
         alert.setTitle("确认移除");
         alert.setHeaderText("确认要移除所选应用程序吗？");
         alert.setContentText("[" + removed.getAppPath() + "] 会被移除，相关进程将被终止。是否继续？");
@@ -312,6 +315,7 @@ public class AppLauncherListActionService {
 
     private boolean confirmClear() {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        FxTheme.apply(alert);
         alert.setTitle("确认清空");
         alert.setHeaderText("确认要清除所有应用程序路径吗？");
         alert.setContentText("此操作将终止所有已启动的进程并清空列表，是否继续？");

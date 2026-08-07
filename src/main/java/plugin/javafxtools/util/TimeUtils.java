@@ -1,6 +1,9 @@
 package plugin.javafxtools.util;
 
 import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Date;
 
 /**
@@ -27,13 +30,16 @@ public class TimeUtils {
      */
     public static final String COMPACT_DATETIME_FORMAT = "yyyyMMddHHmmss";
 
+    private static final DateTimeFormatter DEFAULT_DATETIME_FORMATTER =
+            DateTimeFormatter.ofPattern(DEFAULT_DATETIME_FORMAT);
+
     /**
      * 获取当前时间字符串（默认格式）
      *
      * @return 格式化后的当前时间字符串
      */
     public static String getCurrentDateTime() {
-        return formatDateTime(new Date(), DEFAULT_DATETIME_FORMAT);
+        return LocalDateTime.now().format(DEFAULT_DATETIME_FORMATTER);
     }
 
     /**
@@ -43,7 +49,11 @@ public class TimeUtils {
      * @return 格式化后的时间字符串
      */
     public static String formatDateTime(Date date) {
-        return formatDateTime(date, DEFAULT_DATETIME_FORMAT);
+        if (date == null) {
+            return "";
+        }
+        return DEFAULT_DATETIME_FORMATTER.format(
+                date.toInstant().atZone(ZoneId.systemDefault()));
     }
 
     /**

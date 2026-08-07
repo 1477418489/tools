@@ -1,8 +1,12 @@
 package plugin.javafxtools.service;
 
+import plugin.javafxtools.model.ProjectConfig;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -52,6 +56,85 @@ public class JarPortProcessService {
         } catch (IOException e) {
             return false;
         }
+    }
+
+    /**
+     * 检查端口监听进程是否属于指定 JAR 项目。
+     *
+     * @param project 项目配置
+     * @param port 项目端口
+     * @return 端口归属检查结果
+     */
+    public ProjectPortInspection inspectProjectPort(ProjectConfig project, int port) {
+        if (project == null) {
+            throw new IllegalArgumentException("项目不能为空");
+        }
+        if (!isValidPort(port)) {
+            throw new IllegalArgumentException("端口必须在 1 到 65535 之间");
+        }
+        if (!checkPortInUse(port)) {
+            return new ProjectPortInspection(ProjectPortState.FREE, Set.of(), Set.of());
+        }
+
+        try {
+            Set<String> listeningPids = findListeningPidsByPort(port);
+            if (listeningPids.isEmpty()) {
+                return new ProjectPortInspection(
+                        ProjectPortState.OCCUPIED, Set.of(), Set.of());
+            }
+
+            Set<String> projectPids = new LinkedHashSet<>();
+            Set<String> otherPids = new LinkedHashSet<>();
+            for (String pid : listeningPids) {
+                String commandLine = readProcessCommandLine(pid);
+                if (commandLineTargetsJar(commandLine, project.getTargetJar())) {
+                    projectPids.add(pid);
+                } else {
+                    otherPids.add(pid);
+                }
+            }
+            ProjectPortState state = projectPids.isEmpty()
+                    ? ProjectPortState.OCCUPIED
+                    : ProjectPortState.PROJECT_RUNNING;
+            return new ProjectPortInspection(
+                    state, Set.copyOf(projectPids), Set.copyOf(otherPids));
+        } catch (IOException e) {
+            logger.accept("无法识别端口 " + port + " 的监听进程: " + e.getMessage());
+            return new ProjectPortInspection(ProjectPortState.OCCUPIED, Set.of(), Set.of());
+        }
+    }
+
+    /**
+     * 只终止属于指定项目的端口监听进程，拒绝处理其他程序。
+     *
+     * @param project 项目配置
+     * @param port 项目端口
+     * @return 项目进程已停止或原本未运行
+     */
+    public boolean killProjectOnPort(ProjectConfig project, int port) {
+        ProjectPortInspection inspection = inspectProjectPort(project, port);
+        if (inspection.state() == ProjectPortState.FREE) {
+            return true;
+        }
+        if (inspection.state() != ProjectPortState.PROJECT_RUNNING) {
+            logger.accept("端口 " + port + " 由其他进程占用，已拒绝终止");
+            return false;
+        }
+
+        boolean killedAll = true;
+        for (String pid : inspection.projectPids()) {
+            try {
+                killedAll &= killProcessTree(pid, port);
+            } catch (IOException e) {
+                logger.accept("终止项目进程失败 (PID: " + pid + "): " + e.getMessage());
+                killedAll = false;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        return killedAll
+                && inspectProjectPort(project, port).state() != ProjectPortState.PROJECT_RUNNING;
     }
 
     /**
@@ -156,6 +239,67 @@ public class JarPortProcessService {
         return formatProcessDetails(pid, outputLines);
     }
 
+    private String readProcessCommandLine(String pid) throws IOException {
+        try {
+            long processId = Long.parseLong(pid);
+            String commandLine = ProcessHandle.of(processId)
+                    .flatMap(handle -> handle.info().commandLine())
+                    .orElse("");
+            if (!commandLine.isBlank()) {
+                return commandLine;
+            }
+        } catch (NumberFormatException ignored) {
+            // 继续使用系统命令读取详情。
+        }
+
+        ProcessBuilder commandLineBuilder = new ProcessBuilder(
+                "wmic.exe",
+                "process",
+                "where", "processid=" + pid,
+                "get", "commandline",
+                "/FORMAT:LIST");
+        Process commandLineProcess = commandLineBuilder.start();
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(commandLineProcess.getInputStream(), "GBK"))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String trimmed = line.trim();
+                if (trimmed.startsWith("CommandLine=")) {
+                    return trimmed.substring("CommandLine=".length()).trim();
+                }
+            }
+        } finally {
+            waitForProcessExit(commandLineProcess, 3);
+        }
+        return "";
+    }
+
+    static boolean commandLineTargetsJar(String commandLine, String targetJar) {
+        if (commandLine == null || commandLine.isBlank()
+                || targetJar == null || targetJar.isBlank()) {
+            return false;
+        }
+        try {
+            String normalizedTarget = targetJar.trim().replace('/', '\\');
+            boolean windowsAbsolute = normalizedTarget.matches("^[A-Za-z]:\\\\.*")
+                    || normalizedTarget.startsWith("\\\\");
+            if (!windowsAbsolute) {
+                normalizedTarget = Path.of(normalizedTarget)
+                        .toAbsolutePath()
+                        .normalize()
+                        .toString()
+                        .replace('/', '\\');
+            }
+            normalizedTarget = normalizedTarget.toLowerCase(java.util.Locale.ROOT);
+            String normalizedCommand = commandLine
+                    .replace('/', '\\')
+                    .toLowerCase(java.util.Locale.ROOT);
+            return normalizedCommand.contains(normalizedTarget);
+        } catch (InvalidPathException e) {
+            return false;
+        }
+    }
+
     static String formatProcessDetails(String pid, List<String> wmicLines) {
         String processName = "";
         String commandLine = "";
@@ -240,5 +384,16 @@ public class JarPortProcessService {
             Thread.currentThread().interrupt();
             process.destroyForcibly();
         }
+    }
+
+    public enum ProjectPortState {
+        FREE,
+        PROJECT_RUNNING,
+        OCCUPIED
+    }
+
+    public record ProjectPortInspection(ProjectPortState state,
+                                        Set<String> projectPids,
+                                        Set<String> otherPids) {
     }
 }

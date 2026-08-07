@@ -6,6 +6,7 @@ import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+import plugin.javafxtools.controller.MainController;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.IOException;
@@ -16,6 +17,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FxmlLayoutRegressionTest {
@@ -45,13 +47,104 @@ class FxmlLayoutRegressionTest {
     }
 
     @Test
-    void mainViewUsesCollapsedSystemLogToPreserveWorkspace() throws IOException {
+    void mainViewUsesPopupOnlySystemLogToPreserveWorkspace() throws IOException {
         String fxml = readFxml("main-view.fxml");
 
-        assertTrue(fxml.contains("fx:id=\"systemLogPane\""));
-        assertTrue(fxml.contains("expanded=\"false\""));
-        assertTrue(fxml.contains("fx:id=\"centralLogArea\""));
-        assertTrue(fxml.contains("styleClass=\"system-log-pane\""));
+        assertTrue(fxml.contains("fx:id=\"systemLogViewer\""));
+        assertTrue(fxml.contains("title=\"系统日志\""));
+        assertFalse(fxml.contains("systemLogPane"));
+        assertFalse(fxml.contains("<TitledPane"));
+        assertFalse(fxml.contains("inlineContent=\"true\""));
+    }
+
+    @Test
+    void mainViewDeclaresLazyModuleTabsAndRuntimeSettings() throws IOException {
+        String fxml = readFxml("main-view.fxml");
+
+        assertFalse(fxml.contains("<fx:include"));
+        assertTrue(fxml.contains("fx:id=\"appLauncherTab\""));
+        assertTrue(fxml.contains("fx:id=\"memoReminderTab\""));
+        assertTrue(fxml.contains("fx:id=\"windowsPowerTab\""));
+        assertTrue(fxml.contains("fx:id=\"closeToTrayMenuItem\""));
+        assertTrue(fxml.contains("fx:id=\"reminderSoundMenuItem\""));
+        assertTrue(fxml.contains("fx:id=\"startupMenuItem\""));
+        assertTrue(fxml.contains("onAction=\"#handleOpenDataDirectory\""));
+        assertTrue(fxml.contains("fx:id=\"exportBackupMenuItem\""));
+        assertTrue(fxml.contains("onAction=\"#handleExportDataBackup\""));
+    }
+
+    @Test
+    void everyLazyModuleResourceIsAvailableOnTheRuntimeClasspath() {
+        for (String resource : List.of(
+                "app-launcher-view.fxml",
+                "http-request-view.fxml",
+                "websocket-view.fxml",
+                "network-tools-view.fxml",
+                "data-format-view.fxml",
+                "strData-format-view.fxml",
+                "jar-launcher-view.fxml",
+                "memo-reminder-view.fxml",
+                "keepalive-manager-view.fxml",
+                "windows-power-view.fxml")) {
+            assertNotNull(MainController.class.getResource("/plugin/javafxtools/" + resource),
+                    resource);
+        }
+        assertNotNull(MainController.class.getResource("/css/modern-light.css"));
+    }
+
+    @Test
+    void operationalLogViewsUseTheUnifiedViewer() throws IOException {
+        List<String> logViews = List.of(
+                "app-launcher-view.fxml",
+                "http-request-view.fxml",
+                "jar-launcher-view.fxml",
+                "keepalive-manager-view.fxml",
+                "memo-reminder-view.fxml",
+                "websocket-view.fxml");
+
+        for (String view : logViews) {
+            String fxml = readFxml(view);
+            assertTrue(fxml.contains("<LogViewer"), view);
+            assertFalse(fxml.contains("fx:id=\"logArea\""), view);
+            assertFalse(fxml.contains("fx:id=\"wsMessageArea\""), view);
+        }
+    }
+
+    @Test
+    void ordinaryLogsArePopupOnlyAndWorkAreasTakeRemainingHeight() throws IOException {
+        for (String view : List.of(
+                "app-launcher-view.fxml",
+                "http-request-view.fxml",
+                "keepalive-manager-view.fxml",
+                "memo-reminder-view.fxml")) {
+            String fxml = readFxml(view);
+            assertFalse(fxml.contains("<SplitPane orientation=\"VERTICAL\""), view);
+            assertFalse(fxml.contains("expanded="), view);
+            assertFalse(fxml.contains("inlineContent=\"true\""), view);
+            assertTrue(fxml.contains("VBox.vgrow=\"ALWAYS\""), view);
+        }
+    }
+
+    @Test
+    void httpRequestAndResponseWorkspacesUseAvailableWidthAndHeight() throws IOException {
+        String fxml = readFxml("http-request-view.fxml");
+
+        assertTrue(fxml.contains("<ColumnConstraints percentWidth=\"44\""));
+        assertTrue(fxml.contains("<ColumnConstraints percentWidth=\"56\""));
+        assertTrue(fxml.contains("fx:id=\"responseBodyArea\""));
+        assertTrue(fxml.contains("fx:id=\"responseHeadersArea\""));
+        assertTrue(fxml.contains("fx:id=\"sendOnceButton\""));
+        assertTrue(fxml.contains("onAction=\"#handleSendOnceButton\""));
+        assertTrue(fxml.contains("GridPane.columnIndex=\"1\""));
+    }
+
+    @Test
+    void websocketKeepsItsOperationalMessageStreamInline() throws IOException {
+        String fxml = readFxml("websocket-view.fxml");
+
+        assertTrue(fxml.contains("fx:id=\"wsMessageViewer\""));
+        assertTrue(fxml.contains("inlineContent=\"true\""));
+        assertTrue(fxml.contains("VBox.vgrow=\"ALWAYS\""));
     }
 
     @Test
@@ -66,11 +159,38 @@ class FxmlLayoutRegressionTest {
     }
 
     @Test
-    void jarLauncherRemovesUnusedProcessOutputArea() throws IOException {
+    void jarLauncherShowsAllProjectRuntimeStatesWithoutAnInlineLog() throws IOException {
         String fxml = readFxml("jar-launcher-view.fxml");
 
+        assertTrue(fxml.contains("fx:id=\"projectListView\""));
+        assertTrue(fxml.contains("fx:id=\"projectOverviewLabel\""));
+        assertTrue(fxml.contains("fx:id=\"statusRefreshTimeLabel\""));
+        assertTrue(fxml.contains("onAction=\"#refreshProjectStatuses\""));
+        assertTrue(fxml.contains("fx:id=\"openDirectoryButton\""));
+        assertTrue(fxml.contains("onAction=\"#handleOpenTargetDirectory\""));
+        assertTrue(fxml.contains("fx:id=\"openLogButton\""));
+        assertTrue(fxml.contains("onAction=\"#handleOpenCurrentLog\""));
+        assertFalse(fxml.contains("fx:id=\"projectComboBox\""));
         assertFalse(fxml.contains("processOutputArea"));
         assertFalse(fxml.contains("进程输出"));
+        assertFalse(fxml.contains("inlineContent=\"true\""));
+    }
+
+    @Test
+    void windowsPowerPageProvidesPersistentPowerAndWakeSchedules() throws IOException {
+        String fxml = readFxml("windows-power-view.fxml");
+
+        assertTrue(fxml.contains("fx:id=\"powerActionComboBox\""));
+        assertTrue(fxml.contains("onAction=\"#handleSchedulePower\""));
+        assertTrue(fxml.contains("onAction=\"#handleCancelPower\""));
+        assertTrue(fxml.contains("onAction=\"#handleScheduleWake\""));
+        assertTrue(fxml.contains("onAction=\"#handleCancelWake\""));
+        assertTrue(fxml.contains("onAction=\"#handleRefreshDiagnostics\""));
+        assertTrue(fxml.contains("fx:id=\"diagnosticsStatusLabel\""));
+        assertTrue(fxml.contains("fx:id=\"biosInterfaceStatusLabel\""));
+        assertTrue(fxml.contains("fx:id=\"wakeTimerStatusLabel\""));
+        assertTrue(fxml.contains("RTC 定时开机"));
+        assertTrue(fxml.contains("需在固件中确认"));
     }
 
     @Test
@@ -103,11 +223,12 @@ class FxmlLayoutRegressionTest {
                 "memo-reminder-view.fxml",
                 "network-tools-view.fxml",
                 "strData-format-view.fxml",
-                "websocket-view.fxml");
+                "websocket-view.fxml",
+                "windows-power-view.fxml");
 
         for (String view : toolViews) {
             String fxml = readFxml(view);
-            assertTrue(fxml.contains("styleClass=\"tool-page\""), view);
+            assertTrue(fxml.contains("tool-page"), view);
             assertTrue(fxml.contains("styleClass=\"page-header\""), view);
             assertTrue(fxml.contains("styleClass=\"page-title\""), view);
         }

@@ -20,14 +20,14 @@ import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.HBox;
 import plugin.javafxtools.base.BaseController;
+import plugin.javafxtools.control.LogViewer;
 import plugin.javafxtools.model.IntervalUnit;
 import plugin.javafxtools.model.MemoReminder;
 import plugin.javafxtools.model.ReminderScheduleMode;
 import plugin.javafxtools.service.MemoReminderSchedulerService;
 import plugin.javafxtools.service.MemoReminderStore;
 import plugin.javafxtools.service.MemoReminderTableSupport;
-import plugin.javafxtools.util.LogTextTrimmer;
-import plugin.javafxtools.util.TimeUtils;
+import plugin.javafxtools.util.FxTheme;
 
 import java.io.IOException;
 import java.time.LocalDate;
@@ -44,14 +44,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.UnaryOperator;
+import java.util.function.BooleanSupplier;
 
 /**
  * 备忘提醒页签控制器，负责 FXML 事件入口、表单校验和服务装配。
  */
 public class MemoReminderController extends BaseController {
-    private static final int MAX_LOG_LINES = 400;
-    private static final int MAX_LOG_CHARACTERS = 500_000;
-    private static final int LOG_TRIM_TARGET_CHARACTERS = 350_000;
     private static final DateTimeFormatter TIME_INPUT_FORMATTER = new DateTimeFormatterBuilder()
             .appendValue(ChronoField.HOUR_OF_DAY, 2)
             .appendLiteral(':')
@@ -115,8 +113,10 @@ public class MemoReminderController extends BaseController {
     @FXML
     private TableColumn<MemoReminder, String> statusCol;
 
-    @FXML
     private TextArea logArea;
+
+    @FXML
+    private LogViewer logViewer;
 
     @FXML
     private Button addButton;
@@ -141,6 +141,8 @@ public class MemoReminderController extends BaseController {
      */
     @FXML
     public void initialize() {
+        logArea = logViewer.getTextArea();
+        logViewer.setOnClear(this::handleClearLog);
         intervalField.setTextFormatter(unsignedIntegerFormatter());
         timesField.setTextFormatter(signedIntegerFormatter());
         reminderTimeField.setTextFormatter(timeFormatter());
@@ -275,32 +277,6 @@ public class MemoReminderController extends BaseController {
     }
 
     /**
-     * 记录备忘提醒模块日志。
-     *
-     * @param level 日志级别
-     * @param message 日志内容
-     */
-    @Override
-    public void log(String level, String message) {
-        String formatted = String.format("[%s][%s][备忘提醒] %s",
-                TimeUtils.getCurrentDateTime(), level, message);
-        Runnable append = () -> {
-            if (logArea != null && logArea.getScene() != null) {
-                LogTextTrimmer.trimToMaxLines(logArea, MAX_LOG_LINES, 80);
-                logArea.appendText(formatted + "\n");
-                LogTextTrimmer.trimToMaxCharacters(
-                        logArea, MAX_LOG_CHARACTERS, LOG_TRIM_TARGET_CHARACTERS);
-                logArea.setScrollTop(Double.MAX_VALUE);
-            }
-        };
-        if (Platform.isFxApplicationThread() && logArea != null && logArea.getScene() != null) {
-            append.run();
-        } else {
-            Platform.runLater(append);
-        }
-    }
-
-    /**
      * 获取备忘提醒模块日志输出区域。
      *
      * @return 日志输出区域
@@ -317,6 +293,13 @@ public class MemoReminderController extends BaseController {
     public void cleanup() {
         if (schedulerService != null) {
             schedulerService.cleanup();
+        }
+        super.cleanup();
+    }
+
+    public void setReminderSoundEnabledSupplier(BooleanSupplier supplier) {
+        if (schedulerService != null) {
+            schedulerService.setSoundEnabledSupplier(supplier);
         }
     }
 
@@ -408,6 +391,7 @@ public class MemoReminderController extends BaseController {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
                 "确定删除提醒 \"" + reminder.getContent() + "\"？",
                 ButtonType.OK, ButtonType.CANCEL);
+        FxTheme.apply(alert);
         alert.setTitle("删除提醒");
         alert.setHeaderText(null);
         Optional<ButtonType> result = alert.showAndWait();

@@ -237,6 +237,13 @@ public class EnhancedKeepAliveService implements ModuleLogger {
     }
 
     /**
+     * 清除保活日志缓冲区中尚未刷新的内容。
+     */
+    public void clearLogs() {
+        logBuffer.clearPendingLogs();
+    }
+
+    /**
      * 记录信息日志。
      *
      * @param message 日志内容

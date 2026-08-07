@@ -2,10 +2,11 @@
 
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
+<?import plugin.javafxtools.control.LogViewer?>
 
 <VBox xmlns="http://javafx.com/javafx/23" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="plugin.javafxtools.controller.MemoReminderController"
-      spacing="12" prefWidth="1000" prefHeight="700" styleClass="tool-page">
+      spacing="12" prefWidth="1000" prefHeight="700" styleClass="tool-page, accent-rose">
 
     <HBox alignment="CENTER_LEFT" styleClass="page-header">
         <Label text="备忘提醒" styleClass="page-title"/>
@@ -91,14 +92,5 @@
         </TableView>
     </VBox>
 
-    <TitledPane text="模块日志" expanded="false" animated="false" styleClass="system-log-pane">
-        <content>
-            <VBox spacing="6">
-                <HBox alignment="CENTER_RIGHT">
-                    <Button text="清空" onAction="#handleClearLog" styleClass="compact-button"/>
-                </HBox>
-                <TextArea fx:id="logArea" prefHeight="120" editable="false" styleClass="log-area"/>
-            </VBox>
-        </content>
-    </TitledPane>
+    <LogViewer fx:id="logViewer" title="模块日志" promptText="等待提醒事件"/>
 </VBox>

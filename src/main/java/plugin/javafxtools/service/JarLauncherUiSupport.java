@@ -4,11 +4,13 @@ import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.TextArea;
+import plugin.javafxtools.util.FxTheme;
 import plugin.javafxtools.util.LogTextTrimmer;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * JAR 启动器通用 UI 提示和日志辅助逻辑。
@@ -22,6 +24,7 @@ public class JarLauncherUiSupport {
     private static final DateTimeFormatter LOG_TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     private final TextArea logArea;
+    private final AtomicLong logGeneration = new AtomicLong();
 
     /**
      * 创建 JAR 启动器 UI 辅助对象。
@@ -40,10 +43,42 @@ public class JarLauncherUiSupport {
     public void appendLog(String message) {
         String timestamp = LocalTime.now().format(LOG_TIME_FMT);
         String line = "[" + timestamp + "] " + message + "\n";
+        long generation = logGeneration.get();
         if (Platform.isFxApplicationThread()) {
-            appendLogOnFxThread(line);
+            if (generation == logGeneration.get()) {
+                appendLogOnFxThread(line);
+            }
         } else {
-            Platform.runLater(() -> appendLogOnFxThread(line));
+            try {
+                Platform.runLater(() -> {
+                    if (generation == logGeneration.get()) {
+                        appendLogOnFxThread(line);
+                    }
+                });
+            } catch (IllegalStateException ignored) {
+                // JavaFX 已关闭，丢弃尚未显示的日志。
+            }
+        }
+    }
+
+    /**
+     * 清除日志并使已经排队的旧刷新失效。
+     */
+    public void clearLogs() {
+        logGeneration.incrementAndGet();
+        Runnable clear = () -> {
+            if (logArea != null) {
+                logArea.clear();
+            }
+        };
+        if (Platform.isFxApplicationThread()) {
+            clear.run();
+        } else {
+            try {
+                Platform.runLater(clear);
+            } catch (IllegalStateException ignored) {
+                // JavaFX 已关闭，无需清理不可见的界面。
+            }
         }
     }
 
@@ -55,6 +90,7 @@ public class JarLauncherUiSupport {
     public void showError(String message) {
         Runnable showAlert = () -> {
             Alert alert = new Alert(Alert.AlertType.ERROR);
+            FxTheme.apply(alert);
             alert.setTitle("错误");
             alert.setHeaderText(null);
             alert.setContentText(message);
@@ -75,6 +111,7 @@ public class JarLauncherUiSupport {
      */
     public boolean confirmKillProcessOnPort(int port) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        FxTheme.apply(alert);
         alert.setTitle("端口冲突");
         alert.setHeaderText("检测到端口 " + port + " 被占用");
         alert.setContentText("是否终止占用进程？");
@@ -91,7 +128,6 @@ public class JarLauncherUiSupport {
         logArea.appendText(line);
         LogTextTrimmer.trimToMaxCharacters(
                 logArea, MAX_LOG_CHARACTERS, LOG_TRIM_TARGET_CHARACTERS);
-        logArea.setScrollTop(Double.MAX_VALUE);
     }
 
     private void trimLogs() {

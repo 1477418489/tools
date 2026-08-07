@@ -2,10 +2,11 @@
 
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
+<?import plugin.javafxtools.control.LogViewer?>
 
 <VBox xmlns="http://javafx.com/javafx/23" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="plugin.javafxtools.controller.HttpRequestController"
-      spacing="12" prefWidth="1000" prefHeight="750" styleClass="tool-page">
+      spacing="12" prefWidth="1000" prefHeight="750" styleClass="tool-page, accent-cyan">
 
     <HBox alignment="CENTER_LEFT" styleClass="page-header">
         <Label text="HTTP 请求调度" styleClass="page-title"/>
@@ -16,6 +17,8 @@
     <HBox spacing="8" alignment="CENTER_LEFT" styleClass="toolbar">
         <ComboBox fx:id="methodComboBox" prefWidth="105"/>
         <TextField fx:id="urlField" promptText="https://example.com/api" HBox.hgrow="ALWAYS"/>
+        <Button fx:id="sendOnceButton" text="发送一次" onAction="#handleSendOnceButton"
+                styleClass="primary-button"/>
         <Button fx:id="startButton" text="启动调度" onAction="#handleStartButton"
                 styleClass="success-button"/>
         <Button fx:id="stopButton" text="停止" onAction="#handleStopButton"
@@ -61,33 +64,52 @@
         </HBox>
     </VBox>
 
-    <SplitPane dividerPositions="0.5" VBox.vgrow="ALWAYS">
-        <items>
-            <VBox spacing="7" styleClass="surface">
-                <Label text="请求内容" styleClass="section-title"/>
-                <TabPane fx:id="requestEditorPane" tabClosingPolicy="UNAVAILABLE"
-                         styleClass="editor-tab-pane" VBox.vgrow="ALWAYS">
-                    <tabs>
-                        <Tab text="参数 / 请求体">
-                            <TextArea fx:id="paramsArea" styleClass="code-area"/>
-                        </Tab>
-                        <Tab text="请求头">
-                            <TextArea fx:id="headersArea" styleClass="code-area"/>
-                        </Tab>
-                    </tabs>
-                </TabPane>
-            </VBox>
+    <GridPane hgap="8" VBox.vgrow="ALWAYS">
+        <columnConstraints>
+            <ColumnConstraints percentWidth="44" hgrow="ALWAYS" fillWidth="true"/>
+            <ColumnConstraints percentWidth="56" hgrow="ALWAYS" fillWidth="true"/>
+        </columnConstraints>
+        <VBox spacing="7" styleClass="surface" GridPane.columnIndex="0">
+            <Label text="请求内容" styleClass="section-title"/>
+            <TabPane fx:id="requestEditorPane" tabClosingPolicy="UNAVAILABLE"
+                     styleClass="editor-tab-pane" VBox.vgrow="ALWAYS">
+                <tabs>
+                    <Tab text="参数 / 请求体">
+                        <TextArea fx:id="paramsArea" styleClass="code-area"/>
+                    </Tab>
+                    <Tab text="请求头">
+                        <TextArea fx:id="headersArea" styleClass="code-area"/>
+                    </Tab>
+                </tabs>
+            </TabPane>
+        </VBox>
 
-            <VBox spacing="7" styleClass="log-panel">
-                <HBox spacing="8" alignment="CENTER_LEFT" styleClass="section-header">
-                    <Label text="响应与执行日志" styleClass="section-title"/>
-                    <Pane HBox.hgrow="ALWAYS"/>
-                    <Button fx:id="formatButton" text="美化响应" onAction="#handleFormatButton"
-                            styleClass="compact-button"/>
-                    <Button text="清空" onAction="#handleClearLog" styleClass="compact-button"/>
-                </HBox>
-                <TextArea fx:id="logArea" editable="false" VBox.vgrow="ALWAYS" styleClass="log-area"/>
-            </VBox>
-        </items>
-    </SplitPane>
+        <VBox spacing="7" styleClass="surface, response-workspace" GridPane.columnIndex="1">
+            <HBox spacing="8" alignment="CENTER_LEFT" styleClass="section-header">
+                <Label text="最新响应" styleClass="section-title"/>
+                <Label fx:id="responseStatusLabel" text="等待响应"
+                       styleClass="status-badge, status-offline"/>
+                <Label fx:id="responseDurationLabel" text="-- ms" styleClass="response-duration"/>
+                <Pane HBox.hgrow="ALWAYS"/>
+                <Button fx:id="formatButton" text="格式化" onAction="#handleFormatButton"/>
+                <Button fx:id="copyResponseButton" text="复制" onAction="#handleCopyResponse"/>
+                <Button fx:id="saveResponseButton" text="保存" onAction="#handleSaveResponse"/>
+                <Button fx:id="clearResponseButton" text="清空" onAction="#handleClearResponse"/>
+            </HBox>
+            <TabPane tabClosingPolicy="UNAVAILABLE" styleClass="editor-tab-pane" VBox.vgrow="ALWAYS">
+                <tabs>
+                    <Tab text="正文">
+                        <TextArea fx:id="responseBodyArea" promptText="请求完成后在此显示响应正文"
+                                  wrapText="true" styleClass="code-area, response-area"/>
+                    </Tab>
+                    <Tab text="响应头">
+                        <TextArea fx:id="responseHeadersArea" promptText="暂无响应头"
+                                  styleClass="code-area, response-area"/>
+                    </Tab>
+                </tabs>
+            </TabPane>
+        </VBox>
+    </GridPane>
+
+    <LogViewer fx:id="logViewer" title="执行日志" promptText="等待请求"/>
 </VBox>

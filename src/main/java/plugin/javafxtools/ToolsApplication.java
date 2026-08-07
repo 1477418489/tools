@@ -1,12 +1,15 @@
 package plugin.javafxtools;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.stage.Stage;
 import plugin.javafxtools.controller.MainController;
+import plugin.javafxtools.service.SystemTrayService;
+import plugin.javafxtools.util.FxTheme;
 
 import java.net.URL;
 import java.util.Objects;
@@ -24,16 +27,14 @@ public class ToolsApplication extends Application {
      */
     private static final String ICON_PATH = "/favicon.png";
     /**
-     * 全局样式资源路径。
-     */
-    private static final String GLOBAL_STYLE_PATH = "/css/styles.css";
-
-    /**
      * 主界面控制器引用，用于应用关闭时释放子模块资源。
      */
     private MainController mainController;
+    private final SystemTrayService trayService = new SystemTrayService();
 
     private boolean resourcesCleaned;
+    private boolean exiting;
+    private boolean trayAvailable;
 
     /**
      * 初始化并展示 JavaFX 主舞台。
@@ -53,25 +54,41 @@ public class ToolsApplication extends Application {
             // 配置主舞台
             primaryStage.setTitle("FxTools");
             Scene scene = new Scene(root, 1240, 800);
-            URL styleUrl = getClass().getResource(GLOBAL_STYLE_PATH);
-            if (styleUrl != null) {
-                scene.getStylesheets().add(styleUrl.toExternalForm());
-            }
+            FxTheme.apply(scene);
             primaryStage.setScene(scene);
             primaryStage.setMinWidth(1040);
             primaryStage.setMinHeight(720);
             primaryStage.setResizable(true);
 
-            // 如果主控制器包含AppLauncherController，设置primaryStage
-            if (mainController != null && mainController.getAppLauncherController() != null) {
-                mainController.getAppLauncherController().setPrimaryStage(primaryStage);
-            }
+            mainController.setPrimaryStage(primaryStage);
             // 加载并设置应用图标（支持PNG/ICO等格式）
             URL iconUrl = getClass().getResource(ICON_PATH);
             if (iconUrl != null) {
                 primaryStage.getIcons().add(new Image(iconUrl.toExternalForm()));
             }
+            trayAvailable = trayService.initialize(iconUrl, primaryStage, this::requestExit);
+            mainController.setTrayAvailable(trayAvailable);
+            if (trayAvailable) {
+                Platform.setImplicitExit(false);
+            }
+            primaryStage.setOnCloseRequest(event -> {
+                if (exiting) {
+                    return;
+                }
+                event.consume();
+                if (trayAvailable && mainController.isCloseToTrayEnabled()) {
+                    primaryStage.hide();
+                    mainController.setApplicationVisible(false);
+                } else {
+                    requestExit();
+                }
+            });
+            primaryStage.showingProperty().addListener((observable, oldValue, showing) ->
+                    updateApplicationVisibility(primaryStage));
+            primaryStage.iconifiedProperty().addListener((observable, oldValue, iconified) ->
+                    updateApplicationVisibility(primaryStage));
             primaryStage.show();
+            updateApplicationVisibility(primaryStage);
 
         } catch (Exception e) {
             throw new RuntimeException("启动失败", e);
@@ -84,6 +101,7 @@ public class ToolsApplication extends Application {
     @Override
     public void stop() {
         cleanupResources();
+        trayService.close();
     }
 
     /**
@@ -94,6 +112,22 @@ public class ToolsApplication extends Application {
             resourcesCleaned = true;
             mainController.cleanup();
         }
+    }
+
+    private void updateApplicationVisibility(Stage stage) {
+        if (mainController != null) {
+            mainController.setApplicationVisible(stage.isShowing() && !stage.isIconified());
+        }
+    }
+
+    private void requestExit() {
+        if (exiting) {
+            return;
+        }
+        exiting = true;
+        cleanupResources();
+        trayService.close();
+        Platform.exit();
     }
 
     /**

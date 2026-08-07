@@ -18,6 +18,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.regex.Pattern;
 
@@ -52,6 +53,7 @@ public class HttpRequestService {
         List<String[]> customHeaders = parseHeaders(headers);
         String fullUrl = buildRequestUrl(urlStr, method, params);
         HttpURLConnection connection = null;
+        long startedAt = System.nanoTime();
 
         try {
             URL url = parseUrl(fullUrl);
@@ -65,9 +67,10 @@ public class HttpRequestService {
             writeRequestBodyIfNeeded(connection, method, params, customHeaders);
 
             int responseCode = connection.getResponseCode();
-            String headerLog = buildHeaderLog(responseCode, connection.getHeaderFields());
+            String responseHeaders = buildResponseHeaders(connection.getHeaderFields());
             String responseBody = readResponseBody(connection, responseCode);
-            return new HttpRequestResult(headerLog, responseBody);
+            long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
+            return new HttpRequestResult(responseCode, elapsedMillis, responseHeaders, responseBody);
         } finally {
             if (connection != null) {
                 connection.disconnect();
@@ -138,14 +141,14 @@ public class HttpRequestService {
         }
     }
 
-    private String buildHeaderLog(int responseCode, Map<String, List<String>> responseHeaders) {
-        StringBuilder headerLog = new StringBuilder("响应状态: " + responseCode + "\n");
+    private String buildResponseHeaders(Map<String, List<String>> responseHeaders) {
+        StringBuilder headerText = new StringBuilder();
         responseHeaders.forEach((key, value) -> {
             if (key != null) {
-                headerLog.append(key).append(": ").append(String.join("; ", value)).append("\n");
+                headerText.append(key).append(": ").append(String.join("; ", value)).append("\n");
             }
         });
-        return headerLog.toString();
+        return headerText.toString();
     }
 
     String readResponseBody(HttpURLConnection connection, int responseCode) throws IOException {

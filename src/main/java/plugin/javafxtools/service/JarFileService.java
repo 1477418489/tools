@@ -76,36 +76,67 @@ public class JarFileService {
      * @param project 项目配置
      * @param port 启动端口
      * @param profile Spring profile
-     * @return 启动包装进程
+     * @return 实际 Java 进程
      * @throws IOException 启动失败
      */
     public Process startJavaApplication(ProjectConfig project, int port, String profile) throws IOException {
-        List<String> command = new ArrayList<>();
-        command.add("cmd.exe");
-        command.add("/c");
-        command.add("start");
-        command.add("\"JAR_" + port + "\"");
-        command.add("cmd.exe");
-        command.add("/c");
-        command.add(buildJavaCommand(project, port, profile));
+        List<String> command = buildJavaArguments(project, port, profile);
 
         ProcessBuilder processBuilder = new ProcessBuilder(command);
-        Path jarPath = Paths.get(project.getTargetJar());
-        if (jarPath.getParent() != null) {
-            processBuilder.directory(jarPath.getParent().toFile());
+        Path jarPath = requiredPath(project.getTargetJar(), "目标JAR路径");
+        if (!Files.isRegularFile(jarPath)) {
+            throw new IOException("目标JAR文件不存在: " + jarPath);
         }
-
-        processBuilder.redirectInput(ProcessBuilder.Redirect.INHERIT);
-        processBuilder.redirectOutput(ProcessBuilder.Redirect.INHERIT);
-        processBuilder.redirectError(ProcessBuilder.Redirect.INHERIT);
+        Path workingDirectory = resolveTargetDirectory(project);
+        processBuilder.directory(workingDirectory.toFile());
+        Path outputLog = resolveOutputLog(project, port);
+        processBuilder.redirectInput(ProcessBuilder.Redirect.PIPE);
+        processBuilder.redirectOutput(ProcessBuilder.Redirect.appendTo(outputLog.toFile()));
+        processBuilder.redirectErrorStream(true);
 
         Map<String, String> env = processBuilder.environment();
         env.put("JAVA_TOOL_OPTIONS", "");
 
         Process process = processBuilder.start();
-        closeProcessStreams(process);
-        logger.accept("已启动独立进程，PID: " + process.pid() + "，启动指令: " + processBuilder.command());
+        process.getOutputStream().close();
+        logger.accept("JAR进程已启动，PID: " + process.pid() + "，输出日志: " + outputLog);
         return process;
+    }
+
+    /**
+     * 解析目标 JAR 所在目录。
+     *
+     * @param project 项目配置
+     * @return 目标目录
+     * @throws IOException 目标 JAR 路径无效
+     */
+    public Path resolveTargetDirectory(ProjectConfig project) throws IOException {
+        if (project == null) {
+            throw new IOException("项目配置不能为空");
+        }
+        Path targetJar = requiredPath(project.getTargetJar(), "目标JAR路径");
+        Path parent = targetJar.getParent();
+        if (parent == null) {
+            throw new IOException("目标JAR路径缺少父目录: " + targetJar);
+        }
+        return parent;
+    }
+
+    /**
+     * 解析指定启动端口对应的输出日志。
+     *
+     * @param project 项目配置
+     * @param port 启动端口
+     * @return 输出日志路径
+     * @throws IOException 项目路径或端口无效
+     */
+    public Path resolveOutputLog(ProjectConfig project, int port) throws IOException {
+        if (!JarPortProcessService.isValidPort(port)) {
+            throw new IOException("端口必须在 1 到 65535 之间");
+        }
+        return resolveTargetDirectory(project)
+                .resolve("jar-launcher-" + port + ".log")
+                .toAbsolutePath().normalize();
     }
 
     private void copyJarFile(Path source, Path target) throws IOException {
@@ -289,38 +320,64 @@ public class JarFileService {
         }
     }
 
-    private String buildJavaCommand(ProjectConfig project, int port, String profile) {
-        StringBuilder fullCommand = new StringBuilder();
-        fullCommand.append("chcp 65001 >nul && ");
-        fullCommand.append("java");
-        fullCommand.append(" -Dfile.encoding=UTF-8");
-        fullCommand.append(" -Dsun.stdout.encoding=UTF-8");
-        fullCommand.append(" -Dsun.stderr.encoding=UTF-8");
-
-        if (project.getJvmOpts() != null && !project.getJvmOpts().isEmpty()) {
-            fullCommand.append(" ").append(project.getJvmOpts());
-        }
-
-        fullCommand.append(" -jar \"").append(project.getTargetJar()).append("\"");
-        fullCommand.append(" --server.port=").append(port);
+    private List<String> buildJavaArguments(ProjectConfig project, int port, String profile)
+            throws IOException {
+        List<String> command = new ArrayList<>();
+        command.add("java");
+        command.add("-Dfile.encoding=UTF-8");
+        command.add("-Dsun.stdout.encoding=UTF-8");
+        command.add("-Dsun.stderr.encoding=UTF-8");
+        command.addAll(parseOptions(project.getJvmOpts()));
+        command.add("-jar");
+        command.add(requiredPath(project.getTargetJar(), "目标JAR路径").toString());
+        command.add("--server.port=" + port);
         if (profile != null && !profile.isBlank()) {
-            fullCommand.append(" --spring.profiles.active=").append(profile.trim());
+            command.add("--spring.profiles.active=" + profile.trim());
         }
-        String otherOpts = project.getOtherOpts();
-        if (otherOpts != null && !otherOpts.trim().isEmpty()) {
-            fullCommand.append(" ").append(otherOpts.trim());
-        }
-        return fullCommand.toString();
+        command.addAll(parseOptions(project.getOtherOpts()));
+        return command;
     }
 
-    private void closeProcessStreams(Process process) {
-        try {
-            Thread.sleep(100);
-            process.getOutputStream().close();
-            process.getInputStream().close();
-            process.getErrorStream().close();
-        } catch (Exception e) {
-            // Ignore stream close failures after starting a detached window.
+    static List<String> parseOptions(String text) throws IOException {
+        if (text == null || text.isBlank()) {
+            return List.of();
         }
+        List<String> arguments = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        char quote = 0;
+        boolean tokenStarted = false;
+        for (int i = 0; i < text.length(); i++) {
+            char character = text.charAt(i);
+            if (quote == 0 && Character.isWhitespace(character)) {
+                if (tokenStarted) {
+                    arguments.add(current.toString());
+                    current.setLength(0);
+                    tokenStarted = false;
+                }
+            } else if (character == '\'' || character == '"') {
+                if (quote == 0) {
+                    quote = character;
+                    tokenStarted = true;
+                } else if (quote == character) {
+                    quote = 0;
+                } else {
+                    current.append(character);
+                }
+            } else if (character == '\\' && i + 1 < text.length()
+                    && text.charAt(i + 1) == quote) {
+                current.append(text.charAt(++i));
+                tokenStarted = true;
+            } else {
+                current.append(character);
+                tokenStarted = true;
+            }
+        }
+        if (quote != 0) {
+            throw new IOException("启动参数包含未闭合的引号");
+        }
+        if (tokenStarted) {
+            arguments.add(current.toString());
+        }
+        return List.copyOf(arguments);
     }
 }

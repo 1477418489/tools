@@ -6,6 +6,7 @@ import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.stage.Stage;
 import plugin.javafxtools.base.BaseController;
+import plugin.javafxtools.control.LogViewer;
 import plugin.javafxtools.model.AppInfo;
 import plugin.javafxtools.model.AppProcessStatus;
 import plugin.javafxtools.service.AppLauncherExecutionService;
@@ -55,7 +56,7 @@ public class AppLauncherController extends BaseController {
     private Label appCountLabel;
 
     @FXML
-    private TextArea logArea;
+    private LogViewer logViewer;
 
     // 数据存储 - 使用线程安全的集合
     private final List<AppInfo> appInfos = Collections.synchronizedList(new ArrayList<>());
@@ -65,6 +66,7 @@ public class AppLauncherController extends BaseController {
     private volatile Stage primaryStage;
 
     private boolean launchOperationRunning;
+    private volatile boolean active;
 
     // 优化的状态检查执行器
     private final ScheduledExecutorService statusCheckExecutor =
@@ -128,7 +130,7 @@ public class AppLauncherController extends BaseController {
      */
     @Override
     public TextArea getLogArea() {
-        return logArea;
+        return logViewer == null ? null : logViewer.getTextArea();
     }
 
     /**
@@ -137,6 +139,7 @@ public class AppLauncherController extends BaseController {
     @Override
     public void cleanup() {
         lifecycleService.cleanup();
+        super.cleanup();
     }
 
     /**
@@ -144,12 +147,14 @@ public class AppLauncherController extends BaseController {
      */
     @FXML
     public void initialize() {
+        logViewer.setOnClear(this::handleClearLog);
+        logViewer.setPromptText("操作日志将显示在这里");
         disableListActionsUntilLoaded();
         appPathField.textProperty().addListener(
                 (observable, oldValue, newValue) -> updateActionButtonStates());
         // 优化的定期状态检查任务
         statusCheckExecutor.scheduleWithFixedDelay(() -> {
-            if (!appInfos.isEmpty()) {
+            if (active && !appInfos.isEmpty()) {
                 statusService.checkAllProcessStatus(
                         snapshotAppInfos(), PROCESS_STATUS_CACHE_TTL_MILLIS);
             }
@@ -162,14 +167,26 @@ public class AppLauncherController extends BaseController {
     }
 
     /**
+     * 控制自动状态轮询。手动刷新和运行操作不受影响。
+     *
+     * @param active 当前页签是否处于可见活动状态
+     */
+    public void setActive(boolean active) {
+        boolean becameActive = active && !this.active;
+        this.active = active;
+        if (becameActive && !appInfos.isEmpty() && !backgroundExecutor.isShutdown()) {
+            backgroundExecutor.submit(() -> statusService.checkAllProcessStatus(
+                    snapshotAppInfos(), 0));
+        }
+    }
+
+    /**
      * 初始化UI组件
      */
     private void initializeUI() {
         try {
             // 设置UI提示文本
             appPathField.setPromptText("输入应用程序路径或点击浏览...");
-            logArea.setPromptText("操作日志将显示在这里...");
-
             listViewSupport = new AppLauncherListViewSupport(this, appListView, processStatusCache,
                     () -> lastSelectedIndex, index -> lastSelectedIndex = index);
             listViewSupport.initialize();
@@ -316,7 +333,7 @@ public class AppLauncherController extends BaseController {
         appInfos.addAll(loadedAppInfos);
         updateAppList();
         info("已加载 " + appInfos.size() + " 个应用程序路径");
-        if (!loadedAppInfos.isEmpty()) {
+        if (active && !loadedAppInfos.isEmpty()) {
             statusService.checkAllProcessStatus(
                     loadedAppInfos, PROCESS_STATUS_CACHE_TTL_MILLIS);
         }

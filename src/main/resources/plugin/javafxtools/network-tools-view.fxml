@@ -5,7 +5,7 @@
 
 <VBox xmlns="http://javafx.com/javafx/23" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="plugin.javafxtools.controller.NetworkToolsController"
-      spacing="12" prefWidth="1000" prefHeight="700" styleClass="tool-page">
+      spacing="12" prefWidth="1000" prefHeight="700" styleClass="tool-page, accent-amber">
 
     <HBox alignment="CENTER_LEFT" styleClass="page-header">
         <Label text="网络查询" styleClass="page-title"/>

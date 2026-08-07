@@ -2,10 +2,11 @@
 
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
+<?import plugin.javafxtools.control.LogViewer?>
 
 <VBox xmlns="http://javafx.com/javafx/23" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="plugin.javafxtools.controller.AppLauncherController"
-      spacing="12" prefWidth="1000" prefHeight="700" styleClass="tool-page">
+      spacing="12" prefWidth="1000" prefHeight="700" styleClass="tool-page, accent-green">
 
     <HBox alignment="CENTER_LEFT" styleClass="page-header">
         <Label text="应用启动项" styleClass="page-title"/>
@@ -61,12 +62,5 @@
         </HBox>
     </VBox>
 
-    <VBox spacing="7" minHeight="120" prefHeight="165" styleClass="log-panel">
-        <HBox alignment="CENTER_LEFT" styleClass="section-header">
-            <Label text="执行日志" styleClass="section-title"/>
-            <Pane HBox.hgrow="ALWAYS"/>
-            <Button text="清空" onAction="#handleClearLog" styleClass="compact-button"/>
-        </HBox>
-        <TextArea fx:id="logArea" editable="false" VBox.vgrow="ALWAYS" styleClass="log-area"/>
-    </VBox>
+    <LogViewer fx:id="logViewer" title="执行日志" promptText="等待操作"/>
 </VBox>

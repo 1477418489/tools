@@ -11,16 +11,28 @@ import javafx.scene.control.TabPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextFormatter;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
 import javafx.scene.layout.Pane;
+import javafx.stage.FileChooser;
 import plugin.javafxtools.base.BaseController;
+import plugin.javafxtools.control.LogViewer;
 import plugin.javafxtools.model.HttpScheduleConfig;
+import plugin.javafxtools.model.HttpRequestResult;
 import plugin.javafxtools.model.HttpTemplate;
 import plugin.javafxtools.service.HttpRequestService;
 import plugin.javafxtools.service.HttpResponseFormatter;
 import plugin.javafxtools.service.HttpSchedulerService;
 import plugin.javafxtools.service.HttpTemplateStore;
+import plugin.javafxtools.util.FxTheme;
 import plugin.javafxtools.util.TimeUtils;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -30,6 +42,8 @@ import java.util.function.UnaryOperator;
  * HTTP 请求页签控制器，负责 FXML 事件入口、表单装配和服务联动。
  */
 public class HttpRequestController extends BaseController {
+    private static final DateTimeFormatter EXPORT_TIME_FORMAT =
+            DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
     @FXML
     private TextField startTimeField;
 
@@ -49,10 +63,13 @@ public class HttpRequestController extends BaseController {
     private TextArea headersArea;
 
     @FXML
-    private TextArea logArea;
+    private LogViewer logViewer;
 
     @FXML
     private Button startButton;
+
+    @FXML
+    private Button sendOnceButton;
 
     @FXML
     private Button stopButton;
@@ -62,6 +79,27 @@ public class HttpRequestController extends BaseController {
 
     @FXML
     private Button formatButton;
+
+    @FXML
+    private Button copyResponseButton;
+
+    @FXML
+    private Button saveResponseButton;
+
+    @FXML
+    private Button clearResponseButton;
+
+    @FXML
+    private Label responseStatusLabel;
+
+    @FXML
+    private Label responseDurationLabel;
+
+    @FXML
+    private TextArea responseBodyArea;
+
+    @FXML
+    private TextArea responseHeadersArea;
 
     @FXML
     private Label schedulerStatusLabel;
@@ -92,7 +130,7 @@ public class HttpRequestController extends BaseController {
     private final HttpResponseFormatter responseFormatter = new HttpResponseFormatter();
     private final HttpRequestService requestService = new HttpRequestService();
     private HttpSchedulerService schedulerService;
-    private volatile String lastRawResponseBody;
+    private String lastRawResponseBody;
 
     /**
      * 获取当前模块日志输出区域。
@@ -101,7 +139,7 @@ public class HttpRequestController extends BaseController {
      */
     @Override
     public TextArea getLogArea() {
-        return logArea;
+        return logViewer == null ? null : logViewer.getTextArea();
     }
 
     /**
@@ -109,10 +147,11 @@ public class HttpRequestController extends BaseController {
      */
     @FXML
     public void initialize() {
+        logViewer.setOnClear(this::handleClearLog);
         try {
-            schedulerService = new HttpSchedulerService(requestService, responseFormatter,
+            schedulerService = new HttpSchedulerService(requestService,
                     this::info, this::debug, this::error,
-                    this::acceptRawResponse,
+                    this::acceptResponse,
                     this::setRunningState, this::setStoppedState);
             setupInitialUi();
             loadTemplates();
@@ -144,10 +183,60 @@ public class HttpRequestController extends BaseController {
         }
         String formatted = responseFormatter.tryPrettyJson(lastRawResponseBody);
         if (formatted != null) {
-            log("INFO", "[美化后内容]\n" + formatted);
+            responseBodyArea.setText(formatted);
+            info("响应正文已格式化");
         } else {
             info("不是合法的JSON，无法美化");
         }
+    }
+
+    @FXML
+    private void handleCopyResponse() {
+        String text = responseBodyArea.getText();
+        if (text == null || text.isEmpty()) {
+            return;
+        }
+        ClipboardContent content = new ClipboardContent();
+        content.putString(text);
+        Clipboard.getSystemClipboard().setContent(content);
+        info("响应正文已复制");
+    }
+
+    @FXML
+    private void handleSaveResponse() {
+        String text = responseBodyArea.getText();
+        if (text == null || text.isEmpty()) {
+            return;
+        }
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("保存 HTTP 响应");
+        chooser.setInitialFileName("http-response-"
+                + EXPORT_TIME_FORMAT.format(LocalDateTime.now()) + ".txt");
+        chooser.getExtensionFilters().add(
+                new FileChooser.ExtensionFilter("文本文件 (*.txt)", "*.txt"));
+        File target = chooser.showSaveDialog(responseBodyArea.getScene().getWindow());
+        if (target == null) {
+            return;
+        }
+        try {
+            Files.writeString(target.toPath(), text, StandardCharsets.UTF_8);
+            info("响应正文已保存: " + target.getAbsolutePath());
+        } catch (IOException e) {
+            error("保存响应失败: " + e.getMessage());
+        }
+    }
+
+    @FXML
+    private void handleClearResponse() {
+        lastRawResponseBody = null;
+        responseBodyArea.clear();
+        responseHeadersArea.clear();
+        responseStatusLabel.setText("等待响应");
+        responseDurationLabel.setText("-- ms");
+        responseStatusLabel.getStyleClass().removeAll(
+                "status-online", "status-busy", "status-error");
+        responseStatusLabel.getStyleClass().add("status-offline");
+        updateResponseActions();
     }
 
     /**
@@ -224,12 +313,20 @@ public class HttpRequestController extends BaseController {
     }
 
     /**
+     * 立即发送一次当前请求。
+     */
+    @FXML
+    private void handleSendOnceButton() {
+        schedulerService.executeOnce(buildScheduleConfig());
+    }
+
+    /**
      * 停止调度按钮。
      */
     @FXML
     private void handleStopButton() {
         schedulerService.stop();
-        info("调度器已停止");
+        info("请求任务已停止");
     }
 
     /**
@@ -240,11 +337,17 @@ public class HttpRequestController extends BaseController {
             schedulerService.stop();
         }
         info("HTTP请求模块资源已清理");
+        super.cleanup();
     }
 
     private void setupInitialUi() {
         stopButton.setDisable(true);
         formatButton.setDisable(true);
+        copyResponseButton.setDisable(true);
+        saveResponseButton.setDisable(true);
+        clearResponseButton.setDisable(true);
+        responseBodyArea.setEditable(false);
+        responseHeadersArea.setEditable(false);
         methodComboBox.getItems().addAll("GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS");
         methodComboBox.setValue("GET");
         responseFormatComboBox.getItems().addAll("Auto", "Pretty JSON", "Raw");
@@ -253,8 +356,8 @@ public class HttpRequestController extends BaseController {
         intervalField.setText("10");
         connectTimeoutField.setText("5000");
         readTimeoutField.setText("10000");
-        paramsArea.setPromptText("GET参数示例: userId=1&id=2\nPOST参数示例: {\"title\":\"foo\",\"body\":\"bar\",\"userId\":1}");
-        headersArea.setPromptText("自定义Header，每行一个，例如：\nContent-Type: application/json\nAuthorization: Bearer ...");
+        paramsArea.setPromptText("输入查询参数或请求体");
+        headersArea.setPromptText("每行一个请求头，例如 Content-Type: application/json");
         intervalField.setTextFormatter(digitsOnlyFormatter());
         connectTimeoutField.setTextFormatter(digitsOnlyFormatter());
         readTimeoutField.setTextFormatter(digitsOnlyFormatter());
@@ -328,6 +431,7 @@ public class HttpRequestController extends BaseController {
 
     private void setRunningState() {
         startButton.setDisable(true);
+        sendOnceButton.setDisable(true);
         stopButton.setDisable(false);
         setConfigurationDisabled(true);
         updateSchedulerStatus(true);
@@ -335,6 +439,7 @@ public class HttpRequestController extends BaseController {
 
     private void setStoppedState() {
         startButton.setDisable(false);
+        sendOnceButton.setDisable(false);
         stopButton.setDisable(true);
         setConfigurationDisabled(false);
         updateSchedulerStatus(false);
@@ -345,23 +450,28 @@ public class HttpRequestController extends BaseController {
         return value == null ? "" : value.trim();
     }
 
-    /**
-     * 清空响应区时同步清除最近响应，避免对已不可见内容继续操作。
-     */
-    @FXML
-    @Override
-    public void handleClearLog() {
-        super.handleClearLog();
-        lastRawResponseBody = null;
-        formatButton.setDisable(true);
+    private void acceptResponse(HttpRequestResult result) {
+        lastRawResponseBody = result.rawBody();
+        String displayBody = responseFormatter.formatForPreview(
+                result.rawBody(), responseFormatComboBox.getValue());
+        responseBodyArea.setText(displayBody == null || displayBody.isEmpty()
+                ? "[响应体为空]" : displayBody);
+        responseHeadersArea.setText(result.responseHeaders());
+        responseStatusLabel.setText("HTTP " + result.statusCode());
+        responseDurationLabel.setText(result.elapsedMillis() + " ms");
+        responseStatusLabel.getStyleClass().removeAll(
+                "status-offline", "status-online", "status-busy", "status-error");
+        responseStatusLabel.getStyleClass().add(result.statusCode() >= 400
+                ? "status-error" : "status-online");
+        updateResponseActions();
     }
 
-    private void acceptRawResponse(String rawBody) {
-        lastRawResponseBody = rawBody;
-        Platform.runLater(() -> {
-            String currentBody = lastRawResponseBody;
-            formatButton.setDisable(currentBody == null || currentBody.isBlank());
-        });
+    private void updateResponseActions() {
+        boolean empty = lastRawResponseBody == null || lastRawResponseBody.isEmpty();
+        formatButton.setDisable(empty);
+        copyResponseButton.setDisable(empty);
+        saveResponseButton.setDisable(empty);
+        clearResponseButton.setDisable(lastRawResponseBody == null);
     }
 
     private void setConfigurationDisabled(boolean disabled) {
@@ -387,6 +497,7 @@ public class HttpRequestController extends BaseController {
     private boolean confirmTemplateOverwrite(String templateName) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
                 "模板 \"" + templateName + "\" 已存在，是否覆盖？", ButtonType.OK, ButtonType.CANCEL);
+        FxTheme.apply(alert);
         alert.setTitle("覆盖模板");
         alert.setHeaderText(null);
         Optional<ButtonType> result = alert.showAndWait();
@@ -396,6 +507,7 @@ public class HttpRequestController extends BaseController {
     private boolean confirmTemplateDelete(String templateName) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
                 "确定删除模板 \"" + templateName + "\"？", ButtonType.OK, ButtonType.CANCEL);
+        FxTheme.apply(alert);
         alert.setTitle("删除模板");
         alert.setHeaderText(null);
         Optional<ButtonType> result = alert.showAndWait();

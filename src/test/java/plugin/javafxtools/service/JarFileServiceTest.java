@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -51,6 +52,52 @@ class JarFileServiceTest {
 
         assertTrue(Files.exists(sentinel));
         assertFalse(Files.exists(targetJar));
+    }
+
+    @Test
+    void launchOptionsPreserveQuotedValuesAsSingleArguments() throws Exception {
+        assertEquals(List.of("-Xmx512m", "-Dservice.name=demo app", "--flag"),
+                JarFileService.parseOptions(
+                        "-Xmx512m -Dservice.name=\"demo app\" --flag"));
+    }
+
+    @Test
+    void launchOptionsRejectUnclosedQuotes() {
+        assertThrows(IOException.class,
+                () -> JarFileService.parseOptions("-Dname=\"unfinished"));
+    }
+
+    @Test
+    void launchRejectsMissingTargetJarBeforeCreatingAProcess() {
+        ProjectConfig project = new ProjectConfig();
+        project.setTargetJar(tempDirectory.resolve("missing.jar").toString());
+
+        assertThrows(IOException.class,
+                () -> new JarFileService(_ -> { })
+                        .startJavaApplication(project, 18080, "default"));
+    }
+
+    @Test
+    void resolvesTargetDirectoryAndPortSpecificLogConsistently() throws Exception {
+        Path targetJar = tempDirectory.resolve("deploy").resolve("app.jar");
+        ProjectConfig project = new ProjectConfig();
+        project.setTargetJar(targetJar.toString());
+        JarFileService service = new JarFileService(_ -> { });
+
+        assertEquals(targetJar.getParent().toAbsolutePath().normalize(),
+                service.resolveTargetDirectory(project));
+        assertEquals(targetJar.getParent().resolve("jar-launcher-18080.log")
+                        .toAbsolutePath().normalize(),
+                service.resolveOutputLog(project, 18080));
+    }
+
+    @Test
+    void outputLogRejectsInvalidPort() {
+        ProjectConfig project = new ProjectConfig();
+        project.setTargetJar(tempDirectory.resolve("app.jar").toString());
+
+        assertThrows(IOException.class,
+                () -> new JarFileService(_ -> { }).resolveOutputLog(project, 0));
     }
 
     private ProjectConfig project(Path sourceJar, Path targetJar) {

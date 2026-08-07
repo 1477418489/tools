@@ -2,10 +2,11 @@
 
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
+<?import plugin.javafxtools.control.LogViewer?>
 
 <VBox xmlns="http://javafx.com/javafx/23" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="plugin.javafxtools.controller.KeepAliveManagerController"
-      spacing="12" prefWidth="1000" prefHeight="700" styleClass="tool-page">
+      spacing="12" prefWidth="1000" prefHeight="700" styleClass="tool-page, accent-amber">
 
     <HBox alignment="CENTER_LEFT" styleClass="page-header">
         <Label text="域名保活" styleClass="page-title"/>
@@ -72,17 +73,7 @@
         </items>
     </SplitPane>
 
-    <TitledPane text="执行日志" expanded="false" animated="false" styleClass="system-log-pane">
-        <content>
-            <VBox spacing="6">
-                <HBox alignment="CENTER_RIGHT">
-                    <Button text="清空" onAction="#handleClearLogs" styleClass="compact-button"/>
-                </HBox>
-                <TextArea fx:id="logArea" promptText="等待操作" wrapText="true"
-                          editable="false" prefHeight="120" styleClass="log-area"/>
-            </VBox>
-        </content>
-    </TitledPane>
+    <LogViewer fx:id="logViewer" title="执行日志" promptText="等待操作" wrapText="true"/>
 
     <HBox spacing="10" alignment="CENTER_LEFT" styleClass="status-bar">
         <Label fx:id="statusLabel" text="就绪" styleClass="status-text"/>

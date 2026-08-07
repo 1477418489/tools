@@ -7,7 +7,6 @@ import plugin.javafxtools.util.HttpUrlSupport;
 import plugin.javafxtools.util.TimeUtils;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.Set;
 import java.util.concurrent.Future;
@@ -25,11 +24,10 @@ public class HttpSchedulerService {
     private static final Set<String> SUPPORTED_METHODS = Set.of(
             "GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS");
     private final HttpRequestService requestService;
-    private final HttpResponseFormatter responseFormatter;
     private final Consumer<String> infoLogger;
     private final Consumer<String> debugLogger;
     private final Consumer<String> errorLogger;
-    private final Consumer<String> rawResponseConsumer;
+    private final Consumer<HttpRequestResult> responseConsumer;
     private final Runnable runningStateSetter;
     private final Runnable stoppedStateSetter;
     private final Consumer<Runnable> uiDispatcher;
@@ -43,24 +41,22 @@ public class HttpSchedulerService {
      * 创建 HTTP 定时调度服务。
      *
      * @param requestService HTTP 请求服务
-     * @param responseFormatter 响应格式化服务
      * @param infoLogger 信息日志回调
      * @param debugLogger 调试日志回调
      * @param errorLogger 错误日志回调
-     * @param rawResponseConsumer 最新响应体回调
+     * @param responseConsumer 最新响应回调
      * @param runningStateSetter 进入运行状态的 UI 回调
      * @param stoppedStateSetter 进入停止状态的 UI 回调
      */
     public HttpSchedulerService(HttpRequestService requestService,
-                                HttpResponseFormatter responseFormatter,
                                 Consumer<String> infoLogger,
                                 Consumer<String> debugLogger,
                                 Consumer<String> errorLogger,
-                                Consumer<String> rawResponseConsumer,
+                                Consumer<HttpRequestResult> responseConsumer,
                                 Runnable runningStateSetter,
                                 Runnable stoppedStateSetter) {
-        this(requestService, responseFormatter, infoLogger, debugLogger, errorLogger,
-                rawResponseConsumer, runningStateSetter, stoppedStateSetter,
+        this(requestService, infoLogger, debugLogger, errorLogger,
+                responseConsumer, runningStateSetter, stoppedStateSetter,
                 action -> {
                     if (Platform.isFxApplicationThread()) {
                         action.run();
@@ -71,20 +67,18 @@ public class HttpSchedulerService {
     }
 
     HttpSchedulerService(HttpRequestService requestService,
-                         HttpResponseFormatter responseFormatter,
                          Consumer<String> infoLogger,
                          Consumer<String> debugLogger,
                          Consumer<String> errorLogger,
-                         Consumer<String> rawResponseConsumer,
+                         Consumer<HttpRequestResult> responseConsumer,
                          Runnable runningStateSetter,
                          Runnable stoppedStateSetter,
                          Consumer<Runnable> uiDispatcher) {
         this.requestService = requestService;
-        this.responseFormatter = responseFormatter;
         this.infoLogger = infoLogger;
         this.debugLogger = debugLogger;
         this.errorLogger = errorLogger;
-        this.rawResponseConsumer = rawResponseConsumer;
+        this.responseConsumer = responseConsumer;
         this.runningStateSetter = runningStateSetter;
         this.stoppedStateSetter = stoppedStateSetter;
         this.uiDispatcher = uiDispatcher;
@@ -106,12 +100,8 @@ public class HttpSchedulerService {
             errorLogger.accept("请填写所有必填字段（开始时间、间隔、URL、请求方法）");
             return;
         }
-        if (!HttpUrlSupport.isValid(config.url())) {
-            errorLogger.accept("请输入有效的 HTTP 或 HTTPS 请求地址");
-            return;
-        }
-        if (!SUPPORTED_METHODS.contains(config.method())) {
-            errorLogger.accept("不支持的 HTTP 请求方法: " + config.method());
+        RequestSettings requestSettings = validateRequest(config);
+        if (requestSettings == null) {
             return;
         }
 
@@ -141,29 +131,42 @@ public class HttpSchedulerService {
                 delay = 0;
             }
 
-            Integer connectTimeout = parsePositiveIntOrDefault(
-                    config.connectTimeoutText(), 5000, "连接超时");
-            Integer readTimeout = parsePositiveIntOrDefault(
-                    config.readTimeoutText(), 10000, "读取超时");
-            if (connectTimeout == null || readTimeout == null) {
-                return;
-            }
-            scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-                Thread t = new Thread(r, "HttpRequest-Scheduler");
-                t.setDaemon(true);
-                return t;
-            });
-            running = true;
-            long currentRunVersion = ++runVersion;
+            long currentRunVersion = beginExecution("HttpRequest-Scheduler");
 
             Runnable task = () -> runRequestTask(
-                    currentRunVersion, config, connectTimeout, readTimeout);
+                    currentRunVersion, config, requestSettings, false);
             currentTaskFuture = scheduler.scheduleWithFixedDelay(task, delay, interval, TimeUnit.MILLISECONDS);
-            uiDispatcher.accept(runningStateSetter);
             infoLogger.accept(String.format("调度器已启动，将在 %s 开始执行，间隔 %d 秒",
                     TimeUtils.formatDateTime(startTime, TimeUtils.DEFAULT_DATETIME_FORMAT), interval / 1000));
         } catch (Exception e) {
             errorLogger.accept("启动调度器失败: " + e.getMessage());
+            stop();
+        }
+    }
+
+    /**
+     * 立即执行一次请求，不创建重复调度。
+     *
+     * @param config 请求配置；开始时间和间隔可留空
+     */
+    public synchronized void executeOnce(HttpScheduleConfig config) {
+        if (running) {
+            infoLogger.accept("已有请求任务正在运行");
+            return;
+        }
+
+        RequestSettings requestSettings = validateRequest(config);
+        if (requestSettings == null) {
+            return;
+        }
+
+        try {
+            long currentRunVersion = beginExecution("HttpRequest-OneShot");
+            currentTaskFuture = scheduler.submit(() -> runRequestTask(
+                    currentRunVersion, config, requestSettings, true));
+            infoLogger.accept("已提交单次请求");
+        } catch (RuntimeException e) {
+            errorLogger.accept("发送单次请求失败: " + e.getMessage());
             stop();
         }
     }
@@ -197,45 +200,107 @@ public class HttpSchedulerService {
 
     private void runRequestTask(long expectedRunVersion,
                                 HttpScheduleConfig config,
-                                int connectTimeout,
-                                int readTimeout) {
+                                RequestSettings requestSettings,
+                                boolean stopAfterCompletion) {
         if (!publishIfCurrent(expectedRunVersion,
                 () -> infoLogger.accept("准备发送 " + config.method() + " 请求到: " + config.url()))) {
             return;
         }
 
         try {
-            if (Arrays.asList("POST", "PUT", "PATCH").contains(config.method())) {
-                if (!publishIfCurrent(expectedRunVersion,
-                        () -> infoLogger.accept("请求体: " + config.params()))) {
-                    return;
-                }
-            }
-
             HttpRequestResult result = requestService.sendRequest(
                     config.url(),
                     config.method(),
                     config.params(),
                     config.headers(),
-                    connectTimeout,
-                    readTimeout
+                    requestSettings.connectTimeout(),
+                    requestSettings.readTimeout()
             );
-            String displayResponse = responseFormatter.formatForPreview(result.rawBody(), config.responseFormat());
-            publishIfCurrent(expectedRunVersion, () -> {
-                rawResponseConsumer.accept(result.rawBody());
-                String responseSection = displayResponse == null || displayResponse.isBlank()
-                        ? "\n[响应体为空]"
-                        : "\n[响应体]\n" + displayResponse;
-                infoLogger.accept("请求完成：\n" + result.logContent().stripTrailing()
-                        + responseSection);
+            publishOnUiIfCurrent(expectedRunVersion, () -> {
+                try {
+                    infoLogger.accept("请求完成: HTTP " + result.statusCode()
+                            + "，耗时 " + result.elapsedMillis() + " ms");
+                    responseConsumer.accept(result);
+                } finally {
+                    if (stopAfterCompletion) {
+                        finishOneShot(expectedRunVersion);
+                    }
+                }
             });
         } catch (IOException e) {
-            publishIfCurrent(expectedRunVersion,
-                    () -> errorLogger.accept("请求失败: " + e.getMessage()));
+            publishFailure(expectedRunVersion, "请求失败: " + e.getMessage(), stopAfterCompletion);
         } catch (Exception e) {
-            publishIfCurrent(expectedRunVersion, () -> errorLogger.accept(
-                    "意外错误: " + e.getClass().getSimpleName() + ": " + e.getMessage()));
+            publishFailure(expectedRunVersion,
+                    "意外错误: " + e.getClass().getSimpleName() + ": " + e.getMessage(),
+                    stopAfterCompletion);
         }
+    }
+
+    private synchronized long beginExecution(String threadName) {
+        scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread thread = new Thread(r, threadName);
+            thread.setDaemon(true);
+            return thread;
+        });
+        running = true;
+        long currentRunVersion = ++runVersion;
+        uiDispatcher.accept(runningStateSetter);
+        return currentRunVersion;
+    }
+
+    private RequestSettings validateRequest(HttpScheduleConfig config) {
+        if (config == null || isBlank(config.url()) || isBlank(config.method())) {
+            errorLogger.accept("请填写 URL 和请求方法");
+            return null;
+        }
+        if (!HttpUrlSupport.isValid(config.url())) {
+            errorLogger.accept("请输入有效的 HTTP 或 HTTPS 请求地址");
+            return null;
+        }
+        if (!SUPPORTED_METHODS.contains(config.method())) {
+            errorLogger.accept("不支持的 HTTP 请求方法: " + config.method());
+            return null;
+        }
+        Integer connectTimeout = parsePositiveIntOrDefault(
+                config.connectTimeoutText(), 5000, "连接超时");
+        Integer readTimeout = parsePositiveIntOrDefault(
+                config.readTimeoutText(), 10000, "读取超时");
+        return connectTimeout == null || readTimeout == null
+                ? null : new RequestSettings(connectTimeout, readTimeout);
+    }
+
+    private void publishFailure(long expectedRunVersion,
+                                String message,
+                                boolean stopAfterCompletion) {
+        if (!stopAfterCompletion) {
+            publishIfCurrent(expectedRunVersion, () -> errorLogger.accept(message));
+            return;
+        }
+        publishOnUiIfCurrent(expectedRunVersion, () -> {
+            try {
+                errorLogger.accept(message);
+            } finally {
+                finishOneShot(expectedRunVersion);
+            }
+        });
+    }
+
+    private void finishOneShot(long expectedRunVersion) {
+        ScheduledExecutorService schedulerToStop;
+        synchronized (this) {
+            if (!running || runVersion != expectedRunVersion) {
+                return;
+            }
+            running = false;
+            runVersion++;
+            currentTaskFuture = null;
+            schedulerToStop = scheduler;
+            scheduler = null;
+        }
+        if (schedulerToStop != null) {
+            schedulerToStop.shutdown();
+        }
+        stoppedStateSetter.run();
     }
 
     private synchronized boolean publishIfCurrent(long expectedRunVersion, Runnable action) {
@@ -243,6 +308,16 @@ public class HttpSchedulerService {
             return false;
         }
         action.run();
+        return true;
+    }
+
+    private boolean publishOnUiIfCurrent(long expectedRunVersion, Runnable action) {
+        synchronized (this) {
+            if (!running || runVersion != expectedRunVersion) {
+                return false;
+            }
+        }
+        uiDispatcher.accept(() -> publishIfCurrent(expectedRunVersion, action));
         return true;
     }
 
@@ -264,5 +339,8 @@ public class HttpSchedulerService {
 
     private boolean isBlank(String text) {
         return text == null || text.trim().isEmpty();
+    }
+
+    private record RequestSettings(int connectTimeout, int readTimeout) {
     }
 }

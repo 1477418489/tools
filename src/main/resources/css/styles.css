@@ -30,6 +30,19 @@
     -fx-text-fill: #111827;
 }
 
+.settings-menu-button {
+    -fx-min-height: 32px;
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-text-fill: #344054;
+}
+
+.settings-menu-button:hover,
+.settings-menu-button:showing {
+    -fx-background-color: #f2f4f7;
+    -fx-background-radius: 5;
+}
+
 .tool-page {
     -fx-background-color: #f4f6f8;
     -fx-padding: 18 20 20 20;
@@ -136,8 +149,7 @@
 .content-card,
 .card,
 .toolbar-card,
-.toolbar,
-.log-panel {
+.toolbar {
     -fx-background-color: #ffffff;
     -fx-background-radius: 7;
     -fx-border-color: #e0e5ec;
@@ -154,10 +166,6 @@
 .toolbar {
     -fx-padding: 10 12;
     -fx-background-color: #ffffff;
-}
-
-.log-panel {
-    -fx-padding: 10 12 12 12;
 }
 
 .section-header {
@@ -212,6 +220,23 @@
     -fx-background-color: #ecfdf3;
     -fx-border-color: #abefc6;
     -fx-text-fill: #067647;
+}
+
+.status-error {
+    -fx-background-color: #fef3f2;
+    -fx-border-color: #fecdca;
+    -fx-text-fill: #b42318;
+}
+
+.response-duration {
+    -fx-font-family: "Cascadia Mono", "Consolas", monospace;
+    -fx-font-size: 12px;
+    -fx-font-weight: 700;
+    -fx-text-fill: #475467;
+}
+
+.response-area .content {
+    -fx-background-color: #f8fafc;
 }
 
 .empty-state {
@@ -434,15 +459,13 @@
 }
 
 .code-area,
-.log-area,
-.log-text-area {
+.log-area {
     -fx-font-family: "Cascadia Mono", "Consolas", "Courier New", monospace;
     -fx-font-size: 12px;
     -fx-text-fill: #253247;
 }
 
-.log-area .content,
-.log-text-area .content {
+.log-area .content {
     -fx-background-color: #f8fafc;
 }
 
@@ -470,6 +493,78 @@
 .list-item-meta {
     -fx-font-size: 11px;
     -fx-text-fill: #667085;
+}
+
+.jar-launcher-workspace {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.jar-project-list .list-cell {
+    -fx-padding: 9 10;
+}
+
+.jar-project-row {
+    -fx-min-height: 42px;
+    -fx-alignment: center-left;
+}
+
+.jar-project-status-dot {
+    -fx-min-width: 9px;
+    -fx-pref-width: 9px;
+    -fx-max-width: 9px;
+    -fx-min-height: 9px;
+    -fx-pref-height: 9px;
+    -fx-max-height: 9px;
+    -fx-background-radius: 5px;
+}
+
+.jar-project-status {
+    -fx-font-size: 11px;
+    -fx-font-weight: 700;
+}
+
+.project-status-running .jar-project-status-dot {
+    -fx-background-color: #12b76a;
+}
+
+.project-status-running .jar-project-status {
+    -fx-text-fill: #067647;
+}
+
+.project-status-checking .jar-project-status-dot {
+    -fx-background-color: #f79009;
+}
+
+.project-status-checking .jar-project-status {
+    -fx-text-fill: #b54708;
+}
+
+.project-status-error .jar-project-status-dot {
+    -fx-background-color: #d92d20;
+}
+
+.project-status-conflict .jar-project-status-dot {
+    -fx-background-color: #f04438;
+}
+
+.project-status-conflict .jar-project-status,
+.project-status-error .jar-project-status {
+    -fx-text-fill: #b42318;
+}
+
+.project-status-stopped .jar-project-status-dot,
+.project-status-unknown .jar-project-status-dot {
+    -fx-background-color: #98a2b3;
+}
+
+.project-status-stopped .jar-project-status,
+.project-status-unknown .jar-project-status {
+    -fx-text-fill: #667085;
+}
+
+.jar-project-list .list-cell:filled:selected .list-item-title {
+    -fx-text-fill: #1849a9;
 }
 
 .list-view .list-cell:filled:hover {
@@ -569,38 +664,132 @@
     -fx-border-color: #d8dee8;
 }
 
-.system-log-pane {
-    -fx-background-color: transparent;
-}
-
-.system-log-pane > .title {
+/* ===== Unified log viewer ===== */
+.log-viewer {
     -fx-background-color: #ffffff;
-    -fx-background-radius: 5;
+    -fx-background-radius: 7;
     -fx-border-color: #d8dee8;
-    -fx-border-radius: 5;
-    -fx-padding: 8 11;
+    -fx-border-radius: 7;
+    -fx-border-width: 1;
+    -fx-spacing: 0;
 }
 
-.system-log-pane:expanded > .title {
-    -fx-background-radius: 5 5 0 0;
-    -fx-border-radius: 5 5 0 0;
+.log-viewer-header {
+    -fx-min-height: 44px;
+    -fx-pref-height: 44px;
+    -fx-background-color: #f8fafc;
+    -fx-background-radius: 7;
+    -fx-padding: 5 8;
 }
 
-.system-log-pane > .content {
-    -fx-background-color: #111827;
-    -fx-border-color: #d8dee8;
-    -fx-border-radius: 0 0 5 5;
-    -fx-padding: 8;
+.log-viewer-inline .log-viewer-header {
+    -fx-background-radius: 7 7 0 0;
 }
 
-.system-log-pane .log-area {
-    -fx-border-color: transparent;
-    -fx-text-fill: #dbe7f5;
+.log-viewer-title {
+    -fx-font-size: 13px;
+    -fx-font-weight: 700;
+    -fx-text-fill: #182230;
+    -fx-cursor: hand;
 }
 
-.system-log-pane .log-area .content {
-    -fx-background-color: #111827;
-    -fx-background-radius: 0 0 5 5;
+.log-viewer-meta,
+.log-viewer-match {
+    -fx-font-size: 11px;
+    -fx-text-fill: #667085;
+}
+
+.log-viewer-meta {
+    -fx-cursor: hand;
+}
+
+.log-viewer-inline .log-viewer-title,
+.log-viewer-inline .log-viewer-meta {
+    -fx-cursor: default;
+}
+
+.log-viewer .check-box {
+    -fx-text-fill: #475467;
+    -fx-font-size: 11px;
+}
+
+.log-viewer-content {
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 0 0 7 7;
+}
+
+.log-viewer-searchbar {
+    -fx-min-height: 46px;
+    -fx-background-color: #ffffff;
+    -fx-border-color: #e4e7ec transparent transparent transparent;
+    -fx-border-width: 1 0 0 0;
+    -fx-padding: 7 8;
+}
+
+.log-viewer .log-search-field {
+    -fx-min-height: 32px;
+    -fx-pref-height: 32px;
+    -fx-background-color: #f8fafc;
+    -fx-border-color: #cbd3df;
+    -fx-text-fill: #253247;
+    -fx-prompt-text-fill: #98a2b3;
+    -fx-padding: 5 9;
+}
+
+.log-viewer .log-search-field:focused {
+    -fx-border-color: #2161d1;
+    -fx-effect: none;
+}
+
+.log-viewer .log-command-button,
+.log-viewer .log-icon-button {
+    -fx-min-height: 32px;
+    -fx-pref-height: 32px;
+    -fx-background-color: #ffffff;
+    -fx-border-color: #cbd3df;
+    -fx-text-fill: #344054;
+    -fx-font-size: 11px;
+    -fx-padding: 4 9;
+}
+
+.log-viewer .log-command-button:hover,
+.log-viewer .log-icon-button:hover {
+    -fx-background-color: #f2f4f7;
+    -fx-border-color: #aeb8c6;
+}
+
+.log-viewer .log-icon-button,
+.log-viewer .log-nav-button,
+.log-viewer .log-font-button {
+    -fx-min-width: 32px;
+    -fx-pref-width: 32px;
+    -fx-max-width: 32px;
+    -fx-padding: 0;
+    -fx-font-family: "Segoe UI Symbol", "Microsoft YaHei UI", sans-serif;
+    -fx-font-size: 14px;
+}
+
+.log-viewer .text-area,
+.log-viewer .log-area {
+    -fx-background-color: #fbfcfe;
+    -fx-background-radius: 0 0 7 7;
+    -fx-border-color: #e4e7ec transparent transparent transparent;
+    -fx-border-width: 1 0 0 0;
+    -fx-border-radius: 0 0 7 7;
+    -fx-text-fill: #253247;
+    -fx-highlight-fill: #2161d1;
+    -fx-highlight-text-fill: #ffffff;
+}
+
+.log-viewer .text-area .content,
+.log-viewer .log-area .content {
+    -fx-background-color: #fbfcfe;
+    -fx-background-radius: 0 0 7 7;
+    -fx-padding: 11;
+}
+
+.detached-log-shell {
+    -fx-background-color: #f4f6f8;
 }
 
 .progress-bar {

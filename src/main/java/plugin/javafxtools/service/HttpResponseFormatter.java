@@ -5,12 +5,11 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParser;
 
 /**
- * HTTP 响应体格式化和日志长度控制。
+ * HTTP 响应体格式化。
  *
  * @author wwj
  */
 public class HttpResponseFormatter {
-    private static final int MAX_RESPONSE_LOG_CHARS = 20_000;
     private static final Gson PRETTY_GSON = new GsonBuilder().setPrettyPrinting().create();
 
     /**
@@ -29,20 +28,7 @@ public class HttpResponseFormatter {
                 displayBody = pretty;
             }
         }
-        return limitForLog(displayBody);
-    }
-
-    /**
-     * 限制写入日志的响应体大小。
-     *
-     * @param text 原始响应体
-     * @return 限制后的响应体
-     */
-    public String limitForLog(String text) {
-        if (text == null || text.length() <= MAX_RESPONSE_LOG_CHARS) {
-            return text;
-        }
-        return text.substring(0, MAX_RESPONSE_LOG_CHARS) + "\n[日志展示内容过大，已截断]";
+        return displayBody;
     }
 
     /**

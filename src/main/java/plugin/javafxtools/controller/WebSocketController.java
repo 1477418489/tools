@@ -9,6 +9,7 @@ import javafx.scene.control.TextField;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 import plugin.javafxtools.base.BaseController;
+import plugin.javafxtools.control.LogViewer;
 import plugin.javafxtools.util.LogTextTrimmer;
 
 import java.net.URI;
@@ -52,8 +53,10 @@ public class WebSocketController extends BaseController {
     /**
      * 消息记录和模块日志输出区。
      */
-    @FXML
     private TextArea wsMessageArea;
+
+    @FXML
+    private LogViewer wsMessageViewer;
 
     /**
      * 待发送消息输入框。
@@ -66,12 +69,6 @@ public class WebSocketController extends BaseController {
      */
     @FXML
     private Button wsSendButton;
-
-    /**
-     * 清空消息记录按钮。
-     */
-    @FXML
-    private Button wsClearButton;
 
     @FXML
     private Label wsStatusLabel;
@@ -109,9 +106,9 @@ public class WebSocketController extends BaseController {
      */
     @FXML
     public void initialize() {
+        wsMessageArea = wsMessageViewer.getTextArea();
+        wsMessageViewer.setOnClear(this::handleWsClear);
         disposed = false;
-        wsMessageArea.textProperty().addListener(
-                (observable, oldValue, newValue) -> updateClearButtonState());
         updateConnectionButtons(ConnectionState.DISCONNECTED);
         wsMessageField.setPromptText("输入要发送的消息...");
         info("WebSocket客户端控制器模块初始化完成");
@@ -283,8 +280,7 @@ public class WebSocketController extends BaseController {
     @FXML
     private void handleWsClear() {
         clearPendingMessages();
-        wsMessageArea.clear();
-        updateClearButtonState();
+        handleClearLog();
     }
 
     /**
@@ -302,6 +298,7 @@ public class WebSocketController extends BaseController {
         if (client != null) {
             client.close();
         }
+        super.cleanup();
     }
 
     private synchronized boolean beginConnectionAttempt() {
@@ -371,7 +368,6 @@ public class WebSocketController extends BaseController {
         wsUrlField.setDisable(state != ConnectionState.DISCONNECTED);
         wsMessageField.setDisable(state != ConnectionState.CONNECTED);
         updateConnectionStatus(state);
-        updateClearButtonState();
     }
 
     private void updateConnectionStatus(ConnectionState state) {
@@ -394,10 +390,6 @@ public class WebSocketController extends BaseController {
                 wsStatusLabel.getStyleClass().add("status-busy");
             }
         }
-    }
-
-    private void updateClearButtonState() {
-        wsClearButton.setDisable(wsMessageArea.getText() == null || wsMessageArea.getText().isEmpty());
     }
 
     private void appendMessage(String direction, String message) {
@@ -488,7 +480,6 @@ public class WebSocketController extends BaseController {
             wsMessageArea.appendText(text.toString());
             LogTextTrimmer.trimToMaxCharacters(
                     wsMessageArea, MAX_DISPLAY_CHARACTERS, DISPLAY_TRIM_TARGET_CHARACTERS);
-            wsMessageArea.setScrollTop(Double.MAX_VALUE);
         }
 
         if (hasMore) {

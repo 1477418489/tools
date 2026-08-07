@@ -37,4 +37,23 @@ class JarPortProcessServiceTest {
 
         assertEquals("PID:1234", details);
     }
+
+    @Test
+    void matchesTargetJarByNormalizedAbsolutePath() {
+        assertTrue(JarPortProcessService.commandLineTargetsJar(
+                "java.exe -jar \"D:/apps/demo.jar\" --server.port=18080",
+                "D:\\apps\\demo.jar"));
+    }
+
+    @Test
+    void rejectsDifferentJarWithTheSamePort() {
+        assertFalse(JarPortProcessService.commandLineTargetsJar(
+                "java.exe -jar \"D:\\apps\\other.jar\" --server.port=18080",
+                "D:\\apps\\demo.jar"));
+    }
+
+    @Test
+    void rejectsMissingCommandLineDetails() {
+        assertFalse(JarPortProcessService.commandLineTargetsJar("", "D:\\apps\\demo.jar"));
+    }
 }

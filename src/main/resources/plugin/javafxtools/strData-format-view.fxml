@@ -5,7 +5,7 @@
 
 <VBox xmlns="http://javafx.com/javafx/23" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="plugin.javafxtools.controller.StrDataFormatController"
-      spacing="12" prefWidth="1000" prefHeight="700" styleClass="tool-page">
+      spacing="12" prefWidth="1000" prefHeight="700" styleClass="tool-page, accent-violet">
 
     <HBox alignment="CENTER_LEFT" styleClass="page-header">
         <Label text="字符串处理" styleClass="page-title"/>

@@ -200,6 +200,7 @@ public class NetworkToolsController extends BaseController {
             query.cancel(true);
         }
         queryExecutor.shutdownNow();
+        super.cleanup();
     }
 
     /**

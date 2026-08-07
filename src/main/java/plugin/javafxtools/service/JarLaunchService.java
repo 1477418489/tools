@@ -72,12 +72,15 @@ public class JarLaunchService {
         try {
             backgroundExecutor.submit(() -> {
                 try {
-                    if (!portProcessService.checkPortInUse(port)) {
-                        startLaunchProcess(project, port, profile);
-                        return;
+                    JarPortProcessService.ProjectPortInspection inspection =
+                            portProcessService.inspectProjectPort(project, port);
+                    switch (inspection.state()) {
+                        case FREE -> startLaunchProcess(project, port, profile);
+                        case PROJECT_RUNNING -> Platform.runLater(
+                                () -> confirmPortReleaseAndLaunch(project, port, profile));
+                        case OCCUPIED -> finishWithError(project, port,
+                                "端口 " + port + " 被其他进程占用，已取消启动");
                     }
-
-                    Platform.runLater(() -> confirmPortReleaseAndLaunch(project, port, profile));
                 } catch (RuntimeException e) {
                     finishWithError(project, port, "启动检查失败: " + errorMessage(e));
                 }
@@ -101,8 +104,10 @@ public class JarLaunchService {
         try {
             backgroundExecutor.submit(() -> {
                 try {
-                    boolean portFreed = portProcessService.killProcessOnPort(port);
-                    if (!portFreed && portProcessService.checkPortInUse(port)) {
+                    boolean projectStopped = portProcessService.killProjectOnPort(project, port);
+                    JarPortProcessService.ProjectPortState state =
+                            portProcessService.inspectProjectPort(project, port).state();
+                    if (!projectStopped || state != JarPortProcessService.ProjectPortState.FREE) {
                         finishWithError(project, port, "端口 " + port + " 未释放，已取消启动");
                         return;
                     }
@@ -126,13 +131,17 @@ public class JarLaunchService {
         try {
             backgroundExecutor.submit(() -> {
                 try {
-                    if (!portProcessService.checkPortInUse(port)) {
-                        runningPortClearer.accept(project);
-                        Platform.runLater(() -> updateButtonStates.accept(project, port));
-                        return;
+                    JarPortProcessService.ProjectPortInspection inspection =
+                            portProcessService.inspectProjectPort(project, port);
+                    switch (inspection.state()) {
+                        case FREE -> {
+                            runningPortClearer.accept(project);
+                            Platform.runLater(() -> updateButtonStates.accept(project, port));
+                        }
+                        case PROJECT_RUNNING -> Platform.runLater(() -> confirmStop(project, port));
+                        case OCCUPIED -> finishWithError(project, port,
+                                "端口 " + port + " 被其他进程占用，未执行停止操作");
                     }
-
-                    Platform.runLater(() -> confirmStop(project, port));
                 } catch (RuntimeException e) {
                     finishWithError(project, port, "停止检查失败: " + errorMessage(e));
                 }
@@ -156,15 +165,16 @@ public class JarLaunchService {
         try {
             backgroundExecutor.submit(() -> {
                 try {
-                    boolean stopped = portProcessService.killProcessOnPort(port);
-                    boolean stillRunning = portProcessService.checkPortInUse(port);
-                    if (!stillRunning) {
+                    boolean stopped = portProcessService.killProjectOnPort(project, port);
+                    JarPortProcessService.ProjectPortState state =
+                            portProcessService.inspectProjectPort(project, port).state();
+                    if (state != JarPortProcessService.ProjectPortState.PROJECT_RUNNING) {
                         runningPortClearer.accept(project);
                         if (!stopped) {
-                            logger.accept("端口 " + port + " 已释放");
+                            logger.accept("项目进程已不再监听端口 " + port);
                         }
                     } else {
-                        logger.accept("端口 " + port + " 仍被占用，请检查是否有守护进程自动重启");
+                        logger.accept("项目仍在监听端口 " + port + "，请检查是否有守护进程自动重启");
                     }
                     Platform.runLater(() -> updateButtonStates.accept(project, port));
                 } catch (RuntimeException e) {
@@ -181,12 +191,12 @@ public class JarLaunchService {
             Process process = jarFileService.startJavaApplication(project, port, profile);
             Platform.runLater(() -> {
                 logger.accept("应用程序已作为独立进程启动");
-                logger.accept("进程ID: " + process.pid());
+                logger.accept("Java进程ID: " + process.pid());
                 logger.accept("即使关闭此工具，应用程序也将继续运行");
                 runningPortRecorder.accept(project, port);
             });
 
-            boolean portReady = waitForPortReady(port);
+            boolean portReady = waitForPortReady(project, port, process);
             Platform.runLater(() -> {
                 if (portReady) {
                     logger.accept("端口 " + port + " 已就绪");
@@ -222,11 +232,17 @@ public class JarLaunchService {
         return exception.getMessage() != null ? exception.getMessage() : "未知错误";
     }
 
-    private boolean waitForPortReady(int port) throws InterruptedException {
+    private boolean waitForPortReady(ProjectConfig project, int port, Process process)
+            throws InterruptedException {
         for (int i = 0; i < PORT_READY_CHECK_ATTEMPTS; i++) {
             Thread.sleep(PORT_READY_CHECK_DELAY_MS);
+            if (!process.isAlive()) {
+                logger.accept("Java进程已提前退出，退出码: " + process.exitValue());
+                return false;
+            }
             if (portProcessService.checkPortInUse(port)) {
-                return true;
+                return portProcessService.inspectProjectPort(project, port).state()
+                        == JarPortProcessService.ProjectPortState.PROJECT_RUNNING;
             }
         }
         return false;

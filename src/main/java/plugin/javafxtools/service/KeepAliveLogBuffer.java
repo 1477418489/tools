@@ -12,6 +12,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 域名保活服务的批量日志缓冲和 UI 刷新。
@@ -27,6 +28,7 @@ public class KeepAliveLogBuffer implements ModuleLogger {
     private final ScheduledExecutorService logExecutor;
     private final AtomicBoolean logProcessing = new AtomicBoolean();
     private final AtomicBoolean flushScheduled = new AtomicBoolean();
+    private final AtomicLong logGeneration = new AtomicLong();
     private volatile TextArea logArea;
 
     /**
@@ -91,6 +93,7 @@ public class KeepAliveLogBuffer implements ModuleLogger {
      * 停止日志刷新并释放 UI 引用。
      */
     public void shutdown() {
+        logGeneration.incrementAndGet();
         logArea = null;
         logExecutor.shutdownNow();
         logQueue.clear();
@@ -98,9 +101,20 @@ public class KeepAliveLogBuffer implements ModuleLogger {
         flushScheduled.set(false);
     }
 
+    /**
+     * 清除尚未显示的日志，避免清空后旧批次再次写回界面。
+     */
+    public void clearPendingLogs() {
+        logGeneration.incrementAndGet();
+        logQueue.clear();
+    }
+
     private void flushLogs() {
         flushScheduled.set(false);
-        if (logArea == null || logQueue.isEmpty() || !logProcessing.compareAndSet(false, true)) {
+        if (logArea == null || logQueue.isEmpty()) {
+            return;
+        }
+        if (!logProcessing.compareAndSet(false, true)) {
             return;
         }
 
@@ -121,10 +135,13 @@ public class KeepAliveLogBuffer implements ModuleLogger {
         }
 
         String logsToAppend = batch.toString();
+        long generation = logGeneration.get();
         try {
             Platform.runLater(() -> {
                 try {
-                    appendToLogArea(logsToAppend);
+                    if (generation == logGeneration.get()) {
+                        appendToLogArea(logsToAppend);
+                    }
                 } finally {
                     logProcessing.set(false);
                     if (!logQueue.isEmpty()) {
@@ -165,7 +182,6 @@ public class KeepAliveLogBuffer implements ModuleLogger {
             }
 
             area.appendText(message);
-            area.setScrollTop(Double.MAX_VALUE);
         } catch (Exception e) {
             // Ignore UI log append failures while the tab is being torn down.
         }

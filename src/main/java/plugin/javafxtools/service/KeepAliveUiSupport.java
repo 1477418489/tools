@@ -7,6 +7,7 @@ import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.TextArea;
+import plugin.javafxtools.util.FxTheme;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -142,6 +143,7 @@ public class KeepAliveUiSupport {
     public void showWarning(String message) {
         runOnFxThread(() -> {
             Alert alert = new Alert(Alert.AlertType.WARNING);
+            FxTheme.apply(alert);
             alert.setTitle("警告");
             alert.setHeaderText(null);
             alert.setContentText(message);
@@ -159,6 +161,7 @@ public class KeepAliveUiSupport {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
                 "确定删除保活配置 \"" + domain + "\"？",
                 ButtonType.OK, ButtonType.CANCEL);
+        FxTheme.apply(alert);
         alert.setTitle("删除配置");
         alert.setHeaderText(null);
         Optional<ButtonType> result = alert.showAndWait();

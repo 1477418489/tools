@@ -16,6 +16,7 @@ import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import plugin.javafxtools.base.BaseController;
+import plugin.javafxtools.control.LogViewer;
 import plugin.javafxtools.model.IntervalUnit;
 import plugin.javafxtools.model.KeepAliveConfig;
 import plugin.javafxtools.model.KeepAliveMethod;
@@ -72,8 +73,10 @@ public class KeepAliveManagerController extends BaseController {
     @FXML
     private Button addButton, updateButton, removeButton, saveButton;
 
-    @FXML
     private TextArea logArea;
+
+    @FXML
+    private LogViewer logViewer;
 
     @FXML
     private ProgressIndicator progressIndicator;
@@ -113,6 +116,8 @@ public class KeepAliveManagerController extends BaseController {
      */
     @FXML
     public void initialize() {
+        logArea = logViewer.getTextArea();
+        logViewer.setOnClear(this::handleClearLogs);
         keepAliveService = new EnhancedKeepAliveService(logArea);
         uiSupport = createUiSupport();
         formSupport = createFormSupport();
@@ -168,6 +173,9 @@ public class KeepAliveManagerController extends BaseController {
      */
     @FXML
     private void handleClearLogs() {
+        if (keepAliveService != null) {
+            keepAliveService.clearLogs();
+        }
         handleClearLog();
     }
 
@@ -234,6 +242,7 @@ public class KeepAliveManagerController extends BaseController {
         });
 
         info("保活管理器资源清理完成");
+        super.cleanup();
     }
 
     private KeepAliveUiSupport createUiSupport() {

@@ -3,16 +3,15 @@ package plugin.javafxtools.service;
 import javafx.collections.FXCollections;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
-import javafx.scene.control.ComboBox;
+import javafx.scene.control.ListView;
 import javafx.scene.control.TextField;
 import plugin.javafxtools.model.ProjectConfig;
+import plugin.javafxtools.util.FxTheme;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.BiPredicate;
 import java.util.function.Consumer;
-import java.util.function.ToIntFunction;
 
 /**
  * JAR 启动器项目列表的加载、增删改和选择状态维护。
@@ -20,17 +19,16 @@ import java.util.function.ToIntFunction;
  * @author wwj
  */
 public class JarProjectActionService {
-    private final ComboBox<ProjectConfig> projectComboBox;
+    private final ListView<ProjectConfig> projectListView;
     private final TextField portField;
     private final TextField profileField;
     private final JarProjectStore projectStore;
     private final JarProjectDialogService projectDialogService;
     private final Consumer<String> logger;
     private final Consumer<String> errorReporter;
-    private final BiPredicate<ProjectConfig, Integer> projectRunningChecker;
-    private final ToIntFunction<ProjectConfig> statusPortResolver;
     private final Consumer<ProjectConfig> runningPortClearer;
     private final Consumer<ProjectConfig> buttonStateUpdater;
+    private final Runnable projectListChanged;
     private final Map<Integer, ProjectConfig> projects = new LinkedHashMap<>();
 
     private ProjectConfig selectedProject;
@@ -38,54 +36,51 @@ public class JarProjectActionService {
     /**
      * 创建项目操作服务。
      *
-     * @param projectComboBox 项目下拉框
+     * @param projectListView 项目列表
      * @param portField 端口输入框
      * @param profileField Spring profile 输入框
      * @param projectStore 项目配置存储
      * @param projectDialogService 项目配置弹窗
      * @param logger 日志输出回调
      * @param errorReporter 错误提示回调
-     * @param projectRunningChecker 项目运行状态检查回调
-     * @param statusPortResolver 项目状态端口读取回调
      * @param runningPortClearer 项目运行端口清除回调
      * @param buttonStateUpdater 按钮状态刷新回调
+     * @param projectListChanged 项目列表变更回调
      */
-    public JarProjectActionService(ComboBox<ProjectConfig> projectComboBox,
+    public JarProjectActionService(ListView<ProjectConfig> projectListView,
                                    TextField portField,
                                    TextField profileField,
                                    JarProjectStore projectStore,
                                    JarProjectDialogService projectDialogService,
                                    Consumer<String> logger,
                                    Consumer<String> errorReporter,
-                                   BiPredicate<ProjectConfig, Integer> projectRunningChecker,
-                                   ToIntFunction<ProjectConfig> statusPortResolver,
                                    Consumer<ProjectConfig> runningPortClearer,
-                                   Consumer<ProjectConfig> buttonStateUpdater) {
-        this.projectComboBox = projectComboBox;
+                                   Consumer<ProjectConfig> buttonStateUpdater,
+                                   Runnable projectListChanged) {
+        this.projectListView = projectListView;
         this.portField = portField;
         this.profileField = profileField;
         this.projectStore = projectStore;
         this.projectDialogService = projectDialogService;
         this.logger = logger;
         this.errorReporter = errorReporter;
-        this.projectRunningChecker = projectRunningChecker;
-        this.statusPortResolver = statusPortResolver;
         this.runningPortClearer = runningPortClearer;
         this.buttonStateUpdater = buttonStateUpdater;
+        this.projectListChanged = projectListChanged;
     }
 
     /**
-     * 加载项目配置并绑定下拉框选择监听。
+     * 加载项目配置并绑定列表选择监听。
      */
     public void initialize() {
-        projectComboBox.getSelectionModel().selectedItemProperty()
+        projectListView.getSelectionModel().selectedItemProperty()
                 .addListener((obs, oldVal, newVal) -> selectProject(newVal));
         loadProjectsFromJson();
         refreshProjectItems();
-        if (projectComboBox.getItems().isEmpty()) {
+        if (projectListView.getItems().isEmpty()) {
             selectProject(null);
         } else {
-            projectComboBox.getSelectionModel().selectFirst();
+            projectListView.getSelectionModel().selectFirst();
         }
     }
 
@@ -115,7 +110,7 @@ public class JarProjectActionService {
             return;
         }
         refreshProjectItems();
-        projectComboBox.getSelectionModel().select(newProject);
+        projectListView.getSelectionModel().select(newProject);
         logger.accept("已添加新项目: " + newProject.getName());
     }
 
@@ -141,21 +136,23 @@ public class JarProjectActionService {
             return;
         }
         refreshProjectItems();
-        projectComboBox.getSelectionModel().select(editedProject);
+        projectListView.getSelectionModel().select(editedProject);
         logger.accept("已更新项目: " + editedProject.getName());
     }
 
     /**
      * 删除当前选中的项目。
+     *
+     * @param running 项目是否正在运行
      */
-    public void deleteProject() {
+    public void deleteProject(boolean running) {
         if (selectedProject == null) {
             errorReporter.accept("请先选择要删除的项目");
             return;
         }
 
         ProjectConfig projectToDelete = selectedProject;
-        if (isSelectedProjectRunning(projectToDelete) && !confirmDeleteRunningProject(projectToDelete)) {
+        if (running && !confirmDeleteRunningProject(projectToDelete)) {
             logger.accept("用户取消了删除操作: " + projectToDelete.getName());
             return;
         }
@@ -170,7 +167,7 @@ public class JarProjectActionService {
             return;
         }
         refreshProjectItems();
-        projectComboBox.getSelectionModel().clearSelection();
+        projectListView.getSelectionModel().clearSelection();
         selectedProject = null;
         runningPortClearer.accept(projectToDelete);
         portField.clear();
@@ -195,7 +192,8 @@ public class JarProjectActionService {
     }
 
     private void refreshProjectItems() {
-        projectComboBox.setItems(FXCollections.observableArrayList(projects.values()));
+        projectListView.setItems(FXCollections.observableArrayList(projects.values()));
+        projectListChanged.run();
     }
 
     private void selectProject(ProjectConfig project) {
@@ -210,13 +208,9 @@ public class JarProjectActionService {
         buttonStateUpdater.accept(project);
     }
 
-    private boolean isSelectedProjectRunning(ProjectConfig project) {
-        int port = statusPortResolver.applyAsInt(project);
-        return projectRunningChecker.test(project, port);
-    }
-
     private boolean confirmDeleteRunningProject(ProjectConfig project) {
         Alert runningAlert = new Alert(Alert.AlertType.WARNING);
+        FxTheme.apply(runningAlert);
         runningAlert.setTitle("项目正在运行");
         runningAlert.setHeaderText("项目 \"" + project.getName() + "\" 正在运行");
         runningAlert.setContentText("建议先停止项目再删除，否则可能导致数据丢失。\n\n是否仍要继续删除？");
@@ -227,6 +221,7 @@ public class JarProjectActionService {
 
     private boolean confirmDeleteProject(ProjectConfig project) {
         Alert confirmAlert = new Alert(Alert.AlertType.CONFIRMATION);
+        FxTheme.apply(confirmAlert);
         confirmAlert.setTitle("确认删除");
         confirmAlert.setHeaderText("确定要删除项目 \"" + project.getName() + "\" 吗？");
         confirmAlert.setContentText("此操作不可撤销，项目配置将被永久删除。");

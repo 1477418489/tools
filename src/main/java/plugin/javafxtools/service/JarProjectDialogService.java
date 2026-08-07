@@ -13,6 +13,7 @@ import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Priority;
 import plugin.javafxtools.model.ProjectConfig;
+import plugin.javafxtools.util.FxTheme;
 
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -44,6 +45,7 @@ public class JarProjectDialogService {
      */
     public ProjectConfig showProjectConfigDialog(ProjectConfig project) {
         Dialog<ProjectConfig> dialog = new Dialog<>();
+        FxTheme.apply(dialog);
         dialog.setTitle("项目配置");
         dialog.setHeaderText("配置项目参数");
 

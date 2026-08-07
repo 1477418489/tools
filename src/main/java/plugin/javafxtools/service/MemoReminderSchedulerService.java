@@ -12,7 +12,10 @@ import javafx.stage.Stage;
 import javafx.stage.Window;
 import plugin.javafxtools.model.MemoReminder;
 import plugin.javafxtools.model.ReminderScheduleMode;
+import plugin.javafxtools.util.FxTheme;
 
+import java.awt.HeadlessException;
+import java.awt.Toolkit;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -44,6 +47,7 @@ public class MemoReminderSchedulerService {
     private final BooleanSupplier persistAction;
     private final Runnable stateRefreshAction;
     private final Consumer<String> infoLogger;
+    private volatile BooleanSupplier soundEnabledSupplier = () -> true;
     private volatile boolean closed;
 
     /**
@@ -100,6 +104,10 @@ public class MemoReminderSchedulerService {
         closeOpenDialogs();
     }
 
+    public void setSoundEnabledSupplier(BooleanSupplier soundEnabledSupplier) {
+        this.soundEnabledSupplier = soundEnabledSupplier == null ? () -> true : soundEnabledSupplier;
+    }
+
     private void showReminderDialog(MemoReminder reminder) {
         if (closed || openDialogs.containsKey(reminder.getId())) {
             return;
@@ -112,6 +120,7 @@ public class MemoReminderSchedulerService {
                     return;
                 }
                 Dialog<ButtonType> dialog = new Dialog<>();
+                FxTheme.apply(dialog);
                 dialog.setTitle("备忘提醒");
                 dialog.setHeaderText(reminder.getScheduleMode() == ReminderScheduleMode.AT_TIME
                         ? "定时闹钟"
@@ -135,6 +144,7 @@ public class MemoReminderSchedulerService {
 
                 openDialogs.put(reminder.getId(), dialog);
                 try {
+                    playReminderSound();
                     Optional<ButtonType> result = dialog.showAndWait();
                     handleDialogResult(
                             reminder, result.orElse(ButtonType.CLOSE), doneBox.isSelected());
@@ -144,6 +154,17 @@ public class MemoReminderSchedulerService {
             });
         } catch (IllegalStateException ignored) {
             // JavaFX 运行时正在关闭，不再展示提醒。
+        }
+    }
+
+    private void playReminderSound() {
+        if (!soundEnabledSupplier.getAsBoolean()) {
+            return;
+        }
+        try {
+            Toolkit.getDefaultToolkit().beep();
+        } catch (HeadlessException | SecurityException ignored) {
+            // 无桌面音频环境时仍正常显示提醒。
         }
     }
 
@@ -241,6 +262,7 @@ public class MemoReminderSchedulerService {
         }
         dialog.setOnShown(event -> {
             if (owner instanceof Stage ownerStage) {
+                ownerStage.show();
                 ownerStage.setIconified(false);
                 ownerStage.toFront();
             }

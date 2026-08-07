@@ -3,6 +3,7 @@ package plugin.javafxtools.service;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HttpResponseFormatterTest {
@@ -14,5 +15,12 @@ class HttpResponseFormatterTest {
 
         assertNotNull(formatted);
         assertTrue(formatted.contains(number));
+    }
+
+    @Test
+    void responseWorkspaceDoesNotApplyTheFormerLogTruncationLimit() {
+        String body = "x".repeat(25_000);
+
+        assertEquals(body, new HttpResponseFormatter().formatForPreview(body, "Raw"));
     }
 }

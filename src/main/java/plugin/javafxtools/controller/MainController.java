@@ -1,73 +1,364 @@
 package plugin.javafxtools.controller;
 
+import javafx.application.Platform;
 import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
+import javafx.scene.Parent;
+import javafx.scene.control.Alert;
+import javafx.scene.control.CheckMenuItem;
+import javafx.scene.control.Label;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextArea;
-import javafx.scene.control.TitledPane;
+import javafx.stage.Stage;
+import javafx.stage.FileChooser;
+import plugin.javafxtools.base.BaseController;
+import plugin.javafxtools.control.LogViewer;
+import plugin.javafxtools.model.AppSettings;
+import plugin.javafxtools.service.AppDataBackupService;
+import plugin.javafxtools.service.AppSettingsStore;
 import plugin.javafxtools.service.LoggingService;
+import plugin.javafxtools.service.WindowsStartupService;
 import plugin.javafxtools.util.AppDataPaths;
+import plugin.javafxtools.util.FxTheme;
 
+import java.awt.Desktop;
 import java.io.IOException;
+import java.net.URL;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 
 /**
- * 主控制器，负责校验子控制器注入并协调应用级资源清理。
+ * 主控制器，负责模块按需加载、应用设置和资源清理。
  */
 public class MainController {
-    @FXML
-    private TabPane tabPane;
-    @FXML
-    private HttpRequestController httpRequestTabController;
-    @FXML
-    private WebSocketController webSocketTabController;
-    @FXML
-    private NetworkToolsController networkToolsTabController;
-    @FXML
-    private DataFormatController dataFormatTabController;
-    @FXML
-    private StrDataFormatController strDataFormatTabController;
-    @FXML
-    private AppLauncherController appLauncherTabController;
-    @FXML
-    private JarLauncherController jarLauncherTabController;
-    @FXML
-    private KeepAliveManagerController keepAliveTabController;
-    @FXML
-    private MemoReminderController memoReminderTabController;
-    @FXML
-    private TextArea centralLogArea;
-    @FXML
-    private TitledPane systemLogPane;
+    private static final DateTimeFormatter BACKUP_TIME_FORMAT =
+            DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+
+    @FXML private TabPane tabPane;
+    @FXML private Tab appLauncherTab;
+    @FXML private Tab httpRequestTab;
+    @FXML private Tab webSocketTab;
+    @FXML private Tab networkToolsTab;
+    @FXML private Tab dataFormatTab;
+    @FXML private Tab strDataFormatTab;
+    @FXML private Tab jarLauncherTab;
+    @FXML private Tab memoReminderTab;
+    @FXML private Tab keepAliveTab;
+    @FXML private Tab windowsPowerTab;
+    @FXML private CheckMenuItem closeToTrayMenuItem;
+    @FXML private CheckMenuItem reminderSoundMenuItem;
+    @FXML private CheckMenuItem startupMenuItem;
+    @FXML private MenuItem exportBackupMenuItem;
+    @FXML private LogViewer systemLogViewer;
 
     private final LoggingService loggingService = new LoggingService();
+    private final AppSettingsStore settingsStore = new AppSettingsStore();
+    private final WindowsStartupService startupService = new WindowsStartupService();
+    private final AppDataBackupService backupService = new AppDataBackupService();
+    private final ExecutorService settingsExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "FxTools-Settings");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private final Map<Tab, ModuleDefinition> moduleDefinitions = new LinkedHashMap<>();
+    private final Map<Tab, ControllerBinding> loadedModules = new LinkedHashMap<>();
 
-    /**
-     * 获取启动项页签控制器。
-     *
-     * @return 启动项控制器
-     */
-    public AppLauncherController getAppLauncherController() {
-        return appLauncherTabController;
-    }
+    private TextArea centralLogArea;
+    private volatile AppSettings appSettings = AppSettings.defaults();
+    private Stage primaryStage;
+    private boolean applicationVisible;
+    private boolean cleaned;
 
-    /**
-     * 完成主界面及子控制器初始化。
-     */
     @FXML
     public void initialize() {
-        systemLogPane.setExpanded(false);
+        centralLogArea = systemLogViewer.getTextArea();
+        systemLogViewer.setOnClear(loggingService::clearGlobalLogs);
+        if (centralLogArea != null) {
+            loggingService.addGlobalLogArea(centralLogArea);
+        }
         ensureAppDataDirectoryExists();
-        try {
-            if (centralLogArea != null) {
-                loggingService.addGlobalLogArea(centralLogArea);
+        loadSettings();
+        registerModules();
+
+        loadModule(memoReminderTab);
+        loadModule(keepAliveTab);
+        loadModule(tabPane.getSelectionModel().getSelectedItem());
+        tabPane.getSelectionModel().selectedItemProperty().addListener(
+                (observable, previous, selected) -> {
+                    loadModule(selected);
+                    updateAppLauncherActivity();
+                });
+        loggingService.info("主控制器初始化完成");
+    }
+
+    public AppLauncherController getAppLauncherController() {
+        ControllerBinding binding = loadedModules.get(appLauncherTab);
+        return binding != null && binding.controller() instanceof AppLauncherController controller
+                ? controller : null;
+    }
+
+    public void setPrimaryStage(Stage primaryStage) {
+        this.primaryStage = primaryStage;
+        AppLauncherController controller = getAppLauncherController();
+        if (controller != null) {
+            controller.setPrimaryStage(primaryStage);
+        }
+    }
+
+    public void setApplicationVisible(boolean visible) {
+        applicationVisible = visible;
+        updateAppLauncherActivity();
+    }
+
+    public boolean isCloseToTrayEnabled() {
+        return appSettings.closeToTray();
+    }
+
+    public void setTrayAvailable(boolean available) {
+        closeToTrayMenuItem.setDisable(!available);
+    }
+
+    public TabPane getTabPane() {
+        return tabPane;
+    }
+
+    @FXML
+    private void handleCloseToTraySetting() {
+        AppSettings candidate = new AppSettings(closeToTrayMenuItem.isSelected(),
+                appSettings.reminderSoundEnabled(), appSettings.startWithWindows());
+        if (!saveSettings(candidate)) {
+            closeToTrayMenuItem.setSelected(appSettings.closeToTray());
+        }
+    }
+
+    @FXML
+    private void handleReminderSoundSetting() {
+        AppSettings candidate = new AppSettings(appSettings.closeToTray(),
+                reminderSoundMenuItem.isSelected(), appSettings.startWithWindows());
+        if (!saveSettings(candidate)) {
+            reminderSoundMenuItem.setSelected(appSettings.reminderSoundEnabled());
+        }
+    }
+
+    @FXML
+    private void handleStartupSetting() {
+        boolean enabled = startupMenuItem.isSelected();
+        boolean previousEnabled = appSettings.startWithWindows();
+        startupMenuItem.setDisable(true);
+        settingsExecutor.execute(() -> {
+            boolean registryUpdated = false;
+            try {
+                startupService.setEnabled(enabled);
+                registryUpdated = true;
+                AppSettings candidate = new AppSettings(appSettings.closeToTray(),
+                        appSettings.reminderSoundEnabled(), enabled);
+                settingsStore.save(candidate);
+                appSettings = candidate;
+                loggingService.info(enabled ? "已启用随 Windows 登录启动" : "已关闭随 Windows 登录启动");
+                Platform.runLater(() -> startupMenuItem.setDisable(false));
+            } catch (IOException e) {
+                if (registryUpdated) {
+                    try {
+                        startupService.setEnabled(previousEnabled);
+                    } catch (IOException rollbackFailure) {
+                        loggingService.error("恢复开机启动状态失败: "
+                                + errorMessage(rollbackFailure));
+                    }
+                }
+                loggingService.error("更新开机启动失败: " + errorMessage(e));
+                Platform.runLater(() -> {
+                    startupMenuItem.setSelected(appSettings.startWithWindows());
+                    startupMenuItem.setDisable(!startupService.isSupported());
+                    showError("开机启动设置失败", errorMessage(e));
+                });
             }
-            setupControllers();
-            loggingService.info("主控制器初始化完成");
-        } catch (RuntimeException e) {
-            loggingService.error("主控制器初始化失败: " + errorMessage(e));
-            throw e;
+        });
+    }
+
+    @FXML
+    private void handleOpenDataDirectory() {
+        settingsExecutor.execute(() -> {
+            try {
+                AppDataPaths.ensureDataDirectory();
+                if (!Desktop.isDesktopSupported()) {
+                    throw new IOException("当前系统不支持打开目录");
+                }
+                Desktop.getDesktop().open(AppDataPaths.dataDirectory().toFile());
+            } catch (IOException | SecurityException e) {
+                loggingService.error("打开数据目录失败: " + errorMessage(e));
+                Platform.runLater(() -> showError("无法打开数据目录", errorMessage(e)));
+            }
+        });
+    }
+
+    @FXML
+    private void handleExportDataBackup() {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("导出 FxTools 数据备份");
+        chooser.setInitialFileName("FxTools-backup-"
+                + BACKUP_TIME_FORMAT.format(LocalDateTime.now()) + ".zip");
+        chooser.getExtensionFilters().add(
+                new FileChooser.ExtensionFilter("ZIP 备份 (*.zip)", "*.zip"));
+        var target = chooser.showSaveDialog(primaryStage);
+        if (target == null) {
+            return;
+        }
+
+        exportBackupMenuItem.setDisable(true);
+        try {
+            settingsExecutor.execute(() -> exportDataBackup(target.toPath()));
+        } catch (RejectedExecutionException e) {
+            exportBackupMenuItem.setDisable(false);
+            showError("数据备份失败", "应用正在退出，无法开始备份");
+        }
+    }
+
+    private void exportDataBackup(java.nio.file.Path target) {
+        try {
+            AppDataPaths.ensureDataDirectory();
+            AppDataBackupService.BackupResult result = backupService.export(
+                    AppDataPaths.dataDirectory(), target);
+            loggingService.info("数据备份已导出: " + result.archive());
+            Platform.runLater(() -> {
+                exportBackupMenuItem.setDisable(false);
+                showInfo("数据备份完成", "已备份 " + result.fileCount()
+                        + " 个文件到：\n" + result.archive());
+            });
+        } catch (IOException | SecurityException e) {
+            loggingService.error("导出数据备份失败: " + errorMessage(e));
+            Platform.runLater(() -> {
+                exportBackupMenuItem.setDisable(false);
+                showError("数据备份失败", errorMessage(e));
+            });
+        }
+    }
+
+    public void cleanup() {
+        if (cleaned) {
+            return;
+        }
+        cleaned = true;
+        List<String> failures = new ArrayList<>();
+        List.copyOf(loadedModules.values()).forEach(binding ->
+                cleanupController(binding.name(), binding.cleanupAction(), failures));
+        loadedModules.clear();
+        settingsExecutor.shutdownNow();
+        if (centralLogArea != null) {
+            centralLogArea.clear();
+        }
+        if (!failures.isEmpty()) {
+            loggingService.error("部分模块资源清理失败: " + String.join("、", failures));
+        }
+    }
+
+    private void registerModules() {
+        register(appLauncherTab, "启动项", "app-launcher-view.fxml");
+        register(httpRequestTab, "HTTP 请求", "http-request-view.fxml");
+        register(webSocketTab, "WebSocket", "websocket-view.fxml");
+        register(networkToolsTab, "网络查询", "network-tools-view.fxml");
+        register(dataFormatTab, "数据格式化", "data-format-view.fxml");
+        register(strDataFormatTab, "字符串处理", "strData-format-view.fxml");
+        register(jarLauncherTab, "JAR 启动", "jar-launcher-view.fxml");
+        register(memoReminderTab, "备忘提醒", "memo-reminder-view.fxml");
+        register(keepAliveTab, "域名保活", "keepalive-manager-view.fxml");
+        register(windowsPowerTab, "电源计划", "windows-power-view.fxml");
+    }
+
+    private void register(Tab tab, String name, String resource) {
+        moduleDefinitions.put(tab, new ModuleDefinition(name, resource));
+    }
+
+    private void loadModule(Tab tab) {
+        if (tab == null || loadedModules.containsKey(tab)) {
+            return;
+        }
+        ModuleDefinition definition = moduleDefinitions.get(tab);
+        if (definition == null) {
+            return;
+        }
+        try {
+            URL resource = MainController.class.getResource(
+                    "/plugin/javafxtools/" + definition.resource());
+            if (resource == null) {
+                throw new IOException("找不到模块资源: " + definition.resource());
+            }
+            FXMLLoader loader = new FXMLLoader(resource);
+            Parent content = loader.load();
+            Object controller = loader.getController();
+            if (controller == null) {
+                throw new IOException("FXML 未提供控制器");
+            }
+            tab.setContent(content);
+            ControllerBinding binding = new ControllerBinding(
+                    definition.name(), controller, cleanupAction(controller));
+            loadedModules.put(tab, binding);
+            configureLoadedController(controller);
+            loggingService.info(definition.name() + "模块已加载");
+        } catch (IOException | RuntimeException e) {
+            tab.setContent(new Label("模块加载失败: " + errorMessage(e)));
+            loggingService.error(definition.name() + "模块加载失败: " + errorMessage(e));
+        }
+    }
+
+    private Runnable cleanupAction(Object controller) {
+        if (controller instanceof BaseController baseController) {
+            return baseController::cleanup;
+        }
+        if (controller instanceof JarLauncherController jarController) {
+            return jarController::cleanup;
+        }
+        return () -> { };
+    }
+
+    private void configureLoadedController(Object controller) {
+        if (controller instanceof AppLauncherController appLauncherController) {
+            appLauncherController.setPrimaryStage(primaryStage);
+            updateAppLauncherActivity();
+        } else if (controller instanceof MemoReminderController reminderController) {
+            reminderController.setReminderSoundEnabledSupplier(
+                    () -> appSettings.reminderSoundEnabled());
+        }
+    }
+
+    private void updateAppLauncherActivity() {
+        AppLauncherController controller = getAppLauncherController();
+        if (controller != null) {
+            controller.setActive(applicationVisible
+                    && tabPane.getSelectionModel().getSelectedItem() == appLauncherTab);
+        }
+    }
+
+    private void loadSettings() {
+        try {
+            appSettings = settingsStore.load();
+        } catch (IOException e) {
+            appSettings = AppSettings.defaults();
+            loggingService.error("读取应用设置失败，已使用默认设置: " + errorMessage(e));
+        }
+        closeToTrayMenuItem.setSelected(appSettings.closeToTray());
+        reminderSoundMenuItem.setSelected(appSettings.reminderSoundEnabled());
+        startupMenuItem.setSelected(appSettings.startWithWindows());
+        startupMenuItem.setDisable(!startupService.isSupported());
+    }
+
+    private boolean saveSettings(AppSettings candidate) {
+        try {
+            settingsStore.save(candidate);
+            appSettings = candidate;
+            return true;
+        } catch (IOException e) {
+            loggingService.error("保存应用设置失败: " + errorMessage(e));
+            showError("设置保存失败", errorMessage(e));
+            return false;
         }
     }
 
@@ -79,73 +370,6 @@ public class MainController {
         }
     }
 
-    private void setupControllers() {
-        List<ControllerBinding> controllers = controllerBindings();
-        validateControllerInjection(controllers);
-        controllers.forEach(binding -> loggingService.info(binding.name() + "控制器初始化成功"));
-    }
-
-    private List<ControllerBinding> controllerBindings() {
-        return List.of(
-                new ControllerBinding("HTTP请求", httpRequestTabController,
-                        () -> httpRequestTabController.cleanup()),
-                new ControllerBinding("WebSocket", webSocketTabController,
-                        () -> webSocketTabController.cleanup()),
-                new ControllerBinding("网络工具", networkToolsTabController,
-                        () -> networkToolsTabController.cleanup()),
-                new ControllerBinding("数据格式化", dataFormatTabController,
-                        () -> dataFormatTabController.cleanup()),
-                new ControllerBinding("字符串工具", strDataFormatTabController,
-                        () -> strDataFormatTabController.cleanup()),
-                new ControllerBinding("启动项", appLauncherTabController,
-                        () -> appLauncherTabController.cleanup()),
-                new ControllerBinding("JAR启动器", jarLauncherTabController,
-                        () -> jarLauncherTabController.cleanup()),
-                new ControllerBinding("域名保活", keepAliveTabController,
-                        () -> keepAliveTabController.cleanup()),
-                new ControllerBinding("备忘提醒", memoReminderTabController,
-                        () -> memoReminderTabController.cleanup())
-        );
-    }
-
-    private void validateControllerInjection(List<ControllerBinding> controllers) {
-        String missingControllers = controllers.stream()
-                .filter(binding -> binding.controller() == null)
-                .map(ControllerBinding::name)
-                .collect(Collectors.joining("、"));
-        if (!missingControllers.isEmpty()) {
-            throw new IllegalStateException("控制器注入失败: " + missingControllers);
-        }
-    }
-
-    /**
-     * 获取主界面页签容器。
-     *
-     * @return 页签容器
-     */
-    public TabPane getTabPane() {
-        return tabPane;
-    }
-
-    /**
-     * 逐项清理子模块。单个模块失败不会阻止其余模块释放资源。
-     */
-    public void cleanup() {
-        List<String> failures = new ArrayList<>();
-        controllerBindings().stream()
-                .filter(binding -> binding.controller() != null)
-                .forEach(binding -> cleanupController(binding.name(), binding.cleanupAction(), failures));
-        if (centralLogArea != null) {
-            centralLogArea.clear();
-        }
-
-        if (failures.isEmpty()) {
-            loggingService.info("应用程序资源已清理");
-        } else {
-            loggingService.error("部分模块资源清理失败: " + String.join("、", failures));
-        }
-    }
-
     private void cleanupController(String name, Runnable cleanupAction, List<String> failures) {
         try {
             cleanupAction.run();
@@ -154,11 +378,35 @@ public class MainController {
         }
     }
 
+    private void showError(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.ERROR, message);
+        FxTheme.apply(alert);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        if (primaryStage != null) {
+            alert.initOwner(primaryStage);
+        }
+        alert.show();
+    }
+
+    private void showInfo(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION, message);
+        FxTheme.apply(alert);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        if (primaryStage != null) {
+            alert.initOwner(primaryStage);
+        }
+        alert.show();
+    }
+
     private String errorMessage(Exception exception) {
         String message = exception.getMessage();
         return message == null || message.isBlank()
-                ? exception.getClass().getSimpleName()
-                : message;
+                ? exception.getClass().getSimpleName() : message;
+    }
+
+    private record ModuleDefinition(String name, String resource) {
     }
 
     private record ControllerBinding(String name, Object controller, Runnable cleanupAction) {
