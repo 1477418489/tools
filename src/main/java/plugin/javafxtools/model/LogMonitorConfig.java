@@ -2,8 +2,13 @@ package plugin.javafxtools.model;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Objects;
 
 public record LogMonitorConfig(boolean enabled, String logFile, List<LogMonitorRule> rules) {
+
+    public LogMonitorConfig {
+        rules = List.copyOf(Objects.requireNonNull(rules, "rules"));
+    }
 
     public static LogMonitorConfig defaults() {
         String logFile = Path.of(System.getProperty("user.home"), "Desktop", "cc-switch.log").toString();

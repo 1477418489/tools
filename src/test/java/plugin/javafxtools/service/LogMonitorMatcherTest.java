@@ -2,8 +2,10 @@ package plugin.javafxtools.service;
 
 import org.junit.jupiter.api.Test;
 import plugin.javafxtools.model.LogMatchMode;
+import plugin.javafxtools.model.LogMonitorConfig;
 import plugin.javafxtools.model.LogMonitorRule;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -100,6 +102,26 @@ class LogMonitorMatcherTest {
 
         assertThrows(IllegalArgumentException.class,
                 () -> new LogMonitorMatcher(List.of(first, duplicate)));
+    }
+
+    @Test
+    void configCopiesTheProvidedRules() {
+        LogMonitorRule rule = rule("429", "请求过多", "429", LogMatchMode.WHOLE_TOKEN, true, true);
+        List<LogMonitorRule> source = new ArrayList<>(List.of(rule));
+        LogMonitorConfig config = new LogMonitorConfig(true, "cc-switch.log", source);
+
+        source.clear();
+
+        assertEquals(List.of(rule), config.rules());
+    }
+
+    @Test
+    void configRulesAreUnmodifiable() {
+        LogMonitorRule rule = rule("429", "请求过多", "429", LogMatchMode.WHOLE_TOKEN, true, true);
+        LogMonitorConfig config = new LogMonitorConfig(true, "cc-switch.log",
+                new ArrayList<>(List.of(rule)));
+
+        assertThrows(UnsupportedOperationException.class, () -> config.rules().clear());
     }
 
     private LogMonitorRule rule(String id, String name, String expression, LogMatchMode mode,
