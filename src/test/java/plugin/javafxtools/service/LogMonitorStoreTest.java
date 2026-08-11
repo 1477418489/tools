@@ -13,8 +13,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LogMonitorStoreTest {
     @TempDir
@@ -35,6 +37,10 @@ class LogMonitorStoreTest {
 
         store.save(config);
 
+        assertTrue(new String(Files.readAllBytes(tempDirectory.resolve("log-monitor.json")), StandardCharsets.UTF_8)
+                .contains("\u89c4\u5219-1"));
+        assertTrue(Files.readString(tempDirectory.resolve("log-monitor.json"), StandardCharsets.UTF_8)
+                .contains("D:/logs/\u6d4b\u8bd5.log"));
         assertEquals(config, store.load());
     }
 
@@ -45,8 +51,7 @@ class LogMonitorStoreTest {
 
         assertThrows(IOException.class, () -> new LogMonitorStore(file).load());
 
-        assertEquals(List.of(new String(original, StandardCharsets.UTF_8)),
-                List.of(Files.readString(file, StandardCharsets.UTF_8)));
+        assertArrayEquals(original, Files.readAllBytes(file));
     }
 
     @Test
@@ -56,6 +61,11 @@ class LogMonitorStoreTest {
         assertRejected("{\"enabled\":\"true\",\"logFile\":\"a.log\",\"rules\":[]}");
         assertRejected("{\"enabled\":true,\"logFile\":\"   \",\"rules\":[]}");
         assertRejected("{\"enabled\":true,\"logFile\":\"a.log\",\"rules\":{}}");
+    }
+
+    @Test
+    void duplicateRootPropertiesAreRejectedWithoutChangingTheSource() throws Exception {
+        assertRejected("{\"enabled\":true,\"enabled\":false,\"logFile\":\"a.log\",\"rules\":[]}");
     }
 
     @Test
@@ -70,20 +80,39 @@ class LogMonitorStoreTest {
     }
 
     @Test
+    void duplicateRulePropertiesAreRejectedWithoutChangingTheSource() throws Exception {
+        assertRejected(configJson("{\"id\":\"id\",\"id\":\"other\",\"name\":\"name\",\"expression\":\"error\",\"mode\":\"CONTAINS\",\"caseSensitive\":true,\"enabled\":true}"));
+    }
+
+    @Test
     void blankExpressionsAndDuplicateDefinitionsAreRejected() throws Exception {
         assertRejected(configJson("{\"id\":\"id\",\"name\":\"name\",\"expression\":\"   \",\"mode\":\"CONTAINS\",\"caseSensitive\":true,\"enabled\":true}"));
         assertRejected("{\"enabled\":true,\"logFile\":\"a.log\",\"rules\":[" + ruleJson() + "," + ruleJson() + "]}");
     }
 
     @Test
-    void invalidRulesCannotBeSavedAndExistingFileRemainsUnchanged() throws Exception {
-        Path file = write("existing configuration");
+    void invalidOrNullConfigCannotBeSavedAndExistingFileRemainsUnchanged() throws Exception {
+        Path file = tempDirectory.resolve("log-monitor.json");
+        LogMonitorStore store = new LogMonitorStore(file);
+        store.save(new LogMonitorConfig(true, "a.log", List.of(
+                new LogMonitorRule("id", "name", "error", LogMatchMode.CONTAINS, true, true))));
+        byte[] original = Files.readAllBytes(file);
         LogMonitorConfig invalid = new LogMonitorConfig(true, "a.log", List.of(
                 new LogMonitorRule("id", "name", "[", LogMatchMode.REGEX, true, true)));
 
-        assertThrows(IOException.class, () -> new LogMonitorStore(file).save(invalid));
+        assertThrows(IOException.class, () -> store.save(invalid));
+        assertArrayEquals(original, Files.readAllBytes(file));
+        assertThrows(NullPointerException.class, () -> store.save(null));
 
-        assertEquals("existing configuration", Files.readString(file));
+        assertArrayEquals(original, Files.readAllBytes(file));
+    }
+
+    @Test
+    void directoryTargetDoesNotUseDefaults() throws Exception {
+        Path directory = tempDirectory.resolve("log-monitor.json");
+        Files.createDirectory(directory);
+
+        assertThrows(IOException.class, () -> new LogMonitorStore(directory).load());
     }
 
     @Test
@@ -103,7 +132,9 @@ class LogMonitorStoreTest {
 
     private void assertRejected(String json) throws Exception {
         Path file = write(json);
+        byte[] original = Files.readAllBytes(file);
         assertThrows(IOException.class, () -> new LogMonitorStore(file).load());
+        assertArrayEquals(original, Files.readAllBytes(file));
     }
 
     private Path write(String content) throws IOException {

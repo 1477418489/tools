@@ -1,5 +1,7 @@
 package plugin.javafxtools.service;
 
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.StreamReadFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import plugin.javafxtools.model.LogMatchMode;
@@ -9,7 +11,9 @@ import plugin.javafxtools.util.AppDataPaths;
 import plugin.javafxtools.util.AtomicFileWriter;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,7 +25,9 @@ import java.util.Set;
  */
 public final class LogMonitorStore {
     private static final Path DEFAULT_CONFIG_FILE = AppDataPaths.dataFile("log-monitor.json");
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = new ObjectMapper(JsonFactory.builder()
+            .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+            .build());
     private static final Set<String> ROOT_FIELDS = Set.of("enabled", "logFile", "rules");
     private static final Set<String> RULE_FIELDS = Set.of(
             "id", "name", "expression", "mode", "caseSensitive", "enabled");
@@ -37,11 +43,11 @@ public final class LogMonitorStore {
     }
 
     public LogMonitorConfig load() throws IOException {
-        if (!Files.exists(configFile)) {
+        try (InputStream inputStream = Files.newInputStream(configFile)) {
+            return parseConfig(MAPPER.readTree(inputStream));
+        } catch (NoSuchFileException exception) {
             return LogMonitorConfig.defaults();
         }
-        JsonNode root = MAPPER.readTree(configFile.toFile());
-        return parseConfig(root);
     }
 
     public void save(LogMonitorConfig config) throws IOException {
