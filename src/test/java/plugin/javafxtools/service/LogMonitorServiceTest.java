@@ -112,12 +112,13 @@ class LogMonitorServiceTest {
     void suppressesDuplicateStatusAndReadErrorUntilRecovery() throws Exception {
         Path log = tempDirectory.resolve("folder");
         Files.createDirectory(log);
+        PollObserver observer = new PollObserver();
         RecordingListener listener = new RecordingListener(0, 0, 1);
-        try (LogMonitorService service = service()) {
+        try (LogMonitorService service = service(observer)) {
             service.start(config(log, rule("error", "Error", "ERROR")), listener);
             assertTrue(listener.awaitStatusCount(1));
             assertTrue(listener.awaitErrors());
-            assertTrue(listener.awaitNoNewCallbacks(120));
+            assertTrue(observer.awaitAdditionalPolls(2));
             assertEquals(1, listener.statuses().size());
             assertEquals(1, listener.errors().size());
             Files.delete(log);
@@ -135,13 +136,13 @@ class LogMonitorServiceTest {
         Files.writeString(log, "old\n", StandardCharsets.UTF_8);
         RecordingListener first = new RecordingListener(0, 0, 0);
         RecordingListener second = new RecordingListener(0, 1, 0);
-        LogMonitorService service = service();
+        PollObserver observer = new PollObserver();
+        LogMonitorService service = service(observer);
         try {
             service.start(config(log, rule("error", "Error", "ERROR")), first);
             assertTrue(first.awaitStatusCount(1));
-            assertTrue(Thread.getAllStackTraces().keySet().stream()
-                    .filter(thread -> thread.getName().equals("log-monitor-poller"))
-                    .allMatch(Thread::isDaemon));
+            Thread worker = observer.awaitWorker();
+            assertTrue(worker.isDaemon());
             service.stop();
             service.start(config(log, rule("error", "Error", "ERROR")), second);
             assertTrue(second.awaitStatusCount(1));
@@ -149,9 +150,10 @@ class LogMonitorServiceTest {
             assertTrue(second.awaitMatches());
             assertEquals(0, first.matches().size());
             service.close();
+            worker.join(2_000);
+            assertFalse(worker.isAlive());
             int callbacks = second.callbackCount();
             append(log, "ERROR after close\n");
-            assertTrue(second.awaitNoNewCallbacks(120));
             assertEquals(callbacks, second.callbackCount());
             service.close();
         } finally {
@@ -159,7 +161,54 @@ class LogMonitorServiceTest {
         }
     }
 
+    @Test
+    void oldCallbackPausedBeforeGateCannotPublishAfterStopAndRestart() throws Exception {
+        Path log = tempDirectory.resolve("application.log");
+        Files.writeString(log, "history\n", StandardCharsets.UTF_8);
+        PollObserver observer = new PollObserver();
+        RecordingListener oldListener = new RecordingListener(0, 0, 0);
+        RecordingListener newListener = new RecordingListener(0, 0, 0);
+        try (LogMonitorService service = service(observer)) {
+            service.start(config(log, rule("error", "Error", "ERROR")), oldListener);
+            assertTrue(oldListener.awaitStatusCount(1));
+            observer.pauseNextActiveCallback();
+            append(log, "ERROR old session\n");
+            assertTrue(observer.awaitCallbackGate());
+            service.stop();
+            service.start(config(log, rule("error", "Error", "ERROR")), newListener);
+            assertTrue(newListener.awaitStatusCount(1));
+            observer.releaseCallbackGate();
+            assertTrue(observer.awaitPausedCallbackReleased());
+            assertEquals(0, oldListener.matches().size());
+        }
+    }
+
+    @Test
+    void stoppedCallbackIsSuppressedWhenRestartWinsItsGenerationGate() throws Exception {
+        Path log = tempDirectory.resolve("application.log");
+        Files.writeString(log, "history\n", StandardCharsets.UTF_8);
+        PollObserver observer = new PollObserver();
+        RecordingListener oldListener = new RecordingListener(0, 0, 0);
+        RecordingListener newListener = new RecordingListener(0, 0, 0);
+        try (LogMonitorService service = service(observer)) {
+            service.start(config(log, rule("error", "Error", "ERROR")), oldListener);
+            assertTrue(oldListener.awaitStatusCount(1));
+            observer.pauseNextStoppedCallback();
+            Thread stopper = new Thread(service::stop);
+            stopper.start();
+            assertTrue(observer.awaitCallbackGate());
+            service.start(config(log, rule("error", "Error", "ERROR")), newListener);
+            assertTrue(newListener.awaitStatusCount(1));
+            observer.releaseCallbackGate();
+            stopper.join(2_000);
+            assertFalse(stopper.isAlive());
+            assertEquals(List.of(LogMonitorStatus.RUNNING), oldListener.statuses());
+        }
+    }
+
     private LogMonitorService service() { return new LogMonitorService(15, CLOCK); }
+
+    private LogMonitorService service(PollObserver observer) { return new LogMonitorService(15, CLOCK, observer); }
 
     private LogMonitorConfig config(Path path, LogMonitorRule... rules) {
         return new LogMonitorConfig(true, path.toString(), List.of(rules));
@@ -202,11 +251,6 @@ class LogMonitorServiceTest {
         boolean awaitStatusCount(int count) throws InterruptedException { return awaitSize(() -> statuses().size(), count); }
         boolean awaitMatchCount(int count) throws InterruptedException { return awaitSize(() -> matches().size(), count); }
         boolean awaitErrorCount(int count) throws InterruptedException { return awaitSize(() -> errors().size(), count); }
-        synchronized boolean awaitNoNewCallbacks(long millis) throws InterruptedException {
-            int callbacks = callbackCount();
-            wait(millis);
-            return callbackCount() == callbacks;
-        }
         private synchronized boolean awaitSize(java.util.function.IntSupplier size, int count) throws InterruptedException {
             long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
             while (System.nanoTime() < end) {
@@ -214,6 +258,51 @@ class LogMonitorServiceTest {
                 TimeUnit.NANOSECONDS.timedWait(this, end - System.nanoTime());
             }
             return size.getAsInt() >= count;
+        }
+    }
+
+    private static final class PollObserver implements LogMonitorService.Observer {
+        private final CountDownLatch workerCreated = new CountDownLatch(1);
+        private final CountDownLatch callbackReached = new CountDownLatch(1);
+        private final CountDownLatch releaseCallback = new CountDownLatch(1);
+        private final CountDownLatch callbackReleased = new CountDownLatch(1);
+        private Thread worker;
+        private boolean pauseActive;
+        private boolean pauseStopped;
+        private int polls;
+
+        @Override public synchronized void onPollCompleted(long generation) { polls++; notifyAll(); }
+        @Override public synchronized void onWorkerCreated(Thread thread) { worker = thread; workerCreated.countDown(); }
+        @Override public void beforeCallback(long generation, LogMonitorService.CallbackKind kind) {
+            synchronized (this) {
+                if ((kind == LogMonitorService.CallbackKind.ACTIVE && pauseActive)
+                        || (kind == LogMonitorService.CallbackKind.STOPPED && pauseStopped)) {
+                    pauseActive = false;
+                    pauseStopped = false;
+                    callbackReached.countDown();
+                } else {
+                    return;
+                }
+            }
+            try {
+                releaseCallback.await(2, TimeUnit.SECONDS);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+            } finally {
+                callbackReleased.countDown();
+            }
+        }
+        synchronized void pauseNextActiveCallback() { pauseActive = true; }
+        synchronized void pauseNextStoppedCallback() { pauseStopped = true; }
+        boolean awaitCallbackGate() throws InterruptedException { return callbackReached.await(2, TimeUnit.SECONDS); }
+        void releaseCallbackGate() { releaseCallback.countDown(); }
+        boolean awaitPausedCallbackReleased() throws InterruptedException { return callbackReleased.await(2, TimeUnit.SECONDS); }
+        Thread awaitWorker() throws InterruptedException { assertTrue(workerCreated.await(2, TimeUnit.SECONDS)); synchronized (this) { return worker; } }
+        synchronized boolean awaitAdditionalPolls(int count) throws InterruptedException {
+            int target = polls + count;
+            long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+            while (polls < target && System.nanoTime() < end) TimeUnit.NANOSECONDS.timedWait(this, end - System.nanoTime());
+            return polls >= target;
         }
     }
 }

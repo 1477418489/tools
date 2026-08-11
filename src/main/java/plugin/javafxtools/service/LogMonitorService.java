@@ -6,7 +6,9 @@ import plugin.javafxtools.model.LogMonitorRule;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,27 +29,43 @@ public final class LogMonitorService implements AutoCloseable {
         void onReadError(String message);
     }
 
+    interface Observer {
+        Observer NONE = new Observer() { };
+        default void onWorkerCreated(Thread thread) { }
+        default void beforeCallback(long generation, CallbackKind kind) { }
+        default void onPollCompleted(long generation) { }
+    }
+
+    enum CallbackKind { ACTIVE, STOPPED }
+
     private final ScheduledExecutorService executor;
     private final long pollMillis;
     private final Clock clock;
+    private final Observer observer;
     private long generation;
     private Session session;
     private ScheduledFuture<?> pollTask;
     private boolean closed;
 
     public LogMonitorService() {
-        this(DEFAULT_POLL_MILLIS, Clock.systemUTC());
+        this(DEFAULT_POLL_MILLIS, Clock.systemUTC(), Observer.NONE);
     }
 
     LogMonitorService(long pollMillis, Clock clock) {
+        this(pollMillis, clock, Observer.NONE);
+    }
+
+    LogMonitorService(long pollMillis, Clock clock, Observer observer) {
         if (pollMillis <= 0) {
             throw new IllegalArgumentException("pollMillis must be positive");
         }
         this.pollMillis = pollMillis;
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.observer = Objects.requireNonNull(observer, "observer");
         ThreadFactory factory = runnable -> {
             Thread thread = new Thread(runnable, "log-monitor-poller");
             thread.setDaemon(true);
+            this.observer.onWorkerCreated(thread);
             return thread;
         };
         executor = Executors.newSingleThreadScheduledExecutor(factory);
@@ -73,20 +91,22 @@ public final class LogMonitorService implements AutoCloseable {
         pollTask = executor.scheduleWithFixedDelay(() -> poll(next), 0L, pollMillis, TimeUnit.MILLISECONDS);
     }
 
-    public synchronized void stop() {
-        if (session == null) {
-            return;
+    public void stop() {
+        Listener listener;
+        long stoppedGeneration;
+        synchronized (this) {
+            if (session == null) {
+                return;
+            }
+            listener = session.listener;
+            session = null;
+            if (pollTask != null) {
+                pollTask.cancel(true);
+                pollTask = null;
+            }
+            stoppedGeneration = ++generation;
         }
-        Listener listener = session.listener;
-        session = null;
-        if (pollTask != null) {
-            pollTask.cancel(true);
-            pollTask = null;
-        }
-        long stoppedGeneration = ++generation;
-        if (!closed && generation == stoppedGeneration) {
-            listener.onStatusChanged(LogMonitorStatus.STOPPED, "");
-        }
+        dispatchStopped(listener, stoppedGeneration);
     }
 
     public synchronized boolean isRunning() {
@@ -109,22 +129,25 @@ public final class LogMonitorService implements AutoCloseable {
     }
 
     private void poll(Session current) {
-        if (!isCurrent(current)) {
-            return;
-        }
-        Path path = current.path;
-        if (!Files.exists(path)) {
-            current.lastError = null;
-            publishStatus(current, LogMonitorStatus.WAITING_FOR_FILE, path.toString());
-            return;
-        }
-        if (!Files.isRegularFile(path)) {
-            String message = "Log path is not a regular file: " + path;
-            publishStatus(current, LogMonitorStatus.ERROR, message);
-            publishReadError(current, message);
-            return;
-        }
         try {
+            if (!isCurrent(current)) {
+                return;
+            }
+            Path path = current.path;
+            BasicFileAttributes attributes;
+            try {
+                attributes = Files.readAttributes(path, BasicFileAttributes.class);
+            } catch (NoSuchFileException exception) {
+                current.lastError = null;
+                publishStatus(current, LogMonitorStatus.WAITING_FOR_FILE, path.toString());
+                return;
+            }
+            if (!attributes.isRegularFile()) {
+                String message = "Log path is not a regular file: " + path;
+                publishStatus(current, LogMonitorStatus.ERROR, message);
+                publishReadError(current, message);
+                return;
+            }
             List<String> lines = current.tailer.readAvailable(false);
             current.lastError = null;
             publishStatus(current, LogMonitorStatus.RUNNING, path.toString());
@@ -138,9 +161,11 @@ public final class LogMonitorService implements AutoCloseable {
                 publishMatches(current, List.copyOf(matches));
             }
         } catch (IOException exception) {
-            String message = "Unable to read log file " + path + ": " + exception.getMessage();
+            String message = "Unable to read log file " + current.path + ": " + exception.getMessage();
             publishStatus(current, LogMonitorStatus.ERROR, message);
             publishReadError(current, message);
+        } finally {
+            observer.onPollCompleted(current.generation);
         }
     }
 
@@ -154,11 +179,7 @@ public final class LogMonitorService implements AutoCloseable {
         }
         current.status = status;
         current.detail = detail;
-        synchronized (this) {
-            if (isCurrent(current)) {
-                current.listener.onStatusChanged(status, detail);
-            }
-        }
+        dispatchActive(current, () -> current.listener.onStatusChanged(status, detail));
     }
 
     private void publishReadError(Session current, String message) {
@@ -166,17 +187,27 @@ public final class LogMonitorService implements AutoCloseable {
             return;
         }
         current.lastError = message;
+        dispatchActive(current, () -> current.listener.onReadError(message));
+    }
+
+    private void publishMatches(Session current, List<LogMonitorMatch> matches) {
+        dispatchActive(current, () -> current.listener.onMatches(matches));
+    }
+
+    private void dispatchActive(Session current, Runnable callback) {
+        observer.beforeCallback(current.generation, CallbackKind.ACTIVE);
         synchronized (this) {
             if (isCurrent(current)) {
-                current.listener.onReadError(message);
+                callback.run();
             }
         }
     }
 
-    private void publishMatches(Session current, List<LogMonitorMatch> matches) {
+    private void dispatchStopped(Listener listener, long stoppedGeneration) {
+        observer.beforeCallback(stoppedGeneration, CallbackKind.STOPPED);
         synchronized (this) {
-            if (isCurrent(current)) {
-                current.listener.onMatches(matches);
+            if (!closed && session == null && generation == stoppedGeneration) {
+                listener.onStatusChanged(LogMonitorStatus.STOPPED, "");
             }
         }
     }
