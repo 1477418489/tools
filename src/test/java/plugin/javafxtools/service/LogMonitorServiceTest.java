@@ -15,6 +15,7 @@ import java.nio.file.StandardOpenOption;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -85,6 +86,11 @@ class LogMonitorServiceTest {
             assertEquals(List.of("ERROR after truncate", "ERROR replacement"),
                     listener.matches().stream().map(LogMonitorMatch::line).toList());
         }
+    }
+
+    @Test
+    void stopIsPartOfTheSynchronizedPublicApi() throws Exception {
+        assertTrue(Modifier.isSynchronized(LogMonitorService.class.getMethod("stop").getModifiers()));
     }
 
     @Test
@@ -175,10 +181,12 @@ class LogMonitorServiceTest {
             append(log, "ERROR old session\n");
             assertTrue(observer.awaitCallbackGate());
             service.stop();
+            assertTrue(observer.awaitInterrupt());
+            assertTrue(observer.isCallbackPaused());
             service.start(config(log, rule("error", "Error", "ERROR")), newListener);
-            assertTrue(newListener.awaitStatusCount(1));
             observer.releaseCallbackGate();
             assertTrue(observer.awaitPausedCallbackReleased());
+            assertTrue(newListener.awaitStatusCount(1));
             assertEquals(0, oldListener.matches().size());
         }
     }
@@ -198,8 +206,8 @@ class LogMonitorServiceTest {
             stopper.start();
             assertTrue(observer.awaitCallbackGate());
             service.start(config(log, rule("error", "Error", "ERROR")), newListener);
-            assertTrue(newListener.awaitStatusCount(1));
             observer.releaseCallbackGate();
+            assertTrue(newListener.awaitStatusCount(1));
             stopper.join(2_000);
             assertFalse(stopper.isAlive());
             assertEquals(List.of(LogMonitorStatus.RUNNING), oldListener.statuses());
@@ -266,9 +274,11 @@ class LogMonitorServiceTest {
         private final CountDownLatch callbackReached = new CountDownLatch(1);
         private final CountDownLatch releaseCallback = new CountDownLatch(1);
         private final CountDownLatch callbackReleased = new CountDownLatch(1);
+        private final CountDownLatch interruptObserved = new CountDownLatch(1);
         private Thread worker;
         private boolean pauseActive;
         private boolean pauseStopped;
+        private boolean callbackPaused;
         private int polls;
 
         @Override public synchronized void onPollCompleted(long generation) { polls++; notifyAll(); }
@@ -279,22 +289,33 @@ class LogMonitorServiceTest {
                         || (kind == LogMonitorService.CallbackKind.STOPPED && pauseStopped)) {
                     pauseActive = false;
                     pauseStopped = false;
+                    callbackPaused = true;
                     callbackReached.countDown();
                 } else {
                     return;
                 }
             }
-            try {
-                releaseCallback.await(2, TimeUnit.SECONDS);
-            } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
-            } finally {
-                callbackReleased.countDown();
+            boolean interrupted = false;
+            while (true) {
+                try {
+                    releaseCallback.await(2, TimeUnit.SECONDS);
+                    break;
+                } catch (InterruptedException exception) {
+                    interrupted = true;
+                    interruptObserved.countDown();
+                }
             }
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+            synchronized (this) { callbackPaused = false; }
+            callbackReleased.countDown();
         }
         synchronized void pauseNextActiveCallback() { pauseActive = true; }
         synchronized void pauseNextStoppedCallback() { pauseStopped = true; }
         boolean awaitCallbackGate() throws InterruptedException { return callbackReached.await(2, TimeUnit.SECONDS); }
+        boolean awaitInterrupt() throws InterruptedException { return interruptObserved.await(2, TimeUnit.SECONDS); }
+        synchronized boolean isCallbackPaused() { return callbackPaused; }
         void releaseCallbackGate() { releaseCallback.countDown(); }
         boolean awaitPausedCallbackReleased() throws InterruptedException { return callbackReleased.await(2, TimeUnit.SECONDS); }
         Thread awaitWorker() throws InterruptedException { assertTrue(workerCreated.await(2, TimeUnit.SECONDS)); synchronized (this) { return worker; } }

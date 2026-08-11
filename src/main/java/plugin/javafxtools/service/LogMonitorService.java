@@ -91,22 +91,18 @@ public final class LogMonitorService implements AutoCloseable {
         pollTask = executor.scheduleWithFixedDelay(() -> poll(next), 0L, pollMillis, TimeUnit.MILLISECONDS);
     }
 
-    public void stop() {
-        Listener listener;
-        long stoppedGeneration;
-        synchronized (this) {
-            if (session == null) {
-                return;
-            }
-            listener = session.listener;
-            session = null;
-            if (pollTask != null) {
-                pollTask.cancel(true);
-                pollTask = null;
-            }
-            stoppedGeneration = ++generation;
+    public synchronized void stop() {
+        if (session == null) {
+            return;
         }
-        dispatchStopped(listener, stoppedGeneration);
+        Listener listener = session.listener;
+        session = null;
+        if (pollTask != null) {
+            pollTask.cancel(true);
+            pollTask = null;
+        }
+        long stoppedGeneration = ++generation;
+        executor.execute(() -> dispatchStopped(listener, stoppedGeneration));
     }
 
     public synchronized boolean isRunning() {
