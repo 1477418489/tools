@@ -11,9 +11,62 @@
         <Label text="Windows 电源" styleClass="page-title"/>
         <Pane HBox.hgrow="ALWAYS"/>
         <Label fx:id="platformStatusLabel" text="就绪" styleClass="status-badge, status-offline"/>
-        <Button fx:id="refreshButton" text="刷新任务" onAction="#handleRefresh"
+        <Button fx:id="refreshButton" text="全部刷新" onAction="#handleRefresh"
                 styleClass="compact-button"/>
     </HBox>
+
+    <GridPane hgap="0" vgap="6" styleClass="surface, power-device-strip">
+        <columnConstraints>
+            <ColumnConstraints percentWidth="33.33" fillWidth="true"/>
+            <ColumnConstraints percentWidth="33.34" fillWidth="true"/>
+            <ColumnConstraints percentWidth="33.33" fillWidth="true"/>
+        </columnConstraints>
+        <VBox spacing="3" styleClass="power-device-summary-item" GridPane.columnIndex="0">
+            <Label text="品牌 / 型号" styleClass="power-device-summary-label"/>
+            <Label fx:id="deviceBrandSummaryLabel" text="正在检测" wrapText="true"
+                   minWidth="0" maxWidth="Infinity" textOverrun="CLIP"
+                   styleClass="power-device-summary-value"/>
+        </VBox>
+        <VBox spacing="3" styleClass="power-device-summary-item" GridPane.columnIndex="1">
+            <Label text="处理器" styleClass="power-device-summary-label"/>
+            <Label fx:id="processorSummaryLabel" text="正在检测" wrapText="true"
+                   minWidth="0" maxWidth="Infinity" textOverrun="CLIP"
+                   styleClass="power-device-summary-value"/>
+            <Label fx:id="processorMetaSummaryLabel" text="正在检测" wrapText="true"
+                   minWidth="0" maxWidth="Infinity" textOverrun="CLIP"
+                   styleClass="power-device-summary-meta"/>
+        </VBox>
+        <VBox spacing="3" styleClass="power-device-summary-item, power-device-summary-last"
+              GridPane.columnIndex="2">
+            <Label text="图形处理器" styleClass="power-device-summary-label"/>
+            <Label fx:id="graphicsSummaryLabel" text="正在检测" wrapText="true"
+                   minWidth="0" maxWidth="Infinity" textOverrun="CLIP"
+                   styleClass="power-device-summary-value"/>
+            <Label fx:id="graphicsMetaSummaryLabel" text="正在检测" wrapText="true"
+                   minWidth="0" maxWidth="Infinity" textOverrun="CLIP"
+                   styleClass="power-device-summary-meta"/>
+        </VBox>
+        <VBox spacing="3" styleClass="power-device-summary-item"
+              GridPane.columnIndex="0" GridPane.rowIndex="1">
+            <Label text="物理内存" styleClass="power-device-summary-label"/>
+            <Label fx:id="memorySummaryLabel" text="正在检测" wrapText="true"
+                   minWidth="0" maxWidth="Infinity" textOverrun="CLIP"
+                   styleClass="power-device-summary-value"/>
+            <Label fx:id="memoryMetaSummaryLabel" text="正在检测" wrapText="true"
+                   minWidth="0" maxWidth="Infinity" textOverrun="CLIP"
+                   styleClass="power-device-summary-meta"/>
+        </VBox>
+        <VBox spacing="3" styleClass="power-device-summary-item, power-device-summary-last"
+              GridPane.columnIndex="1" GridPane.rowIndex="1" GridPane.columnSpan="2">
+            <Label text="BIOS / 发布日期" styleClass="power-device-summary-label"/>
+            <Label fx:id="biosSummaryLabel" text="正在检测" wrapText="true"
+                   minWidth="0" maxWidth="Infinity" textOverrun="CLIP"
+                   styleClass="power-device-summary-value"/>
+            <Label fx:id="biosDateSummaryLabel" text="正在检测" wrapText="true"
+                   minWidth="0" maxWidth="Infinity" textOverrun="CLIP"
+                   styleClass="power-device-summary-meta"/>
+        </VBox>
+    </GridPane>
 
     <TabPane tabClosingPolicy="UNAVAILABLE" styleClass="editor-tab-pane, power-tab-pane"
              VBox.vgrow="ALWAYS">
@@ -124,6 +177,9 @@
 
             <Tab text="BIOS / 电源检测">
                 <content>
+                    <ScrollPane fitToWidth="true" hbarPolicy="NEVER"
+                                styleClass="power-diagnostics-scroll">
+                        <content>
                     <VBox spacing="10" styleClass="power-diagnostics-page">
                         <HBox spacing="10" alignment="CENTER_LEFT" styleClass="diagnostics-toolbar">
                             <VBox spacing="2">
@@ -139,77 +195,151 @@
                                     styleClass="compact-button, primary-button"/>
                         </HBox>
 
-                        <GridPane styleClass="diagnostics-grid" VBox.vgrow="ALWAYS">
-                            <columnConstraints>
-                                <ColumnConstraints percentWidth="50" fillWidth="true"/>
-                                <ColumnConstraints percentWidth="50" fillWidth="true"/>
-                            </columnConstraints>
-                            <rowConstraints>
-                                <RowConstraints percentHeight="50" fillHeight="true"/>
-                                <RowConstraints percentHeight="50" fillHeight="true"/>
-                            </rowConstraints>
+                        <VBox spacing="8" styleClass="surface, diagnostic-card, diagnostic-hardware-card">
+                            <Label text="硬件与固件清单" styleClass="diagnostic-card-title"/>
+                            <GridPane hgap="12" vgap="7" styleClass="diagnostic-hardware-grid">
+                                <columnConstraints>
+                                    <ColumnConstraints percentWidth="12" halignment="RIGHT"/>
+                                    <ColumnConstraints percentWidth="38" fillWidth="true"/>
+                                    <ColumnConstraints percentWidth="12" halignment="RIGHT"/>
+                                    <ColumnConstraints percentWidth="38" fillWidth="true"/>
+                                </columnConstraints>
+                                <Label text="整机" styleClass="field-label" GridPane.rowIndex="0"/>
+                                <Label fx:id="systemValueLabel" text="等待检测" wrapText="true" minWidth="0"
+                                       maxWidth="Infinity" textOverrun="CLIP" styleClass="diagnostic-value"
+                                       GridPane.columnIndex="1" GridPane.rowIndex="0"/>
+                                <Label text="处理器" styleClass="field-label"
+                                       GridPane.columnIndex="2" GridPane.rowIndex="0"/>
+                                <Label fx:id="processorValueLabel" text="等待检测" wrapText="true" minWidth="0"
+                                       maxWidth="Infinity" textOverrun="CLIP" styleClass="diagnostic-value"
+                                       GridPane.columnIndex="3" GridPane.rowIndex="0"/>
 
-                            <VBox spacing="8" styleClass="surface, diagnostic-card"
-                                  GridPane.columnIndex="0" GridPane.rowIndex="0">
-                                <Label text="设备与固件" styleClass="diagnostic-card-title"/>
-                                <GridPane hgap="10" vgap="7">
+                                <Label text="整机序列号" styleClass="field-label" GridPane.rowIndex="1"/>
+                                <Label fx:id="serialNumberValueLabel" text="等待检测" wrapText="true" minWidth="0"
+                                       maxWidth="Infinity" textOverrun="CLIP" styleClass="diagnostic-value"
+                                       GridPane.columnIndex="1" GridPane.rowIndex="1"/>
+                                <Label text="图形处理器" styleClass="field-label"
+                                       GridPane.columnIndex="2" GridPane.rowIndex="1"/>
+                                <Label fx:id="graphicsValueLabel" text="等待检测" wrapText="true" minWidth="0"
+                                       maxWidth="Infinity" textOverrun="CLIP" styleClass="diagnostic-value"
+                                       GridPane.columnIndex="3" GridPane.rowIndex="1"/>
+
+                                <Label text="系统 UUID" styleClass="field-label" GridPane.rowIndex="2"/>
+                                <Label fx:id="systemUuidValueLabel" text="等待检测" wrapText="true" minWidth="0"
+                                       maxWidth="Infinity" textOverrun="CLIP" styleClass="diagnostic-value"
+                                       GridPane.columnIndex="1" GridPane.rowIndex="2"/>
+                                <Label text="物理内存" styleClass="field-label"
+                                       GridPane.columnIndex="2" GridPane.rowIndex="2"/>
+                                <Label fx:id="memoryValueLabel" text="等待检测" wrapText="true" minWidth="0"
+                                       maxWidth="Infinity" textOverrun="CLIP" styleClass="diagnostic-value"
+                                       GridPane.columnIndex="3" GridPane.rowIndex="2"/>
+
+                                <Label text="主板" styleClass="field-label" GridPane.rowIndex="3"/>
+                                <Label fx:id="boardValueLabel" text="等待检测" wrapText="true" minWidth="0"
+                                       maxWidth="Infinity" textOverrun="CLIP" styleClass="diagnostic-value"
+                                       GridPane.columnIndex="1" GridPane.rowIndex="3"/>
+                                <Label text="内存条" styleClass="field-label"
+                                       GridPane.columnIndex="2" GridPane.rowIndex="3"/>
+                                <Label fx:id="memoryModulesValueLabel" text="等待检测" wrapText="true" minWidth="0"
+                                       maxWidth="Infinity" textOverrun="CLIP" styleClass="diagnostic-value"
+                                       GridPane.columnIndex="3" GridPane.rowIndex="3"/>
+
+                                <Label text="主板序列号" styleClass="field-label" GridPane.rowIndex="4"/>
+                                <Label fx:id="boardSerialValueLabel" text="等待检测" wrapText="true" minWidth="0"
+                                       maxWidth="Infinity" textOverrun="CLIP" styleClass="diagnostic-value"
+                                       GridPane.columnIndex="1" GridPane.rowIndex="4"/>
+                                <Label text="温度" styleClass="field-label"
+                                       GridPane.columnIndex="2" GridPane.rowIndex="4"/>
+                                <Label fx:id="temperatureValueLabel" text="等待检测" wrapText="true" minWidth="0"
+                                       maxWidth="Infinity" textOverrun="CLIP" styleClass="diagnostic-value"
+                                       GridPane.columnIndex="3" GridPane.rowIndex="4"/>
+
+                                <Label text="操作系统" styleClass="field-label" GridPane.rowIndex="5"/>
+                                <Label fx:id="operatingSystemValueLabel" text="等待检测" wrapText="true" minWidth="0"
+                                       maxWidth="Infinity" textOverrun="CLIP" styleClass="diagnostic-value"
+                                       GridPane.columnIndex="1" GridPane.rowIndex="5"/>
+                                <Label text="BIOS" styleClass="field-label"
+                                       GridPane.columnIndex="2" GridPane.rowIndex="5"/>
+                                <Label fx:id="biosValueLabel" text="等待检测" wrapText="true" minWidth="0"
+                                       maxWidth="Infinity" textOverrun="CLIP" styleClass="diagnostic-value"
+                                       GridPane.columnIndex="3" GridPane.rowIndex="5"/>
+
+                                <Label text="固件模式" styleClass="field-label" GridPane.rowIndex="6"/>
+                                <Label fx:id="firmwareValueLabel" text="等待检测" wrapText="true" minWidth="0"
+                                       maxWidth="Infinity" textOverrun="CLIP" styleClass="diagnostic-value"
+                                       GridPane.columnIndex="1" GridPane.rowIndex="6"/>
+                                <Label text="BIOS 发布日期" styleClass="field-label"
+                                       GridPane.columnIndex="2" GridPane.rowIndex="6"/>
+                                <Label fx:id="biosReleaseDateValueLabel" text="等待检测" wrapText="true" minWidth="0"
+                                       maxWidth="Infinity" textOverrun="CLIP" styleClass="diagnostic-value"
+                                       GridPane.columnIndex="3" GridPane.rowIndex="6"/>
+                            </GridPane>
+                            <Label text="Windows 通常不提供可靠的整机生产日期；BIOS 来源包含时间时会完整展示。"
+                                   wrapText="true" styleClass="diagnostic-note"/>
+                        </VBox>
+
+                        <GridPane styleClass="diagnostics-capability-grid" VBox.vgrow="ALWAYS">
+                            <columnConstraints>
+                                <ColumnConstraints percentWidth="33.33" fillWidth="true"/>
+                                <ColumnConstraints percentWidth="33.34" fillWidth="true"/>
+                                <ColumnConstraints percentWidth="33.33" fillWidth="true"/>
+                            </columnConstraints>
+                            <VBox spacing="9" styleClass="surface, diagnostic-card"
+                                  GridPane.columnIndex="0">
+                                <Label text="Windows 电源状态" styleClass="diagnostic-card-title"/>
+                                <GridPane hgap="8" vgap="6">
                                     <columnConstraints>
-                                        <ColumnConstraints minWidth="68" prefWidth="68" halignment="RIGHT"/>
+                                        <ColumnConstraints minWidth="72" prefWidth="72"
+                                                           halignment="RIGHT"/>
                                         <ColumnConstraints hgrow="ALWAYS" fillWidth="true"/>
                                     </columnConstraints>
-                                    <Label text="整机" styleClass="field-label" GridPane.rowIndex="0"/>
-                                    <Label fx:id="systemValueLabel" text="等待检测" wrapText="true"
-                                           styleClass="diagnostic-value" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
-                                    <Label text="主板" styleClass="field-label" GridPane.rowIndex="1"/>
-                                    <Label fx:id="boardValueLabel" text="等待检测" wrapText="true"
-                                           styleClass="diagnostic-value" GridPane.columnIndex="1" GridPane.rowIndex="1"/>
-                                    <Label text="BIOS" styleClass="field-label" GridPane.rowIndex="2"/>
-                                    <Label fx:id="biosValueLabel" text="等待检测" wrapText="true"
-                                           styleClass="diagnostic-value" GridPane.columnIndex="1" GridPane.rowIndex="2"/>
-                                    <Label text="固件模式" styleClass="field-label" GridPane.rowIndex="3"/>
-                                    <Label fx:id="firmwareValueLabel" text="等待检测"
-                                           styleClass="diagnostic-value" GridPane.columnIndex="1" GridPane.rowIndex="3"/>
+                                    <Label text="当前方案" styleClass="field-label"
+                                           GridPane.rowIndex="0"/>
+                                    <Label fx:id="activePowerPlanValueLabel" text="等待检测"
+                                           wrapText="true" minWidth="0" maxWidth="Infinity"
+                                           textOverrun="CLIP" styleClass="diagnostic-value"
+                                           GridPane.columnIndex="1" GridPane.rowIndex="0"/>
+                                    <Label text="供电状态" styleClass="field-label"
+                                           GridPane.rowIndex="1"/>
+                                    <Label fx:id="powerSupplyStatusValueLabel" text="等待检测"
+                                           wrapText="true" minWidth="0" maxWidth="Infinity"
+                                           textOverrun="CLIP" styleClass="diagnostic-value"
+                                           GridPane.columnIndex="1" GridPane.rowIndex="1"/>
                                 </GridPane>
-                            </VBox>
-
-                            <VBox spacing="8" styleClass="surface, diagnostic-card"
-                                  GridPane.columnIndex="1" GridPane.rowIndex="0">
-                                <Label text="Windows 电源状态" styleClass="diagnostic-card-title"/>
-                                <GridPane hgap="10" vgap="9">
+                                <Separator/>
+                                <GridPane hgap="8" vgap="9">
                                     <columnConstraints>
                                         <ColumnConstraints percentWidth="50"/>
                                         <ColumnConstraints percentWidth="50"/>
                                     </columnConstraints>
-                                    <HBox spacing="7" alignment="CENTER_LEFT" GridPane.rowIndex="0">
+                                    <VBox spacing="4" GridPane.rowIndex="0">
                                         <Label text="S3 睡眠" styleClass="field-label"/>
                                         <Label fx:id="s3StatusLabel" text="待检测"
                                                styleClass="status-badge, status-offline"/>
-                                    </HBox>
-                                    <HBox spacing="7" alignment="CENTER_LEFT"
-                                          GridPane.columnIndex="1" GridPane.rowIndex="0">
+                                    </VBox>
+                                    <VBox spacing="4" GridPane.columnIndex="1" GridPane.rowIndex="0">
                                         <Label text="现代待机" styleClass="field-label"/>
                                         <Label fx:id="modernStandbyStatusLabel" text="待检测"
                                                styleClass="status-badge, status-offline"/>
-                                    </HBox>
-                                    <HBox spacing="7" alignment="CENTER_LEFT" GridPane.rowIndex="1">
+                                    </VBox>
+                                    <VBox spacing="4" GridPane.rowIndex="1">
                                         <Label text="休眠" styleClass="field-label"/>
                                         <Label fx:id="hibernateStatusLabel" text="待检测"
                                                styleClass="status-badge, status-offline"/>
-                                    </HBox>
-                                    <HBox spacing="7" alignment="CENTER_LEFT"
-                                          GridPane.columnIndex="1" GridPane.rowIndex="1">
+                                    </VBox>
+                                    <VBox spacing="4" GridPane.columnIndex="1" GridPane.rowIndex="1">
                                         <Label text="快速启动" styleClass="field-label"/>
                                         <Label fx:id="fastStartupStatusLabel" text="待检测"
                                                styleClass="status-badge, status-offline"/>
-                                    </HBox>
+                                    </VBox>
                                 </GridPane>
                                 <Pane VBox.vgrow="ALWAYS"/>
-                                <Label text="检测仅读取 Windows 当前报告的可用状态。"
+                                <Label text="读取 Windows 当前报告的可用状态。"
                                        wrapText="true" styleClass="diagnostic-note"/>
                             </VBox>
 
-                            <VBox spacing="8" styleClass="surface, diagnostic-card"
-                                  GridPane.columnIndex="0" GridPane.rowIndex="1">
+                            <VBox spacing="9" styleClass="surface, diagnostic-card"
+                                  GridPane.columnIndex="1">
                                 <HBox spacing="8" alignment="CENTER_LEFT">
                                     <Label text="唤醒能力" styleClass="diagnostic-card-title"/>
                                     <Pane HBox.hgrow="ALWAYS"/>
@@ -217,8 +347,10 @@
                                            styleClass="status-badge, status-offline"/>
                                 </HBox>
                                 <Label text="允许唤醒的设备" styleClass="field-label"/>
-                                <Label fx:id="wakeDevicesValueLabel" text="等待检测"
-                                       wrapText="true" styleClass="diagnostic-value"/>
+                                <Label fx:id="wakeDevicesValueLabel" text="等待检测" wrapText="true"
+                                       minWidth="0" maxWidth="Infinity" textOverrun="CLIP"
+                                       styleClass="diagnostic-value"/>
+                                <Pane VBox.vgrow="ALWAYS"/>
                                 <HBox spacing="7" alignment="CENTER_LEFT">
                                     <Label text="唤醒计时器" styleClass="field-label"/>
                                     <Label fx:id="wakeTimerStatusLabel" text="待检测"
@@ -226,19 +358,21 @@
                                 </HBox>
                             </VBox>
 
-                            <VBox spacing="8" styleClass="surface, diagnostic-card"
-                                  GridPane.columnIndex="1" GridPane.rowIndex="1">
+                            <VBox spacing="9" styleClass="surface, diagnostic-card"
+                                  GridPane.columnIndex="2">
                                 <HBox spacing="8" alignment="CENTER_LEFT">
                                     <Label text="BIOS 电源能力" styleClass="diagnostic-card-title"/>
                                     <Pane HBox.hgrow="ALWAYS"/>
                                     <Label fx:id="biosInterfaceStatusLabel" text="待检测"
                                            styleClass="status-badge, status-offline"/>
                                 </HBox>
-                                <Label fx:id="biosInterfaceDetailLabel" text="等待检测"
-                                       wrapText="true" styleClass="diagnostic-value"/>
-                                <GridPane hgap="10" vgap="8">
+                                <Label fx:id="biosInterfaceDetailLabel" text="等待检测" wrapText="true"
+                                       minWidth="0" maxWidth="Infinity" textOverrun="CLIP"
+                                       styleClass="diagnostic-value"/>
+                                <Pane VBox.vgrow="ALWAYS"/>
+                                <GridPane hgap="8" vgap="8">
                                     <columnConstraints>
-                                        <ColumnConstraints minWidth="90" prefWidth="90" halignment="RIGHT"/>
+                                        <ColumnConstraints minWidth="82" prefWidth="82" halignment="RIGHT"/>
                                         <ColumnConstraints hgrow="ALWAYS"/>
                                     </columnConstraints>
                                     <Label text="来电自动启动" styleClass="field-label" GridPane.rowIndex="0"/>
@@ -253,6 +387,8 @@
                             </VBox>
                         </GridPane>
                     </VBox>
+                        </content>
+                    </ScrollPane>
                 </content>
             </Tab>
         </tabs>

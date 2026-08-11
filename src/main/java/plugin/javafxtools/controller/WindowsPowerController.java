@@ -14,8 +14,11 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import plugin.javafxtools.base.BaseController;
 import plugin.javafxtools.service.WindowsPowerDiagnosticsService;
+import plugin.javafxtools.service.WindowsPowerDiagnosticsService.GraphicsAdapterInfo;
+import plugin.javafxtools.service.WindowsPowerDiagnosticsService.MemoryModuleInfo;
 import plugin.javafxtools.service.WindowsPowerDiagnosticsService.PowerDiagnostics;
 import plugin.javafxtools.service.WindowsPowerDiagnosticsService.PowerStateCapabilities;
+import plugin.javafxtools.service.WindowsPowerDiagnosticsService.TemperatureReading;
 import plugin.javafxtools.service.WindowsPowerDiagnosticsService.WakeTimerStatus;
 import plugin.javafxtools.service.WindowsPowerSchedulerService;
 import plugin.javafxtools.service.WindowsPowerSchedulerService.PowerAction;
@@ -44,6 +47,8 @@ public class WindowsPowerController extends BaseController {
                     .withResolverStyle(ResolverStyle.STRICT);
     private static final DateTimeFormatter DISPLAY_TIME_FORMAT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final DateTimeFormatter DIAGNOSTICS_TIME_FORMAT =
+            DateTimeFormatter.ofPattern("HH:mm:ss");
 
     @FXML private Label platformStatusLabel;
     @FXML private ComboBox<PowerAction> powerActionComboBox;
@@ -62,10 +67,31 @@ public class WindowsPowerController extends BaseController {
     @FXML private Button refreshButton;
     @FXML private Label diagnosticsStatusLabel;
     @FXML private Button diagnosticsRefreshButton;
+    @FXML private Label deviceBrandSummaryLabel;
+    @FXML private Label processorSummaryLabel;
+    @FXML private Label processorMetaSummaryLabel;
+    @FXML private Label graphicsSummaryLabel;
+    @FXML private Label graphicsMetaSummaryLabel;
+    @FXML private Label memorySummaryLabel;
+    @FXML private Label memoryMetaSummaryLabel;
+    @FXML private Label biosSummaryLabel;
+    @FXML private Label biosDateSummaryLabel;
     @FXML private Label systemValueLabel;
+    @FXML private Label serialNumberValueLabel;
+    @FXML private Label systemUuidValueLabel;
     @FXML private Label boardValueLabel;
+    @FXML private Label boardSerialValueLabel;
+    @FXML private Label processorValueLabel;
+    @FXML private Label graphicsValueLabel;
+    @FXML private Label memoryValueLabel;
+    @FXML private Label memoryModulesValueLabel;
+    @FXML private Label temperatureValueLabel;
+    @FXML private Label operatingSystemValueLabel;
     @FXML private Label biosValueLabel;
+    @FXML private Label biosReleaseDateValueLabel;
     @FXML private Label firmwareValueLabel;
+    @FXML private Label activePowerPlanValueLabel;
+    @FXML private Label powerSupplyStatusValueLabel;
     @FXML private Label s3StatusLabel;
     @FXML private Label modernStandbyStatusLabel;
     @FXML private Label hibernateStatusLabel;
@@ -161,6 +187,7 @@ public class WindowsPowerController extends BaseController {
     @FXML
     private void handleRefresh() {
         refreshSchedules();
+        refreshDiagnostics();
     }
 
     @FXML
@@ -237,7 +264,8 @@ public class WindowsPowerController extends BaseController {
             return;
         }
         busy = false;
-        setPlatformStatus("ERROR", showAlert ? "操作失败" : "无法读取状态");
+        setPlatformStatus(showAlert ? "ERROR" : "BUSY",
+                showAlert ? "操作失败" : "计划状态受限");
         if (!showAlert) {
             String details = conciseErrorMessage(exception);
             powerTaskExists = false;
@@ -258,19 +286,55 @@ public class WindowsPowerController extends BaseController {
             return;
         }
         diagnosticsBusy = false;
-        systemValueLabel.setText(joinValues(
-                diagnostics.systemManufacturer(), diagnostics.systemModel()));
+        String system = joinValues(diagnostics.systemManufacturer(), diagnostics.systemModel());
+        String processor = formatProcessor(diagnostics);
+        String processorName = joinValues(diagnostics.processorName());
+        String processorMeta = formatProcessorMeta(diagnostics);
+        java.util.List<GraphicsAdapterInfo> graphicsAdapters = relevantGraphics(
+                diagnostics.graphicsAdapters());
+        String graphics = graphicsAdapters.isEmpty()
+                ? "Windows 未返回 GPU 信息" : joinValues(graphicsAdapters.getFirst().name());
+        String graphicsMeta = summarizeGraphicsMeta(graphicsAdapters);
+        String graphicsDetails = formatGraphics(graphicsAdapters);
+        String memory = formatMemory(diagnostics.totalPhysicalMemoryBytes());
+        String memoryMeta = summarizeMemoryMeta(diagnostics);
+        String memoryDetails = formatMemoryModules(diagnostics.memoryModules());
+        String temperatures = formatTemperatures(diagnostics);
+        String biosDate = formatBiosReleaseDate(diagnostics.biosReleaseDate());
+        String biosSummary = joinValues(diagnostics.biosManufacturer(), diagnostics.biosVersion());
+        setSummary(deviceBrandSummaryLabel, system, system);
+        setSummary(processorSummaryLabel, processorName, processor);
+        setSummary(processorMetaSummaryLabel, processorMeta, processor);
+        setSummary(graphicsSummaryLabel, graphics, graphicsDetails);
+        setSummary(graphicsMetaSummaryLabel, graphicsMeta, graphicsDetails);
+        setSummary(memorySummaryLabel, memory, memory + " · " + memoryDetails);
+        setSummary(memoryMetaSummaryLabel, memoryMeta, memory + " · " + memoryDetails);
+        setSummary(biosSummaryLabel, biosSummary, biosSummary);
+        setSummary(biosDateSummaryLabel, biosDate, biosSummary + " · " + biosDate);
+        systemValueLabel.setText(system);
+        serialNumberValueLabel.setText(joinValues(diagnostics.serialNumber()));
+        systemUuidValueLabel.setText(joinValues(diagnostics.systemUuid()));
         boardValueLabel.setText(joinValues(
                 diagnostics.boardManufacturer(), diagnostics.boardProduct()));
+        boardSerialValueLabel.setText(joinValues(diagnostics.boardSerialNumber()));
+        processorValueLabel.setText(processor);
+        graphicsValueLabel.setText(graphicsDetails);
+        memoryValueLabel.setText(formatMemory(diagnostics.totalPhysicalMemoryBytes()));
+        memoryModulesValueLabel.setText(memoryDetails);
+        temperatureValueLabel.setText(temperatures);
+        operatingSystemValueLabel.setText(joinValues(diagnostics.operatingSystem()));
         biosValueLabel.setText(joinValues(
-                diagnostics.biosManufacturer(), diagnostics.biosVersion(),
-                diagnostics.biosReleaseDate()));
+                diagnostics.biosManufacturer(), diagnostics.biosVersion()));
+        biosReleaseDateValueLabel.setText(biosDate);
         firmwareValueLabel.setText(diagnostics.firmwareType().displayName());
+        activePowerPlanValueLabel.setText(joinValues(diagnostics.activePowerPlan()));
+        powerSupplyStatusValueLabel.setText(joinValues(diagnostics.powerSupplyStatus()));
 
         updatePowerCapabilities(diagnostics.powerStates());
         updateWakeCapabilities(diagnostics);
         updateBiosCapabilities(diagnostics);
-        setTaskStatus(diagnosticsStatusLabel, "SUCCESS", "检测完成");
+        setTaskStatus(diagnosticsStatusLabel, "SUCCESS",
+                "已更新 " + DIAGNOSTICS_TIME_FORMAT.format(LocalTime.now()));
         updateControlState();
     }
 
@@ -337,10 +401,31 @@ public class WindowsPowerController extends BaseController {
 
     private void setDiagnosticsUnavailable(String details) {
         setTaskStatus(diagnosticsStatusLabel, "ERROR", "检测失败");
+        deviceBrandSummaryLabel.setText(details);
+        processorSummaryLabel.setText("无法读取");
+        processorMetaSummaryLabel.setText("无法读取");
+        graphicsSummaryLabel.setText("无法读取");
+        graphicsMetaSummaryLabel.setText("无法读取");
+        memorySummaryLabel.setText("无法读取");
+        memoryMetaSummaryLabel.setText("无法读取");
+        biosSummaryLabel.setText("无法读取");
+        biosDateSummaryLabel.setText("无法读取");
         systemValueLabel.setText(details);
+        serialNumberValueLabel.setText("无法读取");
+        systemUuidValueLabel.setText("无法读取");
         boardValueLabel.setText("无法读取");
+        boardSerialValueLabel.setText("无法读取");
+        processorValueLabel.setText("无法读取");
+        graphicsValueLabel.setText("无法读取");
+        memoryValueLabel.setText("无法读取");
+        memoryModulesValueLabel.setText("无法读取");
+        temperatureValueLabel.setText("无法读取");
+        operatingSystemValueLabel.setText("无法读取");
         biosValueLabel.setText("无法读取");
+        biosReleaseDateValueLabel.setText("无法读取");
         firmwareValueLabel.setText("未知");
+        activePowerPlanValueLabel.setText("无法读取");
+        powerSupplyStatusValueLabel.setText("无法读取");
         setTaskStatus(s3StatusLabel, "ERROR", "未知");
         setTaskStatus(modernStandbyStatusLabel, "ERROR", "未知");
         setTaskStatus(hibernateStatusLabel, "ERROR", "未知");
@@ -374,6 +459,160 @@ public class WindowsPowerController extends BaseController {
                 .map(String::strip)
                 .collect(java.util.stream.Collectors.joining(" · "));
         return result.isBlank() ? "未提供" : result;
+    }
+
+    private String formatMemory(long bytes) {
+        if (bytes <= 0) {
+            return "未提供";
+        }
+        return String.format(Locale.ROOT, "%.1f GiB", bytes / 1_073_741_824.0);
+    }
+
+    private String formatBiosReleaseDate(String value) {
+        String date = joinValues(value);
+        return date.matches("\\d{4}-\\d{2}-\\d{2}")
+                ? date + " · 固件未提供具体时间" : date;
+    }
+
+    private String formatProcessor(PowerDiagnostics diagnostics) {
+        java.util.List<String> details = new java.util.ArrayList<>();
+        if (!diagnostics.processorName().isBlank()) {
+            details.add(diagnostics.processorName().strip());
+        }
+        String meta = formatProcessorMeta(diagnostics);
+        if (!meta.equals("规格未提供")) {
+            details.add(meta);
+        }
+        return details.isEmpty() ? "未提供" : String.join(" · ", details);
+    }
+
+    private String formatProcessorMeta(PowerDiagnostics diagnostics) {
+        java.util.List<String> details = new java.util.ArrayList<>();
+        if (diagnostics.processorCores() > 0
+                && diagnostics.processorLogicalProcessors() > 0) {
+            details.add(diagnostics.processorCores() + " 核 / "
+                    + diagnostics.processorLogicalProcessors() + " 线程");
+        } else if (diagnostics.processorCores() > 0) {
+            details.add(diagnostics.processorCores() + " 核");
+        } else if (diagnostics.processorLogicalProcessors() > 0) {
+            details.add(diagnostics.processorLogicalProcessors() + " 线程");
+        }
+        if (diagnostics.processorMaxClockMhz() > 0) {
+            details.add(String.format(Locale.ROOT, "报告频率 %.2f GHz",
+                    diagnostics.processorMaxClockMhz() / 1_000.0));
+        }
+        return details.isEmpty() ? "规格未提供" : String.join(" · ", details);
+    }
+
+    private String summarizeMemoryMeta(PowerDiagnostics diagnostics) {
+        java.util.List<String> details = new java.util.ArrayList<>();
+        if (!diagnostics.memoryModules().isEmpty()) {
+            details.add(diagnostics.memoryModules().size() + " 条内存");
+            int speed = diagnostics.memoryModules().stream()
+                    .mapToInt(module -> module.configuredSpeedMhz() > 0
+                            ? module.configuredSpeedMhz() : module.speedMhz())
+                    .max().orElse(0);
+            if (speed > 0) {
+                details.add(speed + " MHz");
+            }
+        }
+        return details.isEmpty() ? "内存条明细未提供" : String.join(" · ", details);
+    }
+
+    private String formatMemoryModules(java.util.List<MemoryModuleInfo> modules) {
+        if (modules.isEmpty()) {
+            return "Windows 未返回内存条明细";
+        }
+        java.util.List<String> values = new java.util.ArrayList<>();
+        for (int index = 0; index < modules.size(); index++) {
+            MemoryModuleInfo module = modules.get(index);
+            int speed = module.configuredSpeedMhz() > 0
+                    ? module.configuredSpeedMhz() : module.speedMhz();
+            values.add("插槽 " + (index + 1) + ": " + formatMemory(module.capacityBytes())
+                    + (speed > 0 ? " · " + speed + " MHz" : "")
+                    + optionalDetail(module.manufacturer())
+                    + optionalDetail(module.partNumber()));
+        }
+        return String.join("\n", values);
+    }
+
+    private String summarizeGraphicsMeta(java.util.List<GraphicsAdapterInfo> adapters) {
+        if (adapters.isEmpty()) {
+            return "显存与温度未提供";
+        }
+        GraphicsAdapterInfo primary = adapters.getFirst();
+        java.util.List<String> details = new java.util.ArrayList<>();
+        if (primary.adapterMemoryBytes() > 0) {
+            details.add("显存 " + formatMemory(primary.adapterMemoryBytes()));
+        }
+        if (primary.hasTemperature()) {
+            details.add(String.format(Locale.ROOT, "%.1f °C", primary.temperatureCelsius()));
+        }
+        if (adapters.size() > 1) {
+            details.add("另有 " + (adapters.size() - 1) + " 个");
+        }
+        return details.isEmpty() ? "显存与温度未提供" : String.join(" · ", details);
+    }
+
+    private java.util.List<GraphicsAdapterInfo> relevantGraphics(
+            java.util.List<GraphicsAdapterInfo> adapters) {
+        java.util.List<GraphicsAdapterInfo> hardware = adapters.stream()
+                .filter(adapter -> !isVirtualGraphics(adapter.name())).toList();
+        return hardware.isEmpty() ? adapters : hardware;
+    }
+
+    private boolean isVirtualGraphics(String name) {
+        String value = name == null ? "" : name.toLowerCase(Locale.ROOT);
+        return value.contains("orayidd") || value.contains("remote display")
+                || value.contains("indirect display")
+                || value.contains("virtual display")
+                || value.contains("microsoft basic display");
+    }
+
+    private String formatGraphics(java.util.List<GraphicsAdapterInfo> adapters) {
+        if (adapters.isEmpty()) {
+            return "Windows 未返回 GPU 信息";
+        }
+        java.util.List<String> values = new java.util.ArrayList<>();
+        for (GraphicsAdapterInfo adapter : adapters) {
+            String value = joinValues(adapter.name());
+            if (adapter.adapterMemoryBytes() > 0) {
+                value += " · 显存 " + formatMemory(adapter.adapterMemoryBytes());
+            }
+            if (adapter.hasTemperature()) {
+                value += String.format(Locale.ROOT, " · %.1f °C", adapter.temperatureCelsius());
+            }
+            if (!adapter.driverVersion().isBlank()) {
+                value += " · 驱动 " + adapter.driverVersion();
+            }
+            values.add(value);
+        }
+        return String.join("\n", values);
+    }
+
+    private String formatTemperatures(PowerDiagnostics diagnostics) {
+        java.util.List<String> values = new java.util.ArrayList<>();
+        for (GraphicsAdapterInfo adapter : diagnostics.graphicsAdapters()) {
+            if (adapter.hasTemperature()) {
+                values.add(adapter.name() + String.format(Locale.ROOT, " %.1f °C",
+                        adapter.temperatureCelsius()));
+            }
+        }
+        for (TemperatureReading reading : diagnostics.temperatures()) {
+            String source = reading.source().isBlank() ? "" : "（" + reading.source() + "）";
+            values.add(reading.label() + String.format(Locale.ROOT, " %.1f °C", reading.celsius())
+                    + source);
+        }
+        return values.isEmpty() ? "未公开可读取的温度传感器" : String.join(" · ", values);
+    }
+
+    private String optionalDetail(String value) {
+        return value == null || value.isBlank() ? "" : " · " + value.strip();
+    }
+
+    private void setSummary(Label label, String summary, String details) {
+        label.setText(summary);
+        label.setTooltip(details == null || details.isBlank() ? null : new Tooltip(details));
     }
 
     private void updatePowerStatus(ScheduledTaskStatus status) {

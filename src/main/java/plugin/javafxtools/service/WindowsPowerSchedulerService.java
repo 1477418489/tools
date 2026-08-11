@@ -1,16 +1,12 @@
 package plugin.javafxtools.service;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
-import java.util.Base64;
-import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Manages one-time Windows power and wake tasks through Task Scheduler.
@@ -103,7 +99,7 @@ public final class WindowsPowerSchedulerService {
         String script = scriptPreamble()
                 + connectTaskSchedulerScript()
                 + "try{$task=$root.GetTask('" + taskName + "')}"
-                + "catch{if($_.Exception.HResult -eq -2147024894)"
+                + "catch{if($_.Exception.HResult -in @(-2147024894,-2147024893))"
                 + "{Write-Output 'MISSING';exit 0};throw};"
                 + "$next=if($task.NextRunTime -and $task.NextRunTime.Year -gt 2000)"
                 + "{$task.NextRunTime.ToString('yyyy-MM-ddTHH:mm:ss')}else{''};"
@@ -115,11 +111,17 @@ public final class WindowsPowerSchedulerService {
 
     private CommandResult runPowerShell(String script,
                                         String failureMessage) throws IOException {
-        CommandResult result = commandRunner.run(List.of(
-                "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive",
-                "-EncodedCommand", encodePowerShell(script)));
+        String guardedScript = "try{" + script
+                + "}catch{Write-Output ('ERROR|'+$_.Exception.Message);exit 1}";
+        CommandResult result = commandRunner.run(guardedScript);
         if (result.exitCode() != 0) {
-            String details = cleanOutput(result.output());
+            String output = cleanOutput(result.output());
+            String details = output.lines()
+                    .map(String::strip)
+                    .filter(line -> line.startsWith("ERROR|"))
+                    .map(line -> line.substring("ERROR|".length()).strip())
+                    .reduce((previous, current) -> current)
+                    .orElse(output);
             throw new IOException(details.isBlank()
                     ? failureMessage + "，退出码: " + result.exitCode()
                     : failureMessage + ": " + details);
@@ -163,7 +165,7 @@ public final class WindowsPowerSchedulerService {
 
     private String unregisterTaskScript(String taskName) {
         return "try{$root.DeleteTask('" + taskName + "',0)}"
-                + "catch{if($_.Exception.HResult -ne -2147024894){throw}};";
+                + "catch{if($_.Exception.HResult -notin @(-2147024894,-2147024893)){throw}};";
     }
 
     private String connectTaskSchedulerScript() {
@@ -212,11 +214,6 @@ public final class WindowsPowerSchedulerService {
 
     private String cleanOutput(String output) {
         return output == null ? "" : output.replace("\uFEFF", "").strip();
-    }
-
-    private String encodePowerShell(String script) {
-        return Base64.getEncoder().encodeToString(
-                script.getBytes(StandardCharsets.UTF_16LE));
     }
 
     public enum PowerAction {
@@ -274,7 +271,7 @@ public final class WindowsPowerSchedulerService {
 
     @FunctionalInterface
     interface CommandRunner {
-        CommandResult run(List<String> command) throws IOException;
+        CommandResult run(String script) throws IOException;
     }
 
     record CommandResult(int exitCode, String output) {
@@ -282,23 +279,11 @@ public final class WindowsPowerSchedulerService {
 
     private static final class ProcessCommandRunner implements CommandRunner {
         @Override
-        public CommandResult run(List<String> command) throws IOException {
-            Process process = new ProcessBuilder(command)
-                    .redirectErrorStream(true)
-                    .start();
-            try {
-                if (!process.waitFor(COMMAND_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                    process.destroyForcibly();
-                    throw new IOException("Windows 任务计划程序响应超时");
-                }
-                String output = new String(process.getInputStream().readAllBytes(),
-                        StandardCharsets.UTF_8);
-                return new CommandResult(process.exitValue(), output);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                process.destroyForcibly();
-                throw new IOException("Windows 电源计划操作被中断", e);
-            }
+        public CommandResult run(String script) throws IOException {
+            PowerShellScriptRunner.Result result = PowerShellScriptRunner.run(
+                    script, COMMAND_TIMEOUT_SECONDS,
+                    "Windows 电源计划操作", "WindowsPowerSchedulerOutput");
+            return new CommandResult(result.exitCode(), result.output());
         }
     }
 }

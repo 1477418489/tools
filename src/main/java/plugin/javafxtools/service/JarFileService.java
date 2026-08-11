@@ -23,6 +23,8 @@ import java.util.function.Consumer;
  * @author wwj
  */
 public class JarFileService {
+    private static final long MAX_OUTPUT_LOG_BYTES = 50L * 1024 * 1024;
+
     private final Consumer<String> logger;
 
     /**
@@ -76,10 +78,10 @@ public class JarFileService {
      * @param project 项目配置
      * @param port 启动端口
      * @param profile Spring profile
-     * @return 实际 Java 进程
+     * @return Java 进程及其本次启动日志位置
      * @throws IOException 启动失败
      */
-    public Process startJavaApplication(ProjectConfig project, int port, String profile) throws IOException {
+    public JavaLaunch startJavaApplication(ProjectConfig project, int port, String profile) throws IOException {
         List<String> command = buildJavaArguments(project, port, profile);
 
         ProcessBuilder processBuilder = new ProcessBuilder(command);
@@ -90,17 +92,20 @@ public class JarFileService {
         Path workingDirectory = resolveTargetDirectory(project);
         processBuilder.directory(workingDirectory.toFile());
         Path outputLog = resolveOutputLog(project, port);
+        long outputStartOffset = prepareOutputLog(outputLog);
         processBuilder.redirectInput(ProcessBuilder.Redirect.PIPE);
         processBuilder.redirectOutput(ProcessBuilder.Redirect.appendTo(outputLog.toFile()));
         processBuilder.redirectErrorStream(true);
 
         Map<String, String> env = processBuilder.environment();
-        env.put("JAVA_TOOL_OPTIONS", "");
+        env.remove("JAVA_TOOL_OPTIONS");
+        env.remove("JDK_JAVA_OPTIONS");
+        env.remove("_JAVA_OPTIONS");
 
         Process process = processBuilder.start();
         process.getOutputStream().close();
         logger.accept("JAR进程已启动，PID: " + process.pid() + "，输出日志: " + outputLog);
-        return process;
+        return new JavaLaunch(process, outputLog, outputStartOffset);
     }
 
     /**
@@ -336,6 +341,41 @@ public class JarFileService {
         }
         command.addAll(parseOptions(project.getOtherOpts()));
         return command;
+    }
+
+    private long prepareOutputLog(Path outputLog) throws IOException {
+        Path parent = outputLog.getParent();
+        if (parent == null) {
+            throw new IOException("输出日志路径缺少父目录: " + outputLog);
+        }
+        Files.createDirectories(parent);
+        if (Files.isRegularFile(outputLog) && Files.size(outputLog) >= MAX_OUTPUT_LOG_BYTES) {
+            Path previousLog = outputLog.resolveSibling(outputLog.getFileName() + ".previous");
+            try {
+                Files.move(outputLog, previousLog, StandardCopyOption.REPLACE_EXISTING);
+                logger.accept("运行日志已达到 50 MB，已轮转到: " + previousLog);
+            } catch (IOException e) {
+                logger.accept("运行日志轮转失败，将继续追加当前文件: " + e.getMessage());
+            }
+        }
+        return Files.isRegularFile(outputLog) ? Files.size(outputLog) : 0L;
+    }
+
+    /**
+     * Java 启动结果。日志直接由子进程写入文件，工具仅从起始偏移量读取本次新增内容。
+     *
+     * @param process 实际 Java 进程
+     * @param outputLog 输出日志文件
+     * @param outputStartOffset 本次启动前的日志长度
+     */
+    public record JavaLaunch(Process process, Path outputLog, long outputStartOffset) {
+        public JavaLaunch {
+            Objects.requireNonNull(process, "process");
+            Objects.requireNonNull(outputLog, "outputLog");
+            if (outputStartOffset < 0) {
+                throw new IllegalArgumentException("outputStartOffset 不能为负数");
+            }
+        }
     }
 
     static List<String> parseOptions(String text) throws IOException {

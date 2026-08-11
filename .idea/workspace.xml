@@ -4,19 +4,30 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ee1c44d2-bcb9-434c-ac67-b5e91efd8462" name="更改" comment="init5">
+    <list default="true" id="ee1c44d2-bcb9-434c-ac67-b5e91efd8462" name="更改" comment="init6">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/ToolsApplication.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/ToolsApplication.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/AppLauncherController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/AppLauncherController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/JarLauncherController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/JarLauncherController.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/MainController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/MainController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/NetworkToolsController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/NetworkToolsController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/SystemTrayService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/SystemTrayService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/WindowsPowerController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/WindowsPowerController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/AppLauncherExecutionService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/AppLauncherExecutionService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/AppLauncherRuntimeActionService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/AppLauncherRuntimeActionService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/AppProcessManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/AppProcessManager.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarCopyActionService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarCopyActionService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarFileService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarFileService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarLaunchService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarLaunchService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarProjectStatusModel.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarProjectStatusModel.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/WindowsPowerDiagnosticsService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/WindowsPowerDiagnosticsService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/WindowsPowerSchedulerService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/WindowsPowerSchedulerService.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/resources/css/modern-light.css" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/css/modern-light.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/css/styles.css" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/css/styles.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/http-request-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/http-request-view.fxml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/app-launcher-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/app-launcher-view.fxml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/main-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/main-view.fxml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/network-tools-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/network-tools-view.fxml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/windows-power-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/windows-power-view.fxml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/FxmlLayoutRegressionTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/FxmlLayoutRegressionTest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/JarProjectStatusModelTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/JarProjectStatusModelTest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/WindowsPowerDiagnosticsServiceTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/WindowsPowerDiagnosticsServiceTest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/WindowsPowerSchedulerServiceTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/WindowsPowerSchedulerServiceTest.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -84,7 +95,7 @@
     &quot;project.structure.last.edited&quot;: &quot;项目&quot;,
     &quot;project.structure.proportion&quot;: &quot;0.15&quot;,
     &quot;project.structure.side.proportion&quot;: &quot;0.2&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;http.proxy&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;,
     &quot;应用程序.ToolsApplication.executor&quot;: &quot;Run&quot;
   }
@@ -208,7 +219,8 @@
     <MESSAGE value="init3" />
     <MESSAGE value="init4" />
     <MESSAGE value="init5" />
-    <option name="LAST_COMMIT_MESSAGE" value="init5" />
+    <MESSAGE value="init6" />
+    <option name="LAST_COMMIT_MESSAGE" value="init6" />
     <option name="NON_MODAL_COMMIT_POSTPONE_SLOW_CHECKS" value="false" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">

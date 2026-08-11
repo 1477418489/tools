@@ -18,13 +18,20 @@ public final class JarProjectStatusModel {
     private final AtomicLong batchVersion = new AtomicLong();
 
     public long beginBatch(List<ProjectConfig> projects) {
+        return beginBatch(projects, Set.of());
+    }
+
+    public long beginBatch(List<ProjectConfig> projects, Set<Integer> protectedProjectIds) {
         long version = batchVersion.incrementAndGet();
         Set<Integer> projectIds = projects.stream()
                 .map(ProjectConfig::getId)
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
         statuses.keySet().removeIf(projectId -> !projectIds.contains(projectId));
-        projects.forEach(project -> statuses.put(
-                project.getId(), JarProjectRuntimeStatus.CHECKING));
+        projects.forEach(project -> {
+            if (!protectedProjectIds.contains(project.getId())) {
+                statuses.put(project.getId(), JarProjectRuntimeStatus.CHECKING);
+            }
+        });
         return version;
     }
 
@@ -47,9 +54,18 @@ public final class JarProjectStatusModel {
     }
 
     public void failBatch(long version, List<ProjectConfig> projects) {
+        failBatch(version, projects, Set.of());
+    }
+
+    public void failBatch(long version,
+                          List<ProjectConfig> projects,
+                          Set<Integer> protectedProjectIds) {
         if (isBatchCurrent(version)) {
-            projects.forEach(project -> statuses.put(
-                    project.getId(), JarProjectRuntimeStatus.ERROR));
+            projects.forEach(project -> {
+                if (!protectedProjectIds.contains(project.getId())) {
+                    statuses.put(project.getId(), JarProjectRuntimeStatus.ERROR);
+                }
+            });
         }
     }
 
@@ -76,6 +92,11 @@ public final class JarProjectStatusModel {
         long errors = count(JarProjectRuntimeStatus.ERROR);
         long conflicts = count(JarProjectRuntimeStatus.CONFLICT);
         return new JarProjectStatusSummary(total, running, checking, errors, conflicts);
+    }
+
+    public boolean hasCheckingProjects() {
+        return statuses.values().stream()
+                .anyMatch(JarProjectRuntimeStatus.CHECKING::equals);
     }
 
     private long count(JarProjectRuntimeStatus expected) {

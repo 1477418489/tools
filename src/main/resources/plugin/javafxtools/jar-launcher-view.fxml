@@ -87,5 +87,6 @@
         </items>
     </SplitPane>
 
-    <LogViewer fx:id="logViewer" title="执行日志" promptText="等待操作"/>
+    <LogViewer fx:id="logViewer" title="执行日志" promptText="等待操作"
+               inlineContent="true" VBox.vgrow="ALWAYS"/>
 </VBox>

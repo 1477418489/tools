@@ -6,8 +6,10 @@ import plugin.javafxtools.model.AppInfo;
 
 import java.util.List;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
@@ -27,7 +29,10 @@ public class AppLauncherRuntimeActionService {
     private final Supplier<List<AppInfo>> appInfosSnapshotSupplier;
     private final Runnable updateAppList;
     private final Consumer<Boolean> launchStateConsumer;
+    private final IntSupplier launchDelayMillisSupplier;
     private final AtomicBoolean launchInProgress = new AtomicBoolean();
+    private final AtomicReference<Future<?>> batchLaunchTask = new AtomicReference<>();
+    private volatile boolean batchLaunchInProgress;
 
     /**
      * 创建运行时动作服务。
@@ -50,7 +55,8 @@ public class AppLauncherRuntimeActionService {
                                            IntSupplier selectedIndexSupplier,
                                            Supplier<List<AppInfo>> appInfosSnapshotSupplier,
                                            Runnable updateAppList,
-                                           Consumer<Boolean> launchStateConsumer) {
+                                           Consumer<Boolean> launchStateConsumer,
+                                           IntSupplier launchDelayMillisSupplier) {
         this.logger = logger;
         this.executionService = executionService;
         this.statusService = statusService;
@@ -60,6 +66,7 @@ public class AppLauncherRuntimeActionService {
         this.appInfosSnapshotSupplier = appInfosSnapshotSupplier;
         this.updateAppList = updateAppList;
         this.launchStateConsumer = launchStateConsumer;
+        this.launchDelayMillisSupplier = launchDelayMillisSupplier;
     }
 
     /**
@@ -67,7 +74,7 @@ public class AppLauncherRuntimeActionService {
      */
     public void launchSingle() {
         AppInfo selectedApp = selectedApp("请先选择要启动的应用程序");
-        if (selectedApp != null && beginLaunch()) {
+        if (selectedApp != null && beginLaunch(false)) {
             executionService.launchSingle(selectedApp, this::finishLaunch);
         }
     }
@@ -81,9 +88,26 @@ public class AppLauncherRuntimeActionService {
             logger.error("应用程序列表为空");
             return;
         }
-        if (beginLaunch()) {
-            executionService.launchAll(appInfos, this::finishLaunch);
+        if (beginLaunch(true)) {
+            batchLaunchTask.set(executionService.launchAll(
+                    appInfos, launchDelayMillisSupplier.getAsInt(), this::finishLaunch));
         }
+    }
+
+    /** Stops a running delayed batch launch without terminating applications already started. */
+    public void cancelBatchLaunch() {
+        Future<?> task = batchLaunchTask.get();
+        if (!batchLaunchInProgress || task == null || task.isDone()) {
+            logger.info("当前没有可停止的批量启动");
+            return;
+        }
+        if (task.cancel(true)) {
+            logger.info("正在停止批量启动，已启动的应用将保持运行");
+        }
+    }
+
+    public boolean isBatchLaunchInProgress() {
+        return batchLaunchInProgress;
     }
 
     /**
@@ -148,17 +172,22 @@ public class AppLauncherRuntimeActionService {
         return appInfos.get(selectedIndex);
     }
 
-    private boolean beginLaunch() {
+    private boolean beginLaunch(boolean batch) {
         if (!launchInProgress.compareAndSet(false, true)) {
             logger.info("启动操作正在进行中，请稍候");
             return false;
         }
+        batchLaunchInProgress = batch;
         launchStateConsumer.accept(true);
         return true;
     }
 
     private void finishLaunch() {
-        launchInProgress.set(false);
+        if (!launchInProgress.compareAndSet(true, false)) {
+            return;
+        }
+        batchLaunchInProgress = false;
+        batchLaunchTask.set(null);
         launchStateConsumer.accept(false);
         updateAppList.run();
     }

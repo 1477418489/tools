@@ -33,12 +33,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * JAR 启动器控制器，负责项目配置维护、文件复制、端口检查和 Java 进程启动停止。
@@ -114,14 +115,19 @@ public class JarLauncherController {
         return t;
     });
 
+    private final ExecutorService javaProcessExecutor = Executors.newThreadPerTaskExecutor(
+            Thread.ofVirtual().name("JarStartupMonitor-", 0).factory());
+
     private final AtomicLong statusCheckVersion = new AtomicLong();
 
     private final AtomicLong pathCheckVersion = new AtomicLong();
 
     private final JarProjectStatusModel projectStatusModel = new JarProjectStatusModel();
 
-    private final AtomicReference<ProjectOperation> activeOperation =
-            new AtomicReference<>(ProjectOperation.NONE);
+    private final Map<Integer, ProjectOperation> activeProjectOperations =
+            new ConcurrentHashMap<>();
+
+    private final AtomicBoolean portQueryInProgress = new AtomicBoolean();
 
     private final JarProjectStore projectStore = new JarProjectStore(this::appendLog);
 
@@ -149,15 +155,17 @@ public class JarLauncherController {
     private JarProjectActionService projectActionService;
 
     private final JarLaunchService jarLaunchService =
-            new JarLaunchService(backgroundExecutor, portProcessService, jarFileService,
+            new JarLaunchService(javaProcessExecutor, javaProcessExecutor,
+                    portProcessService, jarFileService,
                     this::appendLog, this::showError, this::confirmKillProcessOnPort,
-                    this::finishProjectOperation, this::recordRunningPort,
+                    this::finishProjectOperation, this::updateButtonStates,
+                    this::recordRunningPort,
                     this::clearRunningPort);
 
     private final JarPortQueryService portQueryService =
             new JarPortQueryService(backgroundExecutor, portProcessService,
                     this::appendLog, this::showError, this::confirmKillProcessOnPort,
-                    () -> finishProjectOperation(null, -1));
+                    this::finishPortQuery);
 
     private JarLauncherUiSupport uiSupport;
 
@@ -187,9 +195,6 @@ public class JarLauncherController {
     // 处理添加项目操作
     @FXML
     private void handleAddProject(ActionEvent event) {
-        if (!projectConfigurationAvailable()) {
-            return;
-        }
         projectActionService.addProject();
     }
 
@@ -208,7 +213,7 @@ public class JarLauncherController {
             showError("端口必须在 1 到 65535 之间");
             return;
         }
-        if (!beginProjectOperation(ProjectOperation.QUERYING)) {
+        if (!beginPortQuery()) {
             return;
         }
         portQueryService.queryPort(port);
@@ -216,17 +221,13 @@ public class JarLauncherController {
 
     @FXML
     private void refreshProjectStatuses() {
-        if (activeOperation.get() != ProjectOperation.NONE) {
-            appendLog("请等待当前操作完成后再刷新项目状态");
-            return;
-        }
         scheduleAllProjectStateChecks();
     }
 
     // 处理编辑项目操作
     @FXML
     private void handleEditProject(ActionEvent event) {
-        if (!projectConfigurationAvailable()) {
+        if (!projectConfigurationAvailable(getSelectedProject())) {
             return;
         }
         projectActionService.editProject();
@@ -240,10 +241,13 @@ public class JarLauncherController {
             showError("请先选择项目");
             return;
         }
-        if (!beginProjectOperation(ProjectOperation.COPYING)) {
+        if (!beginProjectOperation(selectedProject, ProjectOperation.COPYING)) {
             return;
         }
-        copyActionService.copyProjectFiles(selectedProject);
+        if (!copyActionService.copyProjectFiles(selectedProject)) {
+            finishProjectOperation(selectedProject,
+                    runtimeState.resolveStatusPort(selectedProject));
+        }
     }
 
     @FXML
@@ -281,7 +285,7 @@ public class JarLauncherController {
         }
         String profileText = profileField.getText() == null ? "" : profileField.getText().trim();
         String profile = profileText.isEmpty() ? selectedProject.getDefaultProfile() : profileText;
-        if (!beginProjectOperation(ProjectOperation.LAUNCHING)) {
+        if (!beginProjectOperation(selectedProject, ProjectOperation.LAUNCHING)) {
             return;
         }
 
@@ -305,7 +309,7 @@ public class JarLauncherController {
             showError("端口必须在 1 到 65535 之间");
             return;
         }
-        if (!beginProjectOperation(ProjectOperation.STOPPING)) {
+        if (!beginProjectOperation(selectedProject, ProjectOperation.STOPPING)) {
             return;
         }
         final ProjectConfig stopProject = selectedProject;
@@ -340,15 +344,12 @@ public class JarLauncherController {
     // 处理删除项目操作
     @FXML
     private void handleDeleteProject(ActionEvent event) {
-        if (!projectConfigurationAvailable()) {
-            return;
-        }
         ProjectConfig project = getSelectedProject();
         if (project == null) {
             showError("请先选择要删除的项目");
             return;
         }
-        if (!beginProjectOperation(ProjectOperation.DELETING)) {
+        if (!beginProjectOperation(project, ProjectOperation.DELETING)) {
             return;
         }
         int port = runtimeState.resolveStatusPort(project);
@@ -358,14 +359,14 @@ public class JarLauncherController {
                 Platform.runLater(() -> finishDeleteCheck(project, status));
             });
         } catch (RejectedExecutionException e) {
-            activeOperation.set(ProjectOperation.NONE);
+            activeProjectOperations.remove(project.getId(), ProjectOperation.DELETING);
             applyProjectState(project, JarProjectRuntimeStatus.ERROR);
             showError("项目状态检查服务已关闭");
         }
     }
 
     private void finishDeleteCheck(ProjectConfig project, JarProjectRuntimeStatus status) {
-        activeOperation.set(ProjectOperation.NONE);
+        activeProjectOperations.remove(project.getId(), ProjectOperation.DELETING);
         ProjectConfig selected = getSelectedProject();
         if (selected == null || selected.getId() != project.getId()) {
             updateButtonStates(selected);
@@ -389,6 +390,10 @@ public class JarLauncherController {
     private void recordRunningPort(ProjectConfig project, int port) {
         runtimeState.recordRunningPort(project, port);
         refreshProjectListOnFxThread();
+        ProjectConfig selected = getSelectedProject();
+        if (selected != null && selected.getId() == project.getId()) {
+            refreshProjectPathButtons(project);
+        }
     }
 
     private void clearRunningPort(ProjectConfig project) {
@@ -447,8 +452,14 @@ public class JarLauncherController {
         statusCheckVersion.incrementAndGet();
         pathCheckVersion.incrementAndGet();
         projectStatusModel.invalidateBatch();
+        activeProjectOperations.clear();
+        portQueryInProgress.set(false);
+        javaProcessExecutor.shutdownNow();
         backgroundExecutor.shutdownNow();
         try {
+            if (!javaProcessExecutor.awaitTermination(2, TimeUnit.SECONDS)) {
+                appendLog("JAR启动监控任务未在超时时间内完全停止");
+            }
             if (!backgroundExecutor.awaitTermination(2, TimeUnit.SECONDS)) {
                 appendLog("JAR启动器后台任务未在超时时间内完全停止");
             }
@@ -471,7 +482,8 @@ public class JarLauncherController {
 
     private void scheduleAllProjectStateChecks() {
         List<ProjectConfig> projects = List.copyOf(projectListView.getItems());
-        long version = projectStatusModel.beginBatch(projects);
+        Set<Integer> protectedIds = Set.copyOf(activeProjectOperations.keySet());
+        long version = projectStatusModel.beginBatch(projects, protectedIds);
 
         if (projects.isEmpty()) {
             updateProjectOverview();
@@ -490,6 +502,9 @@ public class JarLauncherController {
                             || Thread.currentThread().isInterrupted()) {
                         return;
                     }
+                    if (protectedIds.contains(project.getId())) {
+                        continue;
+                    }
                     try {
                         int statusPort = runtimeState.resolveStatusPort(project);
                         JarProjectRuntimeStatus status = inspectProjectStatus(project, statusPort);
@@ -501,7 +516,7 @@ public class JarLauncherController {
                 Platform.runLater(() -> applyProjectStatusSnapshot(version, checkedStatuses));
             });
         } catch (RejectedExecutionException e) {
-            projectStatusModel.failBatch(version, projects);
+            projectStatusModel.failBatch(version, projects, protectedIds);
             updateProjectOverview();
             projectListView.refresh();
         }
@@ -510,9 +525,8 @@ public class JarLauncherController {
     private void applyProjectStatusSnapshot(long version,
                                              Map<Integer, JarProjectRuntimeStatus> checkedStatuses) {
         ProjectConfig selectedProject = getSelectedProject();
-        ProjectOperation operation = activeOperation.get();
-        Set<Integer> protectedIds = selectedProject != null && operation.runtimeStatus != null
-                ? Set.of(selectedProject.getId()) : Set.of();
+        ProjectOperation operation = operationOf(selectedProject);
+        Set<Integer> protectedIds = Set.copyOf(activeProjectOperations.keySet());
         if (!projectStatusModel.applyBatch(version, checkedStatuses, protectedIds)) {
             return;
         }
@@ -520,7 +534,7 @@ public class JarLauncherController {
         updateProjectOverview();
         projectListView.refresh();
 
-        if (selectedProject == null || operation != ProjectOperation.NONE) {
+        if (selectedProject == null || operation != null) {
             return;
         }
         JarProjectRuntimeStatus status = projectStatusModel.statusOf(selectedProject);
@@ -557,8 +571,8 @@ public class JarLauncherController {
             case ONLINE -> projectOverviewLabel.getStyleClass().add("status-online");
             case OFFLINE -> projectOverviewLabel.getStyleClass().add("status-offline");
         }
-        refreshProjectStatusButton.setDisable(total == 0 || summary.checking() > 0
-                || activeOperation.get() != ProjectOperation.NONE);
+        refreshProjectStatusButton.setDisable(total == 0
+                || projectStatusModel.hasCheckingProjects());
     }
 
     private void markStatusRefreshTime() {
@@ -566,10 +580,10 @@ public class JarLauncherController {
     }
 
     private void scheduleProjectStateCheck(ProjectConfig project, int port) {
-        ProjectOperation operation = activeOperation.get();
-        if (operation != ProjectOperation.NONE) {
+        ProjectOperation operation = operationOf(project);
+        if (operation != null) {
             statusCheckVersion.incrementAndGet();
-            applyBusyState(operation);
+            applyBusyState(project, operation);
             return;
         }
         long version = statusCheckVersion.incrementAndGet();
@@ -611,9 +625,9 @@ public class JarLauncherController {
     }
 
     private void applyProjectState(ProjectConfig project, JarProjectRuntimeStatus status) {
-        ProjectOperation operation = activeOperation.get();
-        if (operation != ProjectOperation.NONE) {
-            applyBusyState(operation);
+        ProjectOperation operation = operationOf(project);
+        if (operation != null) {
+            applyBusyState(project, operation);
             return;
         }
         boolean noProject = project == null;
@@ -622,8 +636,8 @@ public class JarLauncherController {
         projectListView.setDisable(false);
         portField.setDisable(noProject);
         profileField.setDisable(noProject);
-        portNumField.setDisable(false);
-        portQueryButton.setDisable(false);
+        portNumField.setDisable(portQueryInProgress.get());
+        portQueryButton.setDisable(portQueryInProgress.get());
         addProjectButton.setDisable(false);
         editProjectButton.setDisable(noProject);
         deleteProjectButton.setDisable(noProject);
@@ -649,24 +663,51 @@ public class JarLauncherController {
         }
     }
 
-    private boolean beginProjectOperation(ProjectOperation operation) {
-        if (!activeOperation.compareAndSet(ProjectOperation.NONE, operation)) {
-            appendLog("请等待当前操作完成: " + activeOperation.get().label);
+    private boolean beginProjectOperation(ProjectConfig project, ProjectOperation operation) {
+        if (project == null || project.getId() <= 0) {
+            showError("项目配置无效");
             return false;
         }
+        ProjectOperation existing = activeProjectOperations.putIfAbsent(project.getId(), operation);
+        if (existing != null) {
+            appendLog("[" + project.getName() + "] 请等待当前操作完成: " + existing.label);
+            return false;
+        }
+        projectStatusModel.invalidateBatch();
         statusCheckVersion.incrementAndGet();
-        applyBusyState(operation);
+        applyBusyState(project, operation);
         return true;
     }
 
     private void finishProjectOperation(ProjectConfig project, int port) {
         Runnable finish = () -> {
-            activeOperation.set(ProjectOperation.NONE);
+            if (project != null) {
+                activeProjectOperations.remove(project.getId());
+            }
             ProjectConfig selectedProject = getSelectedProject();
             if (selectedProject == null) {
                 updateButtonStates(null);
+                if (project != null) {
+                    refreshUnselectedProjectState(project, port);
+                }
+            } else if (project != null && selectedProject.getId() != project.getId()) {
+                refreshUnselectedProjectState(project, port);
+                ProjectOperation selectedOperation = operationOf(selectedProject);
+                if (selectedOperation != null) {
+                    applyBusyState(selectedProject, selectedOperation);
+                } else {
+                    JarProjectRuntimeStatus selectedStatus = projectStatusModel.statusOf(selectedProject);
+                    if (selectedStatus == JarProjectRuntimeStatus.UNKNOWN
+                            || selectedStatus.isBusy()) {
+                        scheduleProjectStateCheck(selectedProject,
+                                runtimeState.resolveStatusPort(selectedProject));
+                    } else {
+                        applyProjectState(selectedProject, selectedStatus);
+                    }
+                }
             } else {
-                updateButtonStates(selectedProject, runtimeState.resolveStatusPort(selectedProject));
+                updateButtonStates(selectedProject, port > 0
+                        ? port : runtimeState.resolveStatusPort(selectedProject));
             }
         };
         if (Platform.isFxApplicationThread()) {
@@ -676,13 +717,34 @@ public class JarLauncherController {
         }
     }
 
-    private void applyBusyState(ProjectOperation operation) {
-        projectListView.setDisable(true);
+    private void refreshUnselectedProjectState(ProjectConfig project, int port) {
+        try {
+            backgroundExecutor.submit(() -> {
+                JarProjectRuntimeStatus status;
+                try {
+                    status = inspectProjectStatus(project, port);
+                } catch (RuntimeException e) {
+                    status = JarProjectRuntimeStatus.ERROR;
+                }
+                JarProjectRuntimeStatus checkedStatus = status;
+                Platform.runLater(() -> {
+                    if (operationOf(project) == null) {
+                        setProjectRuntimeStatus(project, checkedStatus);
+                    }
+                });
+            });
+        } catch (RejectedExecutionException e) {
+            setProjectRuntimeStatus(project, JarProjectRuntimeStatus.ERROR);
+        }
+    }
+
+    private void applyBusyState(ProjectConfig project, ProjectOperation operation) {
+        projectListView.setDisable(false);
         portField.setDisable(true);
         profileField.setDisable(true);
-        portNumField.setDisable(true);
-        portQueryButton.setDisable(true);
-        addProjectButton.setDisable(true);
+        portNumField.setDisable(portQueryInProgress.get());
+        portQueryButton.setDisable(portQueryInProgress.get());
+        addProjectButton.setDisable(false);
         editProjectButton.setDisable(true);
         deleteProjectButton.setDisable(true);
         launchButton.setDisable(true);
@@ -691,21 +753,41 @@ public class JarLauncherController {
         pathCheckVersion.incrementAndGet();
         openDirectoryButton.setDisable(true);
         openLogButton.setDisable(true);
-        refreshProjectStatusButton.setDisable(true);
-        ProjectConfig selectedProject = getSelectedProject();
-        if (selectedProject != null && operation.runtimeStatus != null) {
-            setProjectRuntimeStatus(selectedProject, operation.runtimeStatus);
+        refreshProjectStatusButton.setDisable(projectListView.getItems().isEmpty());
+        if (project != null && operation.runtimeStatus != null) {
+            setProjectRuntimeStatus(project, operation.runtimeStatus);
         }
+        refreshProjectPathButtons(project);
         setProjectStatus(operation.label, "BUSY");
     }
 
-    private boolean projectConfigurationAvailable() {
-        ProjectOperation operation = activeOperation.get();
-        if (operation == ProjectOperation.NONE) {
+    private boolean projectConfigurationAvailable(ProjectConfig project) {
+        ProjectOperation operation = operationOf(project);
+        if (operation == null) {
             return true;
         }
-        appendLog("请等待当前操作完成: " + operation.label);
+        appendLog("[" + project.getName() + "] 请等待当前操作完成: " + operation.label);
         return false;
+    }
+
+    private ProjectOperation operationOf(ProjectConfig project) {
+        return project == null ? null : activeProjectOperations.get(project.getId());
+    }
+
+    private boolean beginPortQuery() {
+        if (!portQueryInProgress.compareAndSet(false, true)) {
+            appendLog("端口查询正在进行中");
+            return false;
+        }
+        portNumField.setDisable(true);
+        portQueryButton.setDisable(true);
+        return true;
+    }
+
+    private void finishPortQuery() {
+        portQueryInProgress.set(false);
+        portNumField.setDisable(false);
+        portQueryButton.setDisable(false);
     }
 
     private void openProjectPath(boolean logFile) {
@@ -749,7 +831,7 @@ public class JarLauncherController {
 
     private void refreshProjectPathButtons(ProjectConfig project) {
         long version = pathCheckVersion.incrementAndGet();
-        if (project == null || activeOperation.get() != ProjectOperation.NONE) {
+        if (project == null) {
             openDirectoryButton.setDisable(true);
             openLogButton.setDisable(true);
             return;
@@ -775,7 +857,6 @@ public class JarLauncherController {
                 Platform.runLater(() -> {
                     ProjectConfig selected = getSelectedProject();
                     if (pathCheckVersion.get() != version
-                            || activeOperation.get() != ProjectOperation.NONE
                             || selected == null
                             || selected.getId() != projectId) {
                         return;
@@ -824,12 +905,10 @@ public class JarLauncherController {
     }
 
     private enum ProjectOperation {
-        NONE("", null),
         COPYING("复制中", null),
         LAUNCHING("启动中", JarProjectRuntimeStatus.STARTING),
         STOPPING("停止中", JarProjectRuntimeStatus.STOPPING),
-        DELETING("检查中", null),
-        QUERYING("查询端口中", null);
+        DELETING("检查中", null);
 
         private final String label;
         private final JarProjectRuntimeStatus runtimeStatus;

@@ -5,6 +5,7 @@ import javafx.collections.ListChangeListener;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.stage.Stage;
+import javafx.util.StringConverter;
 import plugin.javafxtools.base.BaseController;
 import plugin.javafxtools.control.LogViewer;
 import plugin.javafxtools.model.AppInfo;
@@ -16,6 +17,7 @@ import plugin.javafxtools.service.AppLauncherListViewSupport;
 import plugin.javafxtools.service.AppLauncherRuntimeActionService;
 import plugin.javafxtools.service.AppLauncherStore;
 import plugin.javafxtools.service.AppLauncherStatusService;
+import plugin.javafxtools.service.AppLauncherSettingsStore;
 import plugin.javafxtools.service.AppLauncherUiRefreshService;
 import plugin.javafxtools.service.AppProcessManager;
 
@@ -47,10 +49,14 @@ public class AppLauncherController extends BaseController {
 
     @FXML
     private Button browseButton, addButton, launchSingleButton, launchAllButton,
-            killProcessButton, removeButton, clearButton, refreshStatusButton;
+            cancelBatchLaunchButton, killProcessButton, removeButton, clearButton,
+            refreshStatusButton;
 
     @FXML
     private Button moveUpButton, moveDownButton;
+
+    @FXML
+    private ComboBox<Integer> launchIntervalComboBox;
 
     @FXML
     private Label appCountLabel;
@@ -91,6 +97,11 @@ public class AppLauncherController extends BaseController {
 
     private final AppLauncherStore appStore = new AppLauncherStore(this);
 
+    private final AppLauncherSettingsStore launcherSettingsStore =
+            new AppLauncherSettingsStore();
+
+    private boolean launchSettingsLoaded;
+
     private final AppLauncherExecutionService executionService =
             new AppLauncherExecutionService(this, processManager, statusService,
                     backgroundExecutor, processStatusCache);
@@ -116,7 +127,7 @@ public class AppLauncherController extends BaseController {
     private final AppLauncherRuntimeActionService runtimeActionService =
             new AppLauncherRuntimeActionService(this, executionService, statusService, backgroundExecutor,
                     uiRefreshService, this::selectedIndex, this::snapshotAppInfos, this::updateAppList,
-                    this::setLaunchOperationRunning);
+                    this::setLaunchOperationRunning, this::selectedLaunchIntervalMillis);
 
     /**
      * 设置主舞台
@@ -149,6 +160,7 @@ public class AppLauncherController extends BaseController {
     public void initialize() {
         logViewer.setOnClear(this::handleClearLog);
         logViewer.setPromptText("操作日志将显示在这里");
+        configureLaunchInterval();
         disableListActionsUntilLoaded();
         appPathField.textProperty().addListener(
                 (observable, oldValue, newValue) -> updateActionButtonStates());
@@ -162,7 +174,57 @@ public class AppLauncherController extends BaseController {
 
         backgroundExecutor.submit(() -> {
             launcherProcessMap = appStore.loadProcessMap();
-            Platform.runLater(this::initializeUI);
+            AppLauncherSettingsStore.Settings settings;
+            try {
+                settings = launcherSettingsStore.load();
+            } catch (Exception e) {
+                settings = AppLauncherSettingsStore.Settings.defaults();
+                error("加载启动间隔失败，已使用默认值: " + e.getMessage());
+            }
+            AppLauncherSettingsStore.Settings loadedSettings = settings;
+            Platform.runLater(() -> {
+                launchIntervalComboBox.getSelectionModel().select(
+                        Integer.valueOf(loadedSettings.launchDelayMillis()));
+                launchSettingsLoaded = true;
+                initializeUI();
+            });
+        });
+    }
+
+    private void configureLaunchInterval() {
+        launchIntervalComboBox.getItems().setAll(
+                0, 500, 1_000, 2_000, 3_000, 5_000, 10_000, 30_000, 60_000);
+        launchIntervalComboBox.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(Integer value) {
+                if (value == null) {
+                    return "";
+                }
+                return value == 0 ? "不等待"
+                        : value < 1_000 ? value + " ms"
+                        : value % 1_000 == 0
+                        ? value / 1_000 + " 秒"
+                        : String.format(Locale.ROOT, "%.1f 秒", value / 1_000.0);
+            }
+
+            @Override
+            public Integer fromString(String value) {
+                return null;
+            }
+        });
+        launchIntervalComboBox.getSelectionModel().select(
+                Integer.valueOf(AppLauncherSettingsStore.DEFAULT_LAUNCH_DELAY_MILLIS));
+        launchIntervalComboBox.valueProperty().addListener((observable, previous, selected) -> {
+            if (!launchSettingsLoaded || selected == null || Objects.equals(previous, selected)) {
+                return;
+            }
+            try {
+                launcherSettingsStore.save(new AppLauncherSettingsStore.Settings(selected));
+                info("批量启动间隔已设置为 "
+                        + launchIntervalComboBox.getConverter().toString(selected));
+            } catch (Exception e) {
+                error("保存启动间隔失败: " + e.getMessage());
+            }
         });
     }
 
@@ -227,6 +289,12 @@ public class AppLauncherController extends BaseController {
         return listViewSupport == null ? -1 : listViewSupport.selectedIndex();
     }
 
+    private int selectedLaunchIntervalMillis() {
+        Integer selected = launchIntervalComboBox == null ? null : launchIntervalComboBox.getValue();
+        return selected == null
+                ? AppLauncherSettingsStore.DEFAULT_LAUNCH_DELAY_MILLIS : selected;
+    }
+
     /**
      * 浏览文件处理
      */
@@ -257,6 +325,11 @@ public class AppLauncherController extends BaseController {
     @FXML
     private void handleLaunchAll() {
         runtimeActionService.launchAll();
+    }
+
+    @FXML
+    private void handleCancelBatchLaunch() {
+        runtimeActionService.cancelBatchLaunch();
     }
 
     /**
@@ -353,6 +426,7 @@ public class AppLauncherController extends BaseController {
         addButton.setDisable(true);
         launchSingleButton.setDisable(true);
         launchAllButton.setDisable(true);
+        cancelBatchLaunchButton.setDisable(true);
         killProcessButton.setDisable(true);
         removeButton.setDisable(true);
         clearButton.setDisable(true);
@@ -388,8 +462,10 @@ public class AppLauncherController extends BaseController {
         moveDownButton.setDisable(
                 launchOperationRunning || !hasSelection || selectedIndex >= itemCount - 1);
         launchAllButton.setDisable(launchOperationRunning || !hasItems);
+        cancelBatchLaunchButton.setDisable(!runtimeActionService.isBatchLaunchInProgress());
         clearButton.setDisable(launchOperationRunning || !hasItems);
         refreshStatusButton.setDisable(launchOperationRunning || !hasItems);
+        launchIntervalComboBox.setDisable(launchOperationRunning);
         long runningCount = appListView.getItems().stream()
                 .map(AppInfo::getAppPath)
                 .map(processStatusCache::get)

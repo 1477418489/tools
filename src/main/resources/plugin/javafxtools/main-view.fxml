@@ -62,6 +62,11 @@
                               styleClass="sidebar-nav-button, nav-amber">
                     <graphic><Label text="NET" styleClass="nav-code"/></graphic>
                 </ToggleButton>
+                <ToggleButton fx:id="networkQualityNavButton" text="网络质量" maxWidth="Infinity"
+                              contentDisplay="LEFT" graphicTextGap="10"
+                              styleClass="sidebar-nav-button, nav-blue">
+                    <graphic><Label text="NQM" styleClass="nav-code"/></graphic>
+                </ToggleButton>
                 <ToggleButton fx:id="keepAliveNavButton" text="域名保活" maxWidth="Infinity"
                               contentDisplay="LEFT" graphicTextGap="10"
                               styleClass="sidebar-nav-button, nav-amber">
@@ -162,6 +167,7 @@
                 <Tab fx:id="httpRequestTab" text="HTTP 请求"/>
                 <Tab fx:id="webSocketTab" text="WebSocket"/>
                 <Tab fx:id="networkToolsTab" text="网络诊断"/>
+                <Tab fx:id="networkQualityTab" text="网络质量"/>
                 <Tab fx:id="processPortTab" text="进程与端口"/>
                 <Tab fx:id="devEnvironmentTab" text="环境体检"/>
                 <Tab fx:id="fileAnalysisTab" text="文件分析"/>

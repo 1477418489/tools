@@ -67,6 +67,7 @@ class FxmlLayoutRegressionTest {
         assertTrue(fxml.contains("fx:id=\"activeModuleLabel\""));
         assertTrue(fxml.contains("fx:id=\"appLauncherNavButton\""));
         assertTrue(fxml.contains("fx:id=\"httpRequestNavButton\""));
+        assertTrue(fxml.contains("fx:id=\"networkQualityNavButton\""));
         assertTrue(fxml.contains("fx:id=\"jarLauncherNavButton\""));
         assertTrue(fxml.contains("fx:id=\"memoReminderNavButton\""));
         assertTrue(fxml.contains("fx:id=\"windowsPowerNavButton\""));
@@ -78,6 +79,7 @@ class FxmlLayoutRegressionTest {
         assertTrue(fxml.contains("fx:id=\"appLauncherTab\""));
         assertTrue(fxml.contains("fx:id=\"memoReminderTab\""));
         assertTrue(fxml.contains("fx:id=\"windowsPowerTab\""));
+        assertTrue(fxml.contains("fx:id=\"networkQualityTab\""));
         assertFalse(fxml.contains("styleClass=\"app-header\""));
     }
 
@@ -116,6 +118,7 @@ class FxmlLayoutRegressionTest {
                 "http-request-view.fxml",
                 "websocket-view.fxml",
                 "network-tools-view.fxml",
+                "network-quality-view.fxml",
                 "process-port-view.fxml",
                 "dev-environment-view.fxml",
                 "file-analysis-view.fxml",
@@ -221,7 +224,7 @@ class FxmlLayoutRegressionTest {
     }
 
     @Test
-    void jarLauncherShowsAllProjectRuntimeStatesWithoutAnInlineLog() throws IOException {
+    void jarLauncherShowsAllProjectRuntimeStatesWithLiveInlineLog() throws IOException {
         String fxml = readFxml("jar-launcher-view.fxml");
 
         assertTrue(fxml.contains("fx:id=\"projectListView\""));
@@ -235,7 +238,7 @@ class FxmlLayoutRegressionTest {
         assertFalse(fxml.contains("fx:id=\"projectComboBox\""));
         assertFalse(fxml.contains("processOutputArea"));
         assertFalse(fxml.contains("进程输出"));
-        assertFalse(fxml.contains("inlineContent=\"true\""));
+        assertTrue(fxml.contains("inlineContent=\"true\""));
     }
 
     @Test
@@ -251,6 +254,24 @@ class FxmlLayoutRegressionTest {
         assertTrue(fxml.contains("fx:id=\"diagnosticsStatusLabel\""));
         assertTrue(fxml.contains("fx:id=\"biosInterfaceStatusLabel\""));
         assertTrue(fxml.contains("fx:id=\"wakeTimerStatusLabel\""));
+        assertTrue(fxml.contains("fx:id=\"deviceBrandSummaryLabel\""));
+        assertTrue(fxml.contains("fx:id=\"processorSummaryLabel\""));
+        assertTrue(fxml.contains("fx:id=\"processorMetaSummaryLabel\""));
+        assertTrue(fxml.contains("fx:id=\"graphicsSummaryLabel\""));
+        assertTrue(fxml.contains("fx:id=\"graphicsMetaSummaryLabel\""));
+        assertTrue(fxml.contains("fx:id=\"memorySummaryLabel\""));
+        assertTrue(fxml.contains("fx:id=\"memoryMetaSummaryLabel\""));
+        assertFalse(fxml.contains("fx:id=\"temperatureSummaryLabel\""));
+        assertTrue(fxml.contains("fx:id=\"temperatureValueLabel\""));
+        assertTrue(fxml.contains("fx:id=\"biosSummaryLabel\""));
+        assertTrue(fxml.contains("fx:id=\"biosDateSummaryLabel\""));
+        assertTrue(fxml.contains("fx:id=\"activePowerPlanValueLabel\""));
+        assertTrue(fxml.contains("fx:id=\"powerSupplyStatusValueLabel\""));
+        assertTrue(fxml.contains("fx:id=\"serialNumberValueLabel\""));
+        assertTrue(fxml.contains("fx:id=\"systemUuidValueLabel\""));
+        assertTrue(fxml.contains("diagnostic-hardware-grid"));
+        assertTrue(fxml.contains("diagnostics-capability-grid"));
+        assertTrue(fxml.contains("BIOS 发布日期"));
         assertTrue(fxml.contains("RTC 定时开机"));
         assertTrue(fxml.contains("需在固件中确认"));
     }
@@ -284,6 +305,7 @@ class FxmlLayoutRegressionTest {
                 "keepalive-manager-view.fxml",
                 "memo-reminder-view.fxml",
                 "network-tools-view.fxml",
+                "network-quality-view.fxml",
                 "process-port-view.fxml",
                 "dev-environment-view.fxml",
                 "file-analysis-view.fxml",
@@ -325,6 +347,46 @@ class FxmlLayoutRegressionTest {
         assertTrue(base64View.contains("onAction=\"#handleDecode\""));
         assertTrue(base64View.contains("fx:id=\"variantComboBox\""));
         assertTrue(base64View.contains("fx:id=\"encodingComboBox\""));
+    }
+
+    @Test
+    void networkQualityProvidesDirectAndProxyMultiProtocolMonitoring() throws IOException {
+        String fxml = readFxml("network-quality-view.fxml");
+
+        assertTrue(fxml.contains("fx:id=\"targetTable\""));
+        assertTrue(fxml.contains("fx:id=\"rttChart\""));
+        assertTrue(fxml.contains("fx:id=\"routePlanComboBox\""));
+        assertTrue(fxml.contains("fx:id=\"proxyTypeComboBox\""));
+        assertTrue(fxml.contains("fx:id=\"proxyPasswordField\""));
+        assertTrue(fxml.contains("fx:id=\"targetEndpointField\""));
+        assertTrue(fxml.contains("fx:id=\"systemTrendButton\""));
+        assertTrue(fxml.contains("fx:id=\"proxyTrendButton\""));
+        assertTrue(fxml.contains("fx:id=\"selectedQualityLabel\""));
+        assertTrue(fxml.contains("fx:id=\"systemStabilityMetaLabel\""));
+        assertTrue(fxml.contains("fx:id=\"proxyStabilityMetaLabel\""));
+        assertTrue(fxml.contains("fx:id=\"copyReportButton\""));
+        assertTrue(fxml.contains("text=\"代理与探测设置\""));
+        assertTrue(fxml.contains("http://127.0.0.1:10808"));
+        assertTrue(fxml.contains("createSymbols=\"true\""));
+        assertTrue(fxml.contains("label=\"时间（秒）\""));
+        assertTrue(fxml.contains("onAction=\"#handleStart\""));
+        assertTrue(fxml.contains("onAction=\"#handleStop\""));
+        assertTrue(fxml.contains("onAction=\"#handleReset\""));
+        assertTrue(fxml.contains("onAction=\"#handleAddTarget\""));
+        assertTrue(fxml.contains("onAction=\"#handleCopyReport\""));
+        assertTrue(fxml.contains("服务可用性、响应时间与路由对比"));
+        assertTrue(fxml.contains("最近 60 个样本"));
+    }
+
+    @Test
+    void appLauncherExposesConfigurableBatchLaunchInterval() throws IOException {
+        String fxml = readFxml("app-launcher-view.fxml");
+
+        assertTrue(fxml.contains("fx:id=\"launchIntervalComboBox\""));
+        assertTrue(fxml.contains("fx:id=\"cancelBatchLaunchButton\""));
+        assertTrue(fxml.contains("text=\"启动间隔\""));
+        assertTrue(fxml.contains("onAction=\"#handleLaunchAll\""));
+        assertTrue(fxml.contains("onAction=\"#handleCancelBatchLaunch\""));
     }
 
     private static void assertActionHandlersExist(Element element,

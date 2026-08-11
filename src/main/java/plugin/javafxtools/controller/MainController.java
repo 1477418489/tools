@@ -50,6 +50,7 @@ public class MainController {
     @FXML private Tab httpRequestTab;
     @FXML private Tab webSocketTab;
     @FXML private Tab networkToolsTab;
+    @FXML private Tab networkQualityTab;
     @FXML private Tab processPortTab;
     @FXML private Tab devEnvironmentTab;
     @FXML private Tab fileAnalysisTab;
@@ -64,6 +65,7 @@ public class MainController {
     @FXML private ToggleButton httpRequestNavButton;
     @FXML private ToggleButton webSocketNavButton;
     @FXML private ToggleButton networkToolsNavButton;
+    @FXML private ToggleButton networkQualityNavButton;
     @FXML private ToggleButton processPortNavButton;
     @FXML private ToggleButton devEnvironmentNavButton;
     @FXML private ToggleButton fileAnalysisNavButton;
@@ -292,6 +294,7 @@ public class MainController {
         register(httpRequestTab, "网络与接口", "HTTP 请求", "http-request-view.fxml");
         register(webSocketTab, "网络与接口", "WebSocket", "websocket-view.fxml");
         register(networkToolsTab, "网络与接口", "网络诊断", "network-tools-view.fxml");
+        register(networkQualityTab, "网络与接口", "网络质量", "network-quality-view.fxml");
         register(keepAliveTab, "网络与接口", "域名保活", "keepalive-manager-view.fxml");
         register(processPortTab, "系统与开发", "进程与端口", "process-port-view.fxml");
         register(devEnvironmentTab, "系统与开发", "环境体检", "dev-environment-view.fxml");
@@ -313,6 +316,7 @@ public class MainController {
         navigationTabs.put(httpRequestNavButton, httpRequestTab);
         navigationTabs.put(webSocketNavButton, webSocketTab);
         navigationTabs.put(networkToolsNavButton, networkToolsTab);
+        navigationTabs.put(networkQualityNavButton, networkQualityTab);
         navigationTabs.put(keepAliveNavButton, keepAliveTab);
         navigationTabs.put(processPortNavButton, processPortTab);
         navigationTabs.put(devEnvironmentNavButton, devEnvironmentTab);

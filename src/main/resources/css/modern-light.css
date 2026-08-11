@@ -1057,6 +1057,291 @@
     -fx-fit-to-width: true;
 }
 
+/* ===== Network quality center ===== */
+.network-quality-page .page-header {
+    -fx-border-color: transparent transparent transparent #187f68;
+}
+
+.network-quality-command-surface {
+    -fx-padding: 10 12;
+}
+
+.network-quality-endpoint-bar {
+    -fx-min-height: 48px;
+    -fx-padding: 8 10;
+}
+
+.network-quality-settings-pane {
+    -fx-background-color: transparent;
+    -fx-border-color: #dce3ed;
+    -fx-border-radius: 6;
+}
+
+.network-quality-settings-pane > .title {
+    -fx-min-height: 34px;
+    -fx-background-color: #f7f9fc;
+    -fx-background-radius: 6;
+}
+
+.network-quality-settings-pane > .content {
+    -fx-background-color: #ffffff;
+    -fx-border-color: transparent;
+}
+
+.network-quality-settings-content {
+    -fx-padding: 8 10 10 10;
+}
+
+.network-quality-selected-panel,
+.network-quality-session-panel {
+    -fx-padding: 12;
+}
+
+.network-quality-panel-label {
+    -fx-font-size: 10px;
+    -fx-font-weight: 800;
+    -fx-text-fill: #7a8698;
+}
+
+.network-quality-selected-name {
+    -fx-font-size: 16px;
+    -fx-font-weight: 800;
+    -fx-text-fill: #202c40;
+}
+
+.network-quality-selected-endpoint {
+    -fx-font-size: 10px;
+    -fx-text-fill: #66758b;
+}
+
+.network-quality-selected-quality {
+    -fx-min-width: 54px;
+    -fx-padding: 4 7;
+    -fx-background-radius: 4;
+    -fx-font-size: 11px;
+    -fx-font-weight: 800;
+    -fx-alignment: center;
+}
+
+.network-quality-quality-excellent,
+.network-quality-quality-good {
+    -fx-background-color: #e5f6ed;
+    -fx-text-fill: #15724e;
+}
+
+.network-quality-quality-degraded {
+    -fx-background-color: #fff4d8;
+    -fx-text-fill: #946611;
+}
+
+.network-quality-quality-poor,
+.network-quality-quality-offline {
+    -fx-background-color: #fde9ed;
+    -fx-text-fill: #b13b50;
+}
+
+.network-quality-quality-waiting,
+.network-quality-quality-unsupported {
+    -fx-background-color: #edf1f6;
+    -fx-text-fill: #657286;
+}
+
+.network-quality-selected-response {
+    -fx-font-size: 10px;
+    -fx-text-fill: #59687e;
+}
+
+.network-quality-route-value {
+    -fx-font-size: 13px;
+    -fx-font-weight: 800;
+    -fx-text-fill: #26344a;
+}
+
+.network-quality-route-meta {
+    -fx-font-size: 9px;
+    -fx-text-fill: #748197;
+}
+
+.network-quality-session-metric {
+    -fx-padding: 0 0 7 0;
+    -fx-border-color: transparent transparent #e7ebf1 transparent;
+}
+
+.network-quality-session-value {
+    -fx-font-size: 18px;
+    -fx-font-weight: 800;
+    -fx-text-fill: #1f2d42;
+}
+
+.network-quality-session-small-value {
+    -fx-font-size: 13px;
+    -fx-font-weight: 800;
+    -fx-text-fill: #344258;
+}
+
+.network-quality-metric-strip {
+    -fx-min-height: 76px;
+    -fx-pref-height: 76px;
+}
+
+.network-quality-metric-card {
+    -fx-min-height: 76px;
+    -fx-pref-height: 76px;
+    -fx-padding: 10 12;
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 7;
+    -fx-border-color: #dce3ed;
+    -fx-border-radius: 7;
+    -fx-border-width: 1 1 1 3;
+}
+
+.network-quality-metric-primary {
+    -fx-border-color: #dce3ed #dce3ed #dce3ed #6ab49a;
+}
+
+.network-quality-metric-proxy {
+    -fx-border-color: #dce3ed #dce3ed #dce3ed #6b9de3;
+}
+
+.network-quality-metric-label {
+    -fx-font-size: 9px;
+    -fx-font-weight: 800;
+    -fx-text-fill: #7c8799;
+}
+
+.network-quality-metric-value {
+    -fx-font-size: 16px;
+    -fx-font-weight: 800;
+    -fx-text-fill: #1e2a3d;
+}
+
+.network-quality-metric-primary .network-quality-metric-value {
+    -fx-text-fill: #14785b;
+}
+
+.network-quality-metric-meta {
+    -fx-font-size: 10px;
+    -fx-text-fill: #718096;
+}
+
+.network-quality-chart-surface {
+    -fx-padding: 8 10 4 10;
+}
+
+.network-quality-chart-target {
+    -fx-font-size: 11px;
+    -fx-font-weight: 800;
+    -fx-text-fill: #187f68;
+    -fx-padding: 3 7;
+    -fx-background-color: #eaf8f3;
+    -fx-background-radius: 4;
+}
+
+.network-quality-chart-toggle {
+    -fx-min-width: 28px;
+    -fx-pref-width: 28px;
+    -fx-max-width: 28px;
+    -fx-min-height: 28px;
+    -fx-pref-height: 28px;
+    -fx-font-size: 13px;
+}
+
+.network-quality-route-detail {
+    -fx-font-size: 10px;
+    -fx-text-fill: #607086;
+    -fx-padding: 0 4 1 4;
+}
+
+.network-quality-chart-empty {
+    -fx-padding: 5 9;
+    -fx-background-color: rgba(255, 255, 255, 0.88);
+    -fx-background-radius: 4;
+    -fx-font-size: 11px;
+    -fx-text-fill: #778499;
+}
+
+.network-quality-rtt-chart {
+    -fx-padding: 0;
+}
+
+.network-quality-rtt-chart .chart-plot-background {
+    -fx-background-color: #fbfcfe;
+}
+
+.network-quality-rtt-chart .chart-horizontal-grid-lines {
+    -fx-stroke: #e7ecf2;
+    -fx-stroke-dash-array: 3 4;
+}
+
+.network-quality-rtt-chart .default-color0.chart-series-line {
+    -fx-stroke: #2585d8;
+    -fx-stroke-width: 2px;
+}
+
+.network-quality-rtt-chart .default-color0.chart-line-symbol {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.network-quality-rtt-chart .default-color1.chart-series-line {
+    -fx-stroke: transparent;
+}
+
+.network-quality-rtt-chart .default-color1.chart-line-symbol {
+    -fx-background-color: #ffffff, #df6075;
+    -fx-background-insets: 0, 2;
+    -fx-padding: 4;
+}
+
+.network-quality-rtt-chart .axis {
+    -fx-tick-label-fill: #7a8699;
+    -fx-font-size: 9px;
+}
+
+.network-quality-rtt-chart .axis-label {
+    -fx-text-fill: #718096;
+}
+
+.network-quality-table-surface {
+    -fx-padding: 8 10 10 10;
+}
+
+.network-quality-table .table-row-cell {
+    -fx-min-height: 40px;
+    -fx-pref-height: 40px;
+}
+
+.network-quality-table .table-cell {
+    -fx-font-size: 11px;
+}
+
+.network-quality-table .check-box {
+    -fx-padding: 0 0 0 8;
+}
+
+.network-quality-row-excellent,
+.network-quality-row-good {
+    -fx-border-color: transparent transparent #edf1f5 #52ae87;
+    -fx-border-width: 0 0 1 3;
+}
+
+.network-quality-row-degraded {
+    -fx-border-color: transparent transparent #edf1f5 #dfaa3c;
+    -fx-border-width: 0 0 1 3;
+}
+
+.network-quality-row-poor,
+.network-quality-row-offline {
+    -fx-border-color: transparent transparent #edf1f5 #df6075;
+    -fx-border-width: 0 0 1 3;
+}
+
+.network-quality-row-waiting,
+.network-quality-row-unsupported {
+    -fx-border-color: transparent transparent #edf1f5 #b6c0cd;
+    -fx-border-width: 0 0 1 3;
+}
+
 .ip-information-pane {
     -fx-padding: 12 14;
     -fx-background-color: #ffffff;
@@ -1149,6 +1434,38 @@
 }
 
 /* ===== Windows power scheduler ===== */
+.power-device-strip {
+    -fx-min-height: 126px;
+    -fx-padding: 10 12;
+}
+
+.power-device-summary-item {
+    -fx-min-height: 48px;
+    -fx-padding: 3 14;
+    -fx-border-color: transparent #e2e7ee transparent transparent;
+}
+
+.power-device-summary-last {
+    -fx-border-color: transparent;
+}
+
+.power-device-summary-label {
+    -fx-font-size: 9px;
+    -fx-font-weight: 800;
+    -fx-text-fill: #7c8799;
+}
+
+.power-device-summary-value {
+    -fx-font-size: 12px;
+    -fx-font-weight: 700;
+    -fx-text-fill: #253047;
+}
+
+.power-device-summary-meta {
+    -fx-font-size: 10px;
+    -fx-text-fill: #66758a;
+}
+
 .power-workspace {
     -fx-hgap: 14;
     -fx-vgap: 14;
@@ -1214,6 +1531,13 @@
 
 .power-diagnostics-page {
     -fx-background-color: transparent;
+    -fx-padding: 0 8 8 0;
+}
+
+.power-diagnostics-scroll,
+.power-diagnostics-scroll > .viewport {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
 }
 
 .diagnostics-toolbar {
@@ -1225,13 +1549,21 @@
     -fx-border-radius: 7;
 }
 
-.diagnostics-grid {
+.diagnostics-capability-grid {
     -fx-hgap: 10;
     -fx-vgap: 10;
 }
 
 .diagnostic-card {
     -fx-padding: 12 14;
+}
+
+.diagnostic-hardware-card {
+    -fx-padding: 12 16 10 16;
+}
+
+.diagnostic-hardware-grid {
+    -fx-padding: 2 0 1 0;
 }
 
 .diagnostic-card-title {

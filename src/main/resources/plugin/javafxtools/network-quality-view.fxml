@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.chart.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns="http://javafx.com/javafx/23" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="plugin.javafxtools.controller.NetworkQualityController"
+      spacing="8" styleClass="tool-page, network-quality-page">
+    <HBox spacing="8" alignment="CENTER_LEFT" styleClass="page-header">
+        <VBox spacing="1">
+            <Label text="网络质量" styleClass="page-title"/>
+            <Label text="服务可用性、响应时间与路由对比" styleClass="status-muted"/>
+        </VBox>
+        <Pane HBox.hgrow="ALWAYS"/>
+        <Label fx:id="sessionStatusLabel" text="等待开始"
+               styleClass="status-badge, status-offline"/>
+        <Button fx:id="startButton" text="开始" onAction="#handleStart"
+                styleClass="success-button"/>
+        <Button fx:id="stopButton" text="停止" onAction="#handleStop"
+                styleClass="warning-button"/>
+        <Button fx:id="resetButton" text="重置" onAction="#handleReset"/>
+    </HBox>
+
+    <HBox spacing="8" alignment="CENTER_LEFT"
+          styleClass="surface, network-quality-endpoint-bar">
+        <Label text="监控地址" styleClass="field-label"/>
+        <TextField fx:id="targetEndpointField"
+                   promptText="http://127.0.0.1:8080/health 或 https://host/health"
+                   prefWidth="410" HBox.hgrow="ALWAYS"/>
+        <ComboBox fx:id="protocolComboBox" prefWidth="124"/>
+        <Button fx:id="addTargetButton" text="添加" onAction="#handleAddTarget"
+                styleClass="primary-button"/>
+        <Button fx:id="removeTargetButton" text="移除" onAction="#handleRemoveTarget"/>
+        <Button fx:id="restoreDefaultsButton" text="默认目标"
+                onAction="#handleRestoreDefaults"/>
+    </HBox>
+
+    <TitledPane text="代理与探测设置" expanded="false" animated="false"
+                styleClass="network-quality-settings-pane">
+        <content>
+            <VBox spacing="7" styleClass="network-quality-settings-content">
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <Label text="新目标名称" styleClass="field-label"/>
+                    <TextField fx:id="targetNameField" promptText="可选；留空时自动生成"
+                               prefWidth="240"/>
+                </HBox>
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <Label text="出口模式" styleClass="field-label"/>
+                    <ComboBox fx:id="routePlanComboBox" prefWidth="210"
+                              onAction="#handleRoutePlanChanged"/>
+                    <Label text="代理类型" styleClass="field-label"/>
+                    <ComboBox fx:id="proxyTypeComboBox" prefWidth="130"
+                              onAction="#handleProxyTypeChanged"/>
+                    <TextField fx:id="proxyHostField"
+                               promptText="http://127.0.0.1:10808 或主机"
+                               prefWidth="220" HBox.hgrow="ALWAYS"/>
+                    <TextField fx:id="proxyPortField" promptText="端口" prefWidth="74"/>
+                </HBox>
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <Label text="代理认证" styleClass="field-label"/>
+                    <TextField fx:id="proxyUsernameField" promptText="用户名" prefWidth="150"/>
+                    <PasswordField fx:id="proxyPasswordField" promptText="仅本次会话保存"
+                                   prefWidth="170"/>
+                    <Label text="间隔" styleClass="field-label"/>
+                    <ComboBox fx:id="intervalComboBox" prefWidth="104"/>
+                    <Label text="超时" styleClass="field-label"/>
+                    <ComboBox fx:id="timeoutComboBox" prefWidth="104"/>
+                    <Label fx:id="proxyCapabilityLabel"
+                           text="系统路由由 Windows 路由表决定"
+                           styleClass="status-muted" HBox.hgrow="ALWAYS"/>
+                </HBox>
+            </VBox>
+        </content>
+    </TitledPane>
+
+    <HBox spacing="8" minHeight="218" prefHeight="236">
+        <VBox spacing="7" prefWidth="230" minWidth="210"
+              styleClass="surface, network-quality-selected-panel">
+            <Label text="当前端点" styleClass="network-quality-panel-label"/>
+            <Label fx:id="selectedNameLabel" text="未选择目标"
+                   styleClass="network-quality-selected-name"/>
+            <Label fx:id="selectedEndpointLabel" text="--" wrapText="true"
+                   minWidth="0" maxWidth="Infinity" textOverrun="CLIP"
+                   styleClass="network-quality-selected-endpoint"/>
+            <HBox spacing="7" alignment="CENTER_LEFT">
+                <Label fx:id="selectedQualityLabel" text="等待"
+                       styleClass="network-quality-selected-quality, network-quality-quality-waiting"/>
+                <Label fx:id="selectedResponseLabel" text="等待响应" wrapText="true"
+                       styleClass="network-quality-selected-response" HBox.hgrow="ALWAYS"/>
+            </HBox>
+            <Separator/>
+            <GridPane hgap="8" vgap="5">
+                <columnConstraints>
+                    <ColumnConstraints minWidth="62" prefWidth="62"/>
+                    <ColumnConstraints hgrow="ALWAYS" fillWidth="true"/>
+                </columnConstraints>
+                <Label text="系统路由" styleClass="field-label" GridPane.rowIndex="0"/>
+                <VBox spacing="1" GridPane.columnIndex="1" GridPane.rowIndex="0">
+                    <Label fx:id="systemRttValueLabel" text="--"
+                           styleClass="network-quality-route-value"/>
+                    <Label fx:id="systemRttMetaLabel" text="未启用" wrapText="true"
+                           minWidth="0" maxWidth="Infinity" textOverrun="CLIP"
+                           styleClass="network-quality-route-meta"/>
+                    <Label fx:id="systemStabilityMetaLabel" text=""
+                           minWidth="0" maxWidth="Infinity" textOverrun="CLIP"
+                           styleClass="network-quality-route-meta"/>
+                </VBox>
+                <Label text="显式代理" styleClass="field-label" GridPane.rowIndex="1"/>
+                <VBox spacing="1" GridPane.columnIndex="1" GridPane.rowIndex="1">
+                    <Label fx:id="proxyRttValueLabel" text="--"
+                           styleClass="network-quality-route-value"/>
+                    <Label fx:id="proxyRttMetaLabel" text="未启用" wrapText="true"
+                           minWidth="0" maxWidth="Infinity" textOverrun="CLIP"
+                           styleClass="network-quality-route-meta"/>
+                    <Label fx:id="proxyStabilityMetaLabel" text=""
+                           minWidth="0" maxWidth="Infinity" textOverrun="CLIP"
+                           styleClass="network-quality-route-meta"/>
+                </VBox>
+            </GridPane>
+        </VBox>
+
+        <VBox fx:id="chartSurface" spacing="2" HBox.hgrow="ALWAYS"
+              styleClass="surface, network-quality-chart-surface">
+            <HBox spacing="8" alignment="CENTER_LEFT" styleClass="section-header">
+                <Label text="响应时间趋势" minWidth="84" textOverrun="CLIP"
+                       styleClass="section-title"/>
+                <Label fx:id="chartTargetLabel" text="未选择目标"
+                       maxWidth="172" textOverrun="ELLIPSIS"
+                       styleClass="network-quality-chart-target"/>
+                <HBox spacing="0" minWidth="96" styleClass="segmented-control">
+                    <ToggleButton fx:id="systemTrendButton" text="系统"
+                                  onAction="#handleTrendRouteChanged"
+                                  styleClass="segment-button, segment-first"/>
+                    <ToggleButton fx:id="proxyTrendButton" text="代理"
+                                  onAction="#handleTrendRouteChanged"
+                                  styleClass="segment-button, segment-last"/>
+                </HBox>
+                <Pane HBox.hgrow="ALWAYS"/>
+            </HBox>
+            <Label fx:id="chartMetaLabel" text="--" maxWidth="Infinity"
+                   textOverrun="ELLIPSIS" styleClass="status-muted"/>
+            <Label fx:id="routeDetailLabel" text="选择目标查看出口与响应详情"
+                   wrapText="true" styleClass="network-quality-route-detail"/>
+            <StackPane minHeight="128" prefHeight="150" VBox.vgrow="ALWAYS">
+                <LineChart fx:id="rttChart" animated="false" createSymbols="true"
+                           legendVisible="false" verticalGridLinesVisible="false"
+                           maxWidth="Infinity" maxHeight="Infinity"
+                           styleClass="network-quality-rtt-chart">
+                    <xAxis>
+                        <NumberAxis label="时间（秒）" forceZeroInRange="false"
+                                    minorTickVisible="false"/>
+                    </xAxis>
+                    <yAxis>
+                        <NumberAxis label="ms" forceZeroInRange="true" minorTickVisible="false"/>
+                    </yAxis>
+                </LineChart>
+                <Label fx:id="chartEmptyLabel" text="开始监控后显示实时趋势"
+                       mouseTransparent="true" styleClass="network-quality-chart-empty"/>
+            </StackPane>
+        </VBox>
+
+        <VBox spacing="8" prefWidth="190" minWidth="178"
+              styleClass="surface, network-quality-session-panel">
+            <Label text="监控会话" styleClass="network-quality-panel-label"/>
+            <VBox spacing="1" styleClass="network-quality-session-metric">
+                <Label text="当前结论" styleClass="network-quality-metric-label"/>
+                <Label fx:id="qualityValueLabel" text="等待"
+                       styleClass="network-quality-session-value"/>
+                <Label fx:id="qualityMetaLabel" text="暂无有效样本"
+                       styleClass="network-quality-metric-meta"/>
+            </VBox>
+            <VBox spacing="1" styleClass="network-quality-session-metric">
+                <Label text="近期可用率" styleClass="network-quality-metric-label"/>
+                <Label fx:id="failureValueLabel" text="--"
+                       styleClass="network-quality-session-value"/>
+                <Label fx:id="failureMetaLabel" text="最近 60 个样本 / 端点"
+                       styleClass="network-quality-metric-meta"/>
+            </VBox>
+            <GridPane hgap="12" vgap="2">
+                <columnConstraints>
+                    <ColumnConstraints percentWidth="50"/>
+                    <ColumnConstraints percentWidth="50"/>
+                </columnConstraints>
+                <VBox spacing="1" GridPane.columnIndex="0">
+                    <Label text="会话时长" styleClass="network-quality-metric-label"/>
+                    <Label fx:id="durationValueLabel" text="00:00:00"
+                           styleClass="network-quality-session-small-value"/>
+                </VBox>
+                <VBox spacing="1" GridPane.columnIndex="1">
+                    <Label text="探测次数" styleClass="network-quality-metric-label"/>
+                    <Label fx:id="durationMetaLabel" text="0"
+                           styleClass="network-quality-session-small-value"/>
+                </VBox>
+            </GridPane>
+        </VBox>
+    </HBox>
+
+    <VBox spacing="5" styleClass="surface, network-quality-table-surface" VBox.vgrow="ALWAYS">
+        <HBox spacing="8" alignment="CENTER_LEFT" styleClass="section-header">
+            <Label text="全部端点" styleClass="section-title"/>
+            <Label text="RTT 显示当前值；可用率按最近 60 个样本计算"
+                   styleClass="status-muted"/>
+            <Pane HBox.hgrow="ALWAYS"/>
+            <Button fx:id="copyReportButton" text="复制诊断"
+                    onAction="#handleCopyReport" styleClass="compact-button"/>
+        </HBox>
+        <TableView fx:id="targetTable" minHeight="170" VBox.vgrow="ALWAYS"
+                   styleClass="network-quality-table">
+            <placeholder>
+                <Label text="没有监控目标" styleClass="status-muted"/>
+            </placeholder>
+            <columns>
+                <TableColumn fx:id="enabledColumn" text="启用" minWidth="46" prefWidth="46"
+                             maxWidth="46" sortable="false"/>
+                <TableColumn fx:id="protocolColumn" text="协议" minWidth="60" prefWidth="60"/>
+                <TableColumn fx:id="targetColumn" text="端点" minWidth="180" prefWidth="180"/>
+                <TableColumn text="系统路由">
+                    <columns>
+                        <TableColumn fx:id="systemQualityColumn" text="状态" minWidth="48" prefWidth="48"/>
+                        <TableColumn fx:id="systemRttColumn" text="RTT" minWidth="62" prefWidth="62"/>
+                        <TableColumn fx:id="systemFailureColumn" text="可用率" minWidth="70" prefWidth="70"/>
+                    </columns>
+                </TableColumn>
+                <TableColumn text="显式代理">
+                    <columns>
+                        <TableColumn fx:id="proxyQualityColumn" text="状态" minWidth="48" prefWidth="48"/>
+                        <TableColumn fx:id="proxyRttColumn" text="RTT" minWidth="62" prefWidth="62"/>
+                        <TableColumn fx:id="proxyFailureColumn" text="可用率" minWidth="70" prefWidth="70"/>
+                    </columns>
+                </TableColumn>
+                <TableColumn fx:id="deltaColumn" text="差值" minWidth="62" prefWidth="62"/>
+                <TableColumn fx:id="detailColumn" text="最近响应 / 错误" minWidth="140" prefWidth="140"/>
+            </columns>
+        </TableView>
+    </VBox>
+</VBox>

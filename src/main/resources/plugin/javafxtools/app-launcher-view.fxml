@@ -25,10 +25,14 @@
         <HBox spacing="8" alignment="CENTER_LEFT" styleClass="section-header">
             <Label text="应用列表" styleClass="section-title"/>
             <Pane HBox.hgrow="ALWAYS"/>
+            <Label text="启动间隔" styleClass="field-label"/>
+            <ComboBox fx:id="launchIntervalComboBox" prefWidth="104"/>
             <Button fx:id="launchSingleButton" text="启动选中" onAction="#handleLaunchSingle"
                     styleClass="success-button"/>
             <Button fx:id="launchAllButton" text="启动全部" onAction="#handleLaunchAll"
                     styleClass="success-button"/>
+            <Button fx:id="cancelBatchLaunchButton" text="停止批量"
+                    onAction="#handleCancelBatchLaunch" styleClass="danger-button"/>
             <Button fx:id="killProcessButton" text="结束进程" onAction="#handleKillProcess"
                     styleClass="danger-button"/>
         </HBox>

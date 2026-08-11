@@ -5,12 +5,10 @@ import plugin.javafxtools.service.WindowsPowerSchedulerService.CommandResult;
 import plugin.javafxtools.service.WindowsPowerSchedulerService.PowerAction;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
-import java.util.Base64;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -29,7 +27,7 @@ class WindowsPowerSchedulerServiceTest {
 
         assertFalse(service.isSupported());
         assertThrows(IOException.class, () -> service.scheduleWake(futureTime()));
-        assertTrue(runner.commands.isEmpty());
+        assertTrue(runner.scripts.isEmpty());
     }
 
     @Test
@@ -86,6 +84,7 @@ class WindowsPowerSchedulerServiceTest {
         assertFalse(status.exists());
         assertNull(status.nextRunTime());
         assertNull(status.powerAction());
+        assertTrue(runner.lastScript().contains("-2147024894,-2147024893"));
     }
 
     @Test
@@ -112,6 +111,23 @@ class WindowsPowerSchedulerServiceTest {
         assertTrue(error.getMessage().contains("Access denied"));
     }
 
+    @Test
+    void extractsReadableFailureFromPowerShellClixmlNoise() {
+        CapturingRunner runner = new CapturingRunner();
+        runner.results.add(new CommandResult(1, """
+                #< CLIXML
+                ERROR|拒绝访问
+                <Objs><S S="Error">serialized noise</S></Objs>
+                """));
+        WindowsPowerSchedulerService service = windowsService(runner);
+
+        IOException error = assertThrows(IOException.class,
+                () -> service.scheduleWake(futureTime()));
+
+        assertTrue(error.getMessage().contains("拒绝访问"));
+        assertFalse(error.getMessage().contains("CLIXML"));
+    }
+
     private WindowsPowerSchedulerService windowsService(CapturingRunner runner) {
         return new WindowsPowerSchedulerService("Windows 11", runner);
     }
@@ -122,18 +138,17 @@ class WindowsPowerSchedulerServiceTest {
 
     private static final class CapturingRunner
             implements WindowsPowerSchedulerService.CommandRunner {
-        private final List<List<String>> commands = new ArrayList<>();
+        private final List<String> scripts = new ArrayList<>();
         private final Deque<CommandResult> results = new ArrayDeque<>();
 
         @Override
-        public CommandResult run(List<String> command) {
-            commands.add(List.copyOf(command));
+        public CommandResult run(String script) {
+            scripts.add(script);
             return results.isEmpty() ? new CommandResult(0, "") : results.removeFirst();
         }
 
         private String lastScript() {
-            return new String(Base64.getDecoder().decode(
-                    commands.getLast().getLast()), StandardCharsets.UTF_16LE);
+            return scripts.getLast();
         }
     }
 }

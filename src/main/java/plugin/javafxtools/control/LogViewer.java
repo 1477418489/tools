@@ -40,6 +40,7 @@ import java.nio.file.Files;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 统一的只读日志查看器。普通日志以紧凑入口打开独立窗口，核心消息流可按需内嵌；
@@ -69,6 +70,7 @@ public final class LogViewer extends VBox {
     private final Button decreaseFontButton = iconButton("−", "减小字号");
     private final Button increaseFontButton = iconButton("+", "增大字号");
     private final PauseTransition searchRefreshDelay = new PauseTransition(Duration.millis(180));
+    private final AtomicBoolean scrollScheduled = new AtomicBoolean();
     private final HBox displayOptions = new HBox(7);
     private final VBox contentPane = new VBox();
     private final boolean detachedMode;
@@ -173,8 +175,23 @@ public final class LogViewer extends VBox {
     }
 
     private void scrollToEndIfEnabled() {
-        if (isContentVisible() && autoScrollCheckBox.isSelected()) {
-            textArea.setScrollTop(Double.MAX_VALUE);
+        if (!isContentVisible() || !autoScrollCheckBox.isSelected()
+                || !scrollScheduled.compareAndSet(false, true)) {
+            return;
+        }
+        Runnable scroll = () -> {
+            try {
+                if (isContentVisible() && autoScrollCheckBox.isSelected()) {
+                    textArea.setScrollTop(Double.MAX_VALUE);
+                }
+            } finally {
+                scrollScheduled.set(false);
+            }
+        };
+        try {
+            Platform.runLater(scroll);
+        } catch (IllegalStateException ignored) {
+            scrollScheduled.set(false);
         }
     }
 

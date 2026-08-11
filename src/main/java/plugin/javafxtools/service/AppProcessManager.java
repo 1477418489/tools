@@ -206,6 +206,8 @@ public class AppProcessManager {
         builder.redirectOutput(ProcessBuilder.Redirect.DISCARD);
         builder.redirectError(ProcessBuilder.Redirect.DISCARD);
         builder.environment().remove("JAVA_TOOL_OPTIONS");
+        builder.environment().remove("JDK_JAVA_OPTIONS");
+        builder.environment().remove("_JAVA_OPTIONS");
 
         Process process = builder.start();
         String key = pathKey(path);

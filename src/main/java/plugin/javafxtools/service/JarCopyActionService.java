@@ -61,17 +61,17 @@ public class JarCopyActionService {
      *
      * @param project 项目配置快照
      */
-    public void copyProjectFiles(ProjectConfig project) {
+    public boolean copyProjectFiles(ProjectConfig project) {
         if (!copying.compareAndSet(false, true)) {
             logger.accept("文件复制正在进行中");
-            return;
+            return false;
         }
         try {
             beforeCopy.run();
         } catch (RuntimeException e) {
             finishCopy(project);
             errorReporter.accept("无法开始文件复制: " + e.getMessage());
-            return;
+            return true;
         }
         try {
             backgroundExecutor.submit(() -> {
@@ -94,6 +94,7 @@ public class JarCopyActionService {
             finishCopy(project);
             errorReporter.accept("文件复制服务已关闭");
         }
+        return true;
     }
 
     private void finishCopy(ProjectConfig project) {

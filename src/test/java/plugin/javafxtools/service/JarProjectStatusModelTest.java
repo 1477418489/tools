@@ -55,6 +55,34 @@ class JarProjectStatusModelTest {
         assertEquals(JarProjectRuntimeStatus.STARTING, model.statusOf(project));
     }
 
+    @Test
+    void beginningRefreshDoesNotReplaceActiveProjectStatusWithChecking() {
+        JarProjectStatusModel model = new JarProjectStatusModel();
+        ProjectConfig starting = project(1);
+        ProjectConfig idle = project(2);
+        model.setStatus(starting, JarProjectRuntimeStatus.STARTING);
+
+        model.beginBatch(List.of(starting, idle), Set.of(starting.getId()));
+
+        assertEquals(JarProjectRuntimeStatus.STARTING, model.statusOf(starting));
+        assertEquals(JarProjectRuntimeStatus.CHECKING, model.statusOf(idle));
+        assertTrue(model.hasCheckingProjects());
+    }
+
+    @Test
+    void failedRefreshDoesNotReplaceProtectedOperationStatus() {
+        JarProjectStatusModel model = new JarProjectStatusModel();
+        ProjectConfig starting = project(1);
+        ProjectConfig idle = project(2);
+        model.setStatus(starting, JarProjectRuntimeStatus.STARTING);
+        long version = model.beginBatch(List.of(starting, idle), Set.of(starting.getId()));
+
+        model.failBatch(version, List.of(starting, idle), Set.of(starting.getId()));
+
+        assertEquals(JarProjectRuntimeStatus.STARTING, model.statusOf(starting));
+        assertEquals(JarProjectRuntimeStatus.ERROR, model.statusOf(idle));
+    }
+
     private ProjectConfig project(int id) {
         ProjectConfig project = new ProjectConfig();
         project.setId(id);

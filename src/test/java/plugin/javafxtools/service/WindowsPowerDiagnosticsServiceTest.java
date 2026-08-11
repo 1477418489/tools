@@ -6,9 +6,7 @@ import plugin.javafxtools.service.WindowsPowerDiagnosticsService.FirmwareType;
 import plugin.javafxtools.service.WindowsPowerDiagnosticsService.WakeTimerStatus;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -22,9 +20,22 @@ class WindowsPowerDiagnosticsServiceTest {
     void parsesChineseWindowsDiagnostics() throws Exception {
         CapturingRunner runner = new CapturingRunner(new CommandResult(0, """
                 {"systemManufacturer":"IPASON","systemModel":"",\
+                "serialNumber":"SN-123","systemUuid":"UUID-456",\
                 "boardManufacturer":"IPASON","boardProduct":"13500H E1",\
+                "boardSerialNumber":"BOARD-789","processorName":"Intel Core i5-13500H",\
+                "processorCores":12,"processorLogicalProcessors":16,"processorMaxClockMhz":4700,\
+                "totalPhysicalMemoryBytes":17179869184,\
+                "memoryModules":[{"manufacturer":"Kingston","partNumber":"KVR32",\
+                "capacityBytes":8589934592,"speedMhz":3200,"configuredSpeedMhz":3200}],\
+                "graphicsAdapters":[{"name":"NVIDIA RTX Test","adapterMemoryBytes":8589934592,\
+                "driverVersion":"555.1","temperatureCelsius":48.5,"temperatureSource":"NVIDIA-SMI"}],\
+                "temperatures":[{"label":"CPU Package","celsius":54.25,\
+                "source":"LibreHardwareMonitor"}],\
+                "operatingSystem":"Microsoft Windows 11 · 10.0.26100 · Build 26100",\
                 "biosManufacturer":"AMI","biosVersion":"5.27",\
-                "biosReleaseDate":"2024-06-19","firmwareType":2,\
+                "biosReleaseDate":"2024-06-19 08:30:00",\
+                "activePowerPlan":"平衡","powerSupplyStatus":"交流供电 · 82% · 充电中",\
+                "firmwareType":2,\
                 "hibernationConfigured":false,\
                 "powerStatesText":"此系统上有以下睡眠状态:\\n待机 (S3)\\n\\n此系统上没有以下睡眠状态:\\n休眠",\
                 "wakeDevices":["HID Keyboard Device","Realtek PCIe GbE Family Controller"],\
@@ -36,7 +47,26 @@ class WindowsPowerDiagnosticsServiceTest {
         var diagnostics = service.detect();
 
         assertEquals("IPASON", diagnostics.systemManufacturer());
+        assertEquals("SN-123", diagnostics.serialNumber());
+        assertEquals("UUID-456", diagnostics.systemUuid());
         assertEquals("13500H E1", diagnostics.boardProduct());
+        assertEquals("BOARD-789", diagnostics.boardSerialNumber());
+        assertEquals("Intel Core i5-13500H", diagnostics.processorName());
+        assertEquals(12, diagnostics.processorCores());
+        assertEquals(16, diagnostics.processorLogicalProcessors());
+        assertEquals(4_700, diagnostics.processorMaxClockMhz());
+        assertEquals(17_179_869_184L, diagnostics.totalPhysicalMemoryBytes());
+        assertEquals(1, diagnostics.memoryModules().size());
+        assertEquals("KVR32", diagnostics.memoryModules().getFirst().partNumber());
+        assertEquals(1, diagnostics.graphicsAdapters().size());
+        assertTrue(diagnostics.graphicsAdapters().getFirst().hasTemperature());
+        assertEquals(48.5,
+                diagnostics.graphicsAdapters().getFirst().temperatureCelsius(), 0.01);
+        assertEquals(54.25, diagnostics.temperatures().getFirst().celsius(), 0.01);
+        assertEquals("2024-06-19 08:30:00", diagnostics.biosReleaseDate());
+        assertEquals("平衡", diagnostics.activePowerPlan());
+        assertTrue(diagnostics.powerSupplyStatus().contains("82%"));
+        assertTrue(diagnostics.operatingSystem().contains("Windows 11"));
         assertEquals(FirmwareType.UEFI, diagnostics.firmwareType());
         assertTrue(diagnostics.powerStates().s3Supported());
         assertFalse(diagnostics.powerStates().hibernationAvailable());
@@ -99,7 +129,20 @@ class WindowsPowerDiagnosticsServiceTest {
         assertFalse(script.contains("registertaskdefinition"));
         assertFalse(script.contains("powercfg.exe /hibernate"));
         assertTrue(script.contains("get-ciminstance"));
+        assertTrue(script.contains("get-fxtoolsciminstances"));
+        assertTrue(script.contains("get-fxtoolsregistryvalue"));
+        assertTrue(script.contains("microsoft.visualbasic.devices.computerinfo"));
+        assertTrue(script.contains("$windowsbuildnumber -ge 22000"));
         assertTrue(script.contains("get-cimclass"));
+        assertTrue(script.contains("win32_computersystemproduct"));
+        assertTrue(script.contains("win32_processor"));
+        assertTrue(script.contains("win32_operatingsystem"));
+        assertTrue(script.contains("win32_physicalmemory"));
+        assertTrue(script.contains("win32_videocontroller"));
+        assertTrue(script.contains("nvidia-smi"));
+        assertTrue(script.contains("msacpi_thermalzonetemperature"));
+        assertTrue(script.contains("powercfg.exe /getactivescheme"));
+        assertTrue(script.contains("getsystempowerstatus"));
     }
 
     @Test
@@ -109,7 +152,7 @@ class WindowsPowerDiagnosticsServiceTest {
                 new WindowsPowerDiagnosticsService("Linux", runner);
 
         assertThrows(IOException.class, service::detect);
-        assertTrue(runner.commands.isEmpty());
+        assertTrue(runner.scripts.isEmpty());
     }
 
     private WindowsPowerDiagnosticsService windowsService(CapturingRunner runner) {
@@ -129,7 +172,7 @@ class WindowsPowerDiagnosticsServiceTest {
 
     private static final class CapturingRunner
             implements WindowsPowerDiagnosticsService.CommandRunner {
-        private final List<List<String>> commands = new ArrayList<>();
+        private final List<String> scripts = new ArrayList<>();
         private final CommandResult result;
 
         private CapturingRunner(CommandResult result) {
@@ -137,14 +180,13 @@ class WindowsPowerDiagnosticsServiceTest {
         }
 
         @Override
-        public CommandResult run(List<String> command) {
-            commands.add(List.copyOf(command));
+        public CommandResult run(String script) {
+            scripts.add(script);
             return result;
         }
 
         private String lastScript() {
-            return new String(Base64.getDecoder().decode(
-                    commands.getLast().getLast()), StandardCharsets.UTF_16LE);
+            return scripts.getLast();
         }
     }
 }
