@@ -22,9 +22,9 @@ public final class LogMonitorMatcher {
         Set<RuleDefinition> definitions = new HashSet<>();
         List<CompiledRule> compiledRules = new ArrayList<>();
         for (LogMonitorRule rule : rules) {
-            validate(rule, definitions);
+            Pattern regexPattern = validate(rule, definitions);
             if (rule.enabled()) {
-                compiledRules.add(compile(rule));
+                compiledRules.add(compile(rule, regexPattern));
             }
         }
         enabledRules = List.copyOf(compiledRules);
@@ -41,7 +41,7 @@ public final class LogMonitorMatcher {
         return List.copyOf(matches);
     }
 
-    private static void validate(LogMonitorRule rule, Set<RuleDefinition> definitions) {
+    private static Pattern validate(LogMonitorRule rule, Set<RuleDefinition> definitions) {
         Objects.requireNonNull(rule, "rule");
         if (rule.expression() == null || rule.expression().isBlank()) {
             throw new IllegalArgumentException("Rule expression must not be blank");
@@ -53,16 +53,17 @@ public final class LogMonitorMatcher {
         if (!definitions.add(definition)) {
             throw new IllegalArgumentException("Duplicate rule definition: " + rule.expression());
         }
+        return rule.mode() == LogMatchMode.REGEX ? compileRegex(rule) : null;
     }
 
-    private static CompiledRule compile(LogMonitorRule rule) {
+    private static CompiledRule compile(LogMonitorRule rule, Pattern regexPattern) {
         String expression = rule.caseSensitive() ? rule.expression() : rule.expression().toLowerCase(Locale.ROOT);
         return switch (rule.mode()) {
             case CONTAINS -> new CompiledRule(rule, null, expression);
             case WHOLE_TOKEN -> new CompiledRule(rule,
                     Pattern.compile("(?<!" + TOKEN_CHARACTER_CLASS + ")" + Pattern.quote(expression)
                             + "(?!" + TOKEN_CHARACTER_CLASS + ")"), expression);
-            case REGEX -> new CompiledRule(rule, compileRegex(rule), null);
+            case REGEX -> new CompiledRule(rule, regexPattern, null);
         };
     }
 

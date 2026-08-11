@@ -41,6 +41,7 @@ class LogMonitorMatcherTest {
         assertEquals(List.of(rule), matcher.matchingRules("状态：429，稍后重试"));
         assertEquals(List.of(), matcher.matchingRules("x429 429x _429 429_"));
         assertEquals(List.of(), matcher.matchingRules("请求429次"));
+        assertEquals(List.of(), matcher.matchingRules("429\u0661"));
     }
 
     @Test
@@ -81,6 +82,13 @@ class LogMonitorMatcherTest {
     @Test
     void rejectsInvalidRegularExpressions() {
         LogMonitorRule rule = rule("invalid", "无效", "[", LogMatchMode.REGEX, true, true);
+
+        assertThrows(IllegalArgumentException.class, () -> new LogMonitorMatcher(List.of(rule)));
+    }
+
+    @Test
+    void rejectsInvalidRegularExpressionsForDisabledRules() {
+        LogMonitorRule rule = rule("disabled-invalid", "已禁用无效", "[", LogMatchMode.REGEX, true, false);
 
         assertThrows(IllegalArgumentException.class, () -> new LogMonitorMatcher(List.of(rule)));
     }
