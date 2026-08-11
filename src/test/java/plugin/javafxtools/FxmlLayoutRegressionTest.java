@@ -74,13 +74,30 @@ class FxmlLayoutRegressionTest {
         assertTrue(fxml.contains("fx:id=\"processPortNavButton\""));
         assertTrue(fxml.contains("fx:id=\"devEnvironmentNavButton\""));
         assertTrue(fxml.contains("fx:id=\"fileAnalysisNavButton\""));
+        assertTrue(fxml.contains("fx:id=\"logMonitorNavButton\""));
         assertTrue(fxml.contains("fx:id=\"base64NavButton\""));
         assertTrue(fxml.contains("styleClass=\"sidebar-scroll\""));
         assertTrue(fxml.contains("fx:id=\"appLauncherTab\""));
         assertTrue(fxml.contains("fx:id=\"memoReminderTab\""));
         assertTrue(fxml.contains("fx:id=\"windowsPowerTab\""));
         assertTrue(fxml.contains("fx:id=\"networkQualityTab\""));
+        assertTrue(fxml.contains("fx:id=\"logMonitorTab\""));
         assertFalse(fxml.contains("styleClass=\"app-header\""));
+    }
+
+    @Test
+    void logMonitorIsEagerlyLoadedWithWindowAndSoundDependencies() throws IOException {
+        String controller = Files.readString(Path.of(
+                "src", "main", "java", "plugin", "javafxtools", "controller",
+                "MainController.java"));
+
+        assertTrue(controller.contains(
+                "register(logMonitorTab, \"系统与开发\", \"日志监控\", \"log-monitor-view.fxml\")"));
+        assertTrue(controller.contains("loadModule(logMonitorTab)"));
+        assertTrue(controller.contains("getLogMonitorController()"));
+        assertTrue(controller.contains("logMonitorController.setPrimaryStage(primaryStage)"));
+        assertTrue(controller.contains("logMonitorController.setReminderSoundEnabledSupplier("));
+        assertTrue(controller.contains("() -> appSettings.reminderSoundEnabled()"));
     }
 
     @Test
@@ -122,6 +139,7 @@ class FxmlLayoutRegressionTest {
                 "process-port-view.fxml",
                 "dev-environment-view.fxml",
                 "file-analysis-view.fxml",
+                "log-monitor-view.fxml",
                 "data-format-view.fxml",
                 "strData-format-view.fxml",
                 "base64-view.fxml",
@@ -309,6 +327,7 @@ class FxmlLayoutRegressionTest {
                 "process-port-view.fxml",
                 "dev-environment-view.fxml",
                 "file-analysis-view.fxml",
+                "log-monitor-view.fxml",
                 "base64-view.fxml",
                 "strData-format-view.fxml",
                 "websocket-view.fxml",

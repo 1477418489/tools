@@ -1808,3 +1808,47 @@
 .codec-area .content {
     -fx-padding: 12;
 }
+
+/* ===== Log monitor workspace ===== */
+.log-monitor-toolbar {
+    -fx-min-height: 56px;
+}
+
+.log-monitor-toolbar .text-field,
+.log-monitor-expression-field {
+    -fx-font-family: "Cascadia Mono", "Consolas", "Microsoft YaHei UI", monospace;
+    -fx-font-size: 11px;
+}
+
+.log-monitor-workspace {
+    -fx-min-height: 360px;
+}
+
+.log-monitor-workspace > .split-pane-divider {
+    -fx-padding: 0 1;
+}
+
+.log-monitor-rule-surface,
+.log-monitor-match-surface {
+    -fx-min-height: 340px;
+}
+
+.log-monitor-rule-table,
+.log-monitor-match-table {
+    -fx-fixed-cell-size: 30px;
+}
+
+.log-monitor-rule-table .table-cell,
+.log-monitor-match-table .table-cell {
+    -fx-font-size: 11px;
+}
+
+.log-monitor-alert-summary {
+    -fx-font-family: "Cascadia Mono", "Consolas", "Microsoft YaHei UI", monospace;
+    -fx-font-size: 12px;
+    -fx-background-color: #f8fafc;
+}
+
+.log-monitor-alert-dialog > .content {
+    -fx-padding: 12;
+}

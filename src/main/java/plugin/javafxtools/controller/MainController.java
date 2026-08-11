@@ -54,6 +54,7 @@ public class MainController {
     @FXML private Tab processPortTab;
     @FXML private Tab devEnvironmentTab;
     @FXML private Tab fileAnalysisTab;
+    @FXML private Tab logMonitorTab;
     @FXML private Tab dataFormatTab;
     @FXML private Tab strDataFormatTab;
     @FXML private Tab base64Tab;
@@ -69,6 +70,7 @@ public class MainController {
     @FXML private ToggleButton processPortNavButton;
     @FXML private ToggleButton devEnvironmentNavButton;
     @FXML private ToggleButton fileAnalysisNavButton;
+    @FXML private ToggleButton logMonitorNavButton;
     @FXML private ToggleButton dataFormatNavButton;
     @FXML private ToggleButton strDataFormatNavButton;
     @FXML private ToggleButton base64NavButton;
@@ -117,6 +119,7 @@ public class MainController {
 
         loadModule(memoReminderTab);
         loadModule(keepAliveTab);
+        loadModule(logMonitorTab);
         loadModule(tabPane.getSelectionModel().getSelectedItem());
         tabPane.getSelectionModel().selectedItemProperty().addListener(
                 (observable, previous, selected) -> {
@@ -133,11 +136,21 @@ public class MainController {
                 ? controller : null;
     }
 
+    public LogMonitorController getLogMonitorController() {
+        ControllerBinding binding = loadedModules.get(logMonitorTab);
+        return binding != null && binding.controller() instanceof LogMonitorController controller
+                ? controller : null;
+    }
+
     public void setPrimaryStage(Stage primaryStage) {
         this.primaryStage = primaryStage;
         AppLauncherController controller = getAppLauncherController();
         if (controller != null) {
             controller.setPrimaryStage(primaryStage);
+        }
+        LogMonitorController logMonitorController = getLogMonitorController();
+        if (logMonitorController != null) {
+            logMonitorController.setPrimaryStage(primaryStage);
         }
     }
 
@@ -299,6 +312,7 @@ public class MainController {
         register(processPortTab, "系统与开发", "进程与端口", "process-port-view.fxml");
         register(devEnvironmentTab, "系统与开发", "环境体检", "dev-environment-view.fxml");
         register(fileAnalysisTab, "系统与开发", "文件分析", "file-analysis-view.fxml");
+        register(logMonitorTab, "系统与开发", "日志监控", "log-monitor-view.fxml");
         register(dataFormatTab, "数据与效率", "数据格式化", "data-format-view.fxml");
         register(strDataFormatTab, "数据与效率", "字符串处理", "strData-format-view.fxml");
         register(base64Tab, "数据与效率", "Base64 编解码", "base64-view.fxml");
@@ -321,6 +335,7 @@ public class MainController {
         navigationTabs.put(processPortNavButton, processPortTab);
         navigationTabs.put(devEnvironmentNavButton, devEnvironmentTab);
         navigationTabs.put(fileAnalysisNavButton, fileAnalysisTab);
+        navigationTabs.put(logMonitorNavButton, logMonitorTab);
         navigationTabs.put(dataFormatNavButton, dataFormatTab);
         navigationTabs.put(strDataFormatNavButton, strDataFormatTab);
         navigationTabs.put(base64NavButton, base64Tab);
@@ -396,6 +411,10 @@ public class MainController {
             updateAppLauncherActivity();
         } else if (controller instanceof MemoReminderController reminderController) {
             reminderController.setReminderSoundEnabledSupplier(
+                    () -> appSettings.reminderSoundEnabled());
+        } else if (controller instanceof LogMonitorController logMonitorController) {
+            logMonitorController.setPrimaryStage(primaryStage);
+            logMonitorController.setReminderSoundEnabledSupplier(
                     () -> appSettings.reminderSoundEnabled());
         }
     }

@@ -91,6 +91,11 @@
                               styleClass="sidebar-nav-button, nav-amber">
                     <graphic><Label text="FILE" styleClass="nav-code"/></graphic>
                 </ToggleButton>
+                <ToggleButton fx:id="logMonitorNavButton" text="日志监控" maxWidth="Infinity"
+                              contentDisplay="LEFT" graphicTextGap="10"
+                              styleClass="sidebar-nav-button, nav-rose">
+                    <graphic><Label text="LOG" styleClass="nav-code"/></graphic>
+                </ToggleButton>
             </VBox>
 
             <VBox spacing="4">
@@ -171,6 +176,7 @@
                 <Tab fx:id="processPortTab" text="进程与端口"/>
                 <Tab fx:id="devEnvironmentTab" text="环境体检"/>
                 <Tab fx:id="fileAnalysisTab" text="文件分析"/>
+                <Tab fx:id="logMonitorTab" text="日志监控"/>
                 <Tab fx:id="dataFormatTab" text="数据格式化"/>
                 <Tab fx:id="strDataFormatTab" text="字符串处理"/>
                 <Tab fx:id="base64Tab" text="Base64 编解码"/>
