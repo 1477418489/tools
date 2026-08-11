@@ -19,10 +19,12 @@ import java.util.regex.Pattern;
 public final class LogFileTailer {
     private static final int READ_BUFFER_BYTES = 8192;
     private static final int MAX_LINE_BYTES = 32 * 1024;
+    private static final int MAX_SNAPSHOT_RETRIES = 3;
     private static final Pattern ANSI_ESCAPE = Pattern.compile("\\u001B\\[[;\\d]*[ -/]*[@-~]");
 
     private final Path logFile;
     private final AttributesReader attributesReader;
+    private final ChannelOpener channelOpener;
     private final boolean skipFirstObservedFile;
     private final ByteArrayOutputStream pendingLine = new ByteArrayOutputStream();
     private long position;
@@ -31,20 +33,23 @@ public final class LogFileTailer {
     private boolean lineTruncated;
 
     public LogFileTailer(Path logFile, long startOffset) {
-        this(logFile, startOffset, false, path -> Files.readAttributes(path, BasicFileAttributes.class));
+        this(logFile, startOffset, false, path -> Files.readAttributes(path, BasicFileAttributes.class),
+                path -> Files.newByteChannel(path, StandardOpenOption.READ));
     }
 
     private LogFileTailer(Path logFile, long startOffset, boolean skipFirstObservedFile) {
         this(logFile, startOffset, skipFirstObservedFile,
-                path -> Files.readAttributes(path, BasicFileAttributes.class));
+                path -> Files.readAttributes(path, BasicFileAttributes.class),
+                path -> Files.newByteChannel(path, StandardOpenOption.READ));
     }
 
     LogFileTailer(Path logFile, long startOffset, AttributesReader attributesReader) {
-        this(logFile, startOffset, false, attributesReader);
+        this(logFile, startOffset, false, attributesReader,
+                path -> Files.newByteChannel(path, StandardOpenOption.READ));
     }
 
     private LogFileTailer(Path logFile, long startOffset, boolean skipFirstObservedFile,
-                          AttributesReader attributesReader) {
+                          AttributesReader attributesReader, ChannelOpener channelOpener) {
         this.logFile = Objects.requireNonNull(logFile, "logFile");
         if (startOffset < 0) {
             throw new IllegalArgumentException("startOffset 不能为负数");
@@ -52,6 +57,12 @@ public final class LogFileTailer {
         this.position = startOffset;
         this.skipFirstObservedFile = skipFirstObservedFile;
         this.attributesReader = Objects.requireNonNull(attributesReader, "attributesReader");
+        this.channelOpener = Objects.requireNonNull(channelOpener, "channelOpener");
+    }
+
+    LogFileTailer(Path logFile, long startOffset, AttributesReader attributesReader,
+                  ChannelOpener channelOpener) {
+        this(logFile, startOffset, false, attributesReader, channelOpener);
     }
 
     /** Returns a tailer that starts after content present on its first file observation. */
@@ -69,73 +80,103 @@ public final class LogFileTailer {
             return List.of();
         }
 
-        BasicFileAttributes attributes = attributesReader.read(logFile);
-        long size = attributes.size();
-        FileIdentity currentFileIdentity = FileIdentity.from(attributes);
-        if (!observedFile) {
-            observedFile = true;
-            fileIdentity = currentFileIdentity;
-            if (skipFirstObservedFile) {
-                position = size;
-                clearPendingLine();
-                return List.of();
-            }
-        } else if (!fileIdentity.matches(currentFileIdentity) || size < position) {
-            position = 0;
-            clearPendingLine();
-            fileIdentity = currentFileIdentity;
-        }
+        for (int attempt = 0; attempt < MAX_SNAPSHOT_RETRIES; attempt++) {
+            BasicFileAttributes before = attributesReader.read(logFile);
+            FileIdentity beforeIdentity = FileIdentity.from(before);
+            boolean nextObserved = observedFile;
+            FileIdentity nextIdentity = fileIdentity;
+            long nextPosition = position;
+            WorkingLine nextLine = new WorkingLine(pendingLine.toByteArray(), lineTruncated);
 
-        List<String> lines = new ArrayList<>();
-        try (SeekableByteChannel channel = Files.newByteChannel(logFile, StandardOpenOption.READ)) {
-            channel.position(Math.min(position, channel.size()));
-            ByteBuffer buffer = ByteBuffer.allocate(READ_BUFFER_BYTES);
-            while (channel.read(buffer) > 0) {
-                buffer.flip();
-                while (buffer.hasRemaining()) {
-                    acceptByte(buffer.get(), lines);
+            if (!nextObserved) {
+                nextObserved = true;
+                nextIdentity = beforeIdentity;
+                if (skipFirstObservedFile) {
+                    BasicFileAttributes after = attributesReader.read(logFile);
+                    if (!beforeIdentity.matches(FileIdentity.from(after))) {
+                        continue;
+                    }
+                    commit(after.size(), nextLine.clear(), nextObserved, beforeIdentity);
+                    return List.of();
                 }
-                buffer.clear();
+            } else if (!nextIdentity.matches(beforeIdentity) || before.size() < nextPosition) {
+                nextPosition = 0;
+                nextLine.clear();
+                nextIdentity = beforeIdentity;
             }
-            position = channel.position();
-        }
 
-        if (flushPartial && (pendingLine.size() > 0 || lineTruncated)) {
-            lines.add(finishLine());
+            List<String> lines = new ArrayList<>();
+            long readPosition;
+            try (SeekableByteChannel channel = channelOpener.open(logFile)) {
+                channel.position(Math.min(nextPosition, channel.size()));
+                ByteBuffer buffer = ByteBuffer.allocate(READ_BUFFER_BYTES);
+                while (channel.read(buffer) > 0) {
+                    buffer.flip();
+                    while (buffer.hasRemaining()) {
+                        acceptByte(buffer.get(), nextLine, lines);
+                    }
+                    buffer.clear();
+                }
+                readPosition = channel.position();
+            }
+
+            BasicFileAttributes after = attributesReader.read(logFile);
+            if (!beforeIdentity.matches(FileIdentity.from(after))) {
+                continue;
+            }
+            if (flushPartial && !nextLine.isEmpty()) {
+                lines.add(finishLine(nextLine));
+            }
+            commit(readPosition, nextLine, nextObserved, nextIdentity);
+            return List.copyOf(lines);
         }
-        return List.copyOf(lines);
+        throw new IOException("日志文件在读取期间持续变化");
     }
 
-    private void acceptByte(byte value, List<String> lines) {
-        if (value == '\n') {
-            lines.add(finishLine());
-        } else if (value != '\r') {
-            if (pendingLine.size() < MAX_LINE_BYTES) {
-                pendingLine.write(value);
-            } else {
-                lineTruncated = true;
-            }
-        }
-    }
-
-    private String finishLine() {
-        String line = pendingLine.toString(StandardCharsets.UTF_8);
+    private void commit(long nextPosition, WorkingLine nextLine, boolean nextObserved,
+                        FileIdentity nextIdentity) {
+        position = nextPosition;
         pendingLine.reset();
-        if (lineTruncated) {
+        pendingLine.writeBytes(nextLine.bytes.toByteArray());
+        lineTruncated = nextLine.truncated;
+        observedFile = nextObserved;
+        fileIdentity = nextIdentity;
+    }
+
+    private static void acceptByte(byte value, WorkingLine line, List<String> lines) {
+        if (value == '\n') {
+            lines.add(finishLine(line));
+        } else if (value != '\r') {
+            if (line.bytes.size() < MAX_LINE_BYTES) {
+                line.bytes.write(value);
+            } else {
+                line.truncated = true;
+            }
+        }
+    }
+
+    private static String finishLine(WorkingLine workingLine) {
+        String line = workingLine.bytes.toString(StandardCharsets.UTF_8);
+        workingLine.bytes.reset();
+        if (workingLine.truncated) {
             line += "... [单行日志已截断]";
-            lineTruncated = false;
+            workingLine.truncated = false;
         }
         return ANSI_ESCAPE.matcher(line).replaceAll("");
-    }
-
-    private void clearPendingLine() {
-        pendingLine.reset();
-        lineTruncated = false;
     }
 
     @FunctionalInterface
     interface AttributesReader {
         BasicFileAttributes read(Path logFile) throws IOException;
+    }
+
+    @FunctionalInterface
+    interface ChannelOpener {
+        SeekableByteChannel open(Path logFile) throws IOException;
+    }
+
+    static boolean sameFile(BasicFileAttributes first, BasicFileAttributes second) {
+        return FileIdentity.from(first).matches(FileIdentity.from(second));
     }
 
     private record FileIdentity(Object fileKey, FileTime creationTime) {
@@ -148,6 +189,27 @@ public final class LogFileTailer {
                 return fileKey != null && fileKey.equals(other.fileKey);
             }
             return creationTime.equals(other.creationTime);
+        }
+    }
+
+    private static final class WorkingLine {
+        private final ByteArrayOutputStream bytes;
+        private boolean truncated;
+
+        private WorkingLine(byte[] bytes, boolean truncated) {
+            this.bytes = new ByteArrayOutputStream(bytes.length);
+            this.bytes.writeBytes(bytes);
+            this.truncated = truncated;
+        }
+
+        private WorkingLine clear() {
+            bytes.reset();
+            truncated = false;
+            return this;
+        }
+
+        private boolean isEmpty() {
+            return bytes.size() == 0 && !truncated;
         }
     }
 }

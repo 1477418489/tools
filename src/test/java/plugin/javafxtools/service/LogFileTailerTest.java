@@ -10,9 +10,13 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
+import java.nio.channels.SeekableByteChannel;
+import java.nio.ByteBuffer;
+import java.io.IOException;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class LogFileTailerTest {
     @TempDir
@@ -97,14 +101,7 @@ class LogFileTailerTest {
         Files.writeString(log, "before\n", StandardCharsets.UTF_8);
         BasicFileAttributes before = attributes(7, 1);
         BasicFileAttributes after = attributes(7, 2);
-        LogFileTailer tailer = new LogFileTailer(log, 0L, new LogFileTailer.AttributesReader() {
-            private int calls;
-
-            @Override
-            public BasicFileAttributes read(Path ignored) {
-                return calls++ == 0 ? before : after;
-            }
-        });
+        LogFileTailer tailer = new LogFileTailer(log, 0L, reader(before, before, after, after));
         assertEquals(List.of("before"), tailer.readAvailable(false));
         Files.writeString(log, "after\n", StandardCharsets.UTF_8, StandardOpenOption.TRUNCATE_EXISTING);
 
@@ -123,7 +120,89 @@ class LogFileTailerTest {
         assertEquals(List.of("append"), tailer.readAvailable(false));
     }
 
+    @Test
+    void retriesFromBeginningWhenPathChangesBetweenIdentityAndOpen() throws Exception {
+        Path log = tempDirectory.resolve("application.log");
+        Files.writeString(log, "present", StandardCharsets.UTF_8);
+        BasicFileAttributes fileA = attributes(4, 1, "a");
+        BasicFileAttributes fileB = attributes(4, 2, "b");
+        LogFileTailer tailer = new LogFileTailer(log, 0L,
+                reader(fileA, fileA, fileA, fileB, fileB, fileB),
+                opener(channel("old\n"), channel("new\n"), channel("new\n")));
+
+        assertEquals(List.of("old"), tailer.readAvailable(false));
+        assertEquals(List.of("new"), tailer.readAvailable(false));
+    }
+
+    @Test
+    void leavesPartialStateUntouchedWhenReadFails() throws Exception {
+        Path log = tempDirectory.resolve("application.log");
+        Files.writeString(log, "present", StandardCharsets.UTF_8);
+        BasicFileAttributes attributes = attributes(5, 1, "a");
+        LogFileTailer tailer = new LogFileTailer(log, 0L, reader(attributes),
+                opener(channelThenFail("once"), channel("once\n")));
+
+        assertThrows(IOException.class, () -> tailer.readAvailable(false));
+        assertEquals(List.of("once"), tailer.readAvailable(false));
+    }
+
+    @Test
+    void leavesPositionUntouchedWhenCloseFails() throws Exception {
+        Path log = tempDirectory.resolve("application.log");
+        Files.writeString(log, "present", StandardCharsets.UTF_8);
+        BasicFileAttributes attributes = attributes(5, 1, "a");
+        LogFileTailer tailer = new LogFileTailer(log, 0L, reader(attributes),
+                opener(channelWithCloseFailure("once\n"), channel("once\n")));
+
+        assertThrows(IOException.class, () -> tailer.readAvailable(false));
+        assertEquals(List.of("once"), tailer.readAvailable(false));
+    }
+
+    @Test
+    void treatsMixedFileKeyAvailabilityAsReplacement() {
+        assertEquals(false, LogFileTailer.sameFile(attributes(1, 1, "key"), attributes(1, 1)));
+        assertEquals(false, LogFileTailer.sameFile(attributes(1, 1), attributes(1, 1, "key")));
+    }
+
+    private LogFileTailer.AttributesReader reader(BasicFileAttributes... attributes) {
+        return new LogFileTailer.AttributesReader() {
+            private int index;
+
+            @Override
+            public BasicFileAttributes read(Path ignored) {
+                return attributes[Math.min(index++, attributes.length - 1)];
+            }
+        };
+    }
+
+    private LogFileTailer.ChannelOpener opener(SeekableByteChannel... channels) {
+        return new LogFileTailer.ChannelOpener() {
+            private int index;
+
+            @Override
+            public SeekableByteChannel open(Path ignored) {
+                return channels[index++];
+            }
+        };
+    }
+
+    private SeekableByteChannel channel(String text) {
+        return new ScriptedChannel(text.getBytes(StandardCharsets.UTF_8), false, false);
+    }
+
+    private SeekableByteChannel channelThenFail(String text) {
+        return new ScriptedChannel(text.getBytes(StandardCharsets.UTF_8), true, false);
+    }
+
+    private SeekableByteChannel channelWithCloseFailure(String text) {
+        return new ScriptedChannel(text.getBytes(StandardCharsets.UTF_8), false, true);
+    }
+
     private BasicFileAttributes attributes(long size, long createdAtMillis) {
+        return attributes(size, createdAtMillis, null);
+    }
+
+    private BasicFileAttributes attributes(long size, long createdAtMillis, Object fileKey) {
         return new BasicFileAttributes() {
             private final FileTime creationTime = FileTime.fromMillis(createdAtMillis);
 
@@ -169,9 +248,40 @@ class LogFileTailerTest {
 
             @Override
             public Object fileKey() {
-                return null;
+                return fileKey;
             }
         };
+    }
+
+    private static final class ScriptedChannel implements SeekableByteChannel {
+        private final byte[] bytes;
+        private final boolean failAfterContent;
+        private final boolean failOnClose;
+        private int position;
+        private boolean contentRead;
+
+        private ScriptedChannel(byte[] bytes, boolean failAfterContent, boolean failOnClose) {
+            this.bytes = bytes;
+            this.failAfterContent = failAfterContent;
+            this.failOnClose = failOnClose;
+        }
+
+        @Override public int read(ByteBuffer target) throws IOException {
+            if (contentRead && failAfterContent) throw new IOException("read failure");
+            if (position == bytes.length) return -1;
+            int count = Math.min(target.remaining(), bytes.length - position);
+            target.put(bytes, position, count);
+            position += count;
+            contentRead = true;
+            return count;
+        }
+        @Override public int write(ByteBuffer source) { throw new UnsupportedOperationException(); }
+        @Override public long position() { return position; }
+        @Override public SeekableByteChannel position(long value) { position = (int) value; return this; }
+        @Override public long size() { return bytes.length; }
+        @Override public SeekableByteChannel truncate(long size) { throw new UnsupportedOperationException(); }
+        @Override public boolean isOpen() { return true; }
+        @Override public void close() throws IOException { if (failOnClose) throw new IOException("close failure"); }
     }
 
     private void append(Path log, String value) throws Exception {
