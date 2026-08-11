@@ -8,6 +8,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -87,6 +89,89 @@ class LogFileTailerTest {
         Files.move(replacement, log, StandardCopyOption.REPLACE_EXISTING);
 
         assertEquals(List.of("after"), tailer.readAvailable(false));
+    }
+
+    @Test
+    void resetsWhenNullFileKeysHaveDifferentCreationTimes() throws Exception {
+        Path log = tempDirectory.resolve("application.log");
+        Files.writeString(log, "before\n", StandardCharsets.UTF_8);
+        BasicFileAttributes before = attributes(7, 1);
+        BasicFileAttributes after = attributes(7, 2);
+        LogFileTailer tailer = new LogFileTailer(log, 0L, new LogFileTailer.AttributesReader() {
+            private int calls;
+
+            @Override
+            public BasicFileAttributes read(Path ignored) {
+                return calls++ == 0 ? before : after;
+            }
+        });
+        assertEquals(List.of("before"), tailer.readAvailable(false));
+        Files.writeString(log, "after\n", StandardCharsets.UTF_8, StandardOpenOption.TRUNCATE_EXISTING);
+
+        assertEquals(List.of("after"), tailer.readAvailable(false));
+    }
+
+    @Test
+    void appendsWhenNullFileKeysHaveTheSameCreationTime() throws Exception {
+        Path log = tempDirectory.resolve("application.log");
+        Files.writeString(log, "before\n", StandardCharsets.UTF_8);
+        BasicFileAttributes attributes = attributes(7, 1);
+        LogFileTailer tailer = new LogFileTailer(log, 0L, ignored -> attributes);
+        assertEquals(List.of("before"), tailer.readAvailable(false));
+        append(log, "append\n");
+
+        assertEquals(List.of("append"), tailer.readAvailable(false));
+    }
+
+    private BasicFileAttributes attributes(long size, long createdAtMillis) {
+        return new BasicFileAttributes() {
+            private final FileTime creationTime = FileTime.fromMillis(createdAtMillis);
+
+            @Override
+            public FileTime lastModifiedTime() {
+                return creationTime;
+            }
+
+            @Override
+            public FileTime lastAccessTime() {
+                return creationTime;
+            }
+
+            @Override
+            public FileTime creationTime() {
+                return creationTime;
+            }
+
+            @Override
+            public boolean isRegularFile() {
+                return true;
+            }
+
+            @Override
+            public boolean isDirectory() {
+                return false;
+            }
+
+            @Override
+            public boolean isSymbolicLink() {
+                return false;
+            }
+
+            @Override
+            public boolean isOther() {
+                return false;
+            }
+
+            @Override
+            public long size() {
+                return size;
+            }
+
+            @Override
+            public Object fileKey() {
+                return null;
+            }
+        };
     }
 
     private void append(Path log, String value) throws Exception {

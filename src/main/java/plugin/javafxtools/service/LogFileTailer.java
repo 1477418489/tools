@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -21,24 +22,36 @@ public final class LogFileTailer {
     private static final Pattern ANSI_ESCAPE = Pattern.compile("\\u001B\\[[;\\d]*[ -/]*[@-~]");
 
     private final Path logFile;
+    private final AttributesReader attributesReader;
     private final boolean skipFirstObservedFile;
     private final ByteArrayOutputStream pendingLine = new ByteArrayOutputStream();
     private long position;
-    private Object fileKey;
+    private FileIdentity fileIdentity;
     private boolean observedFile;
     private boolean lineTruncated;
 
     public LogFileTailer(Path logFile, long startOffset) {
-        this(logFile, startOffset, false);
+        this(logFile, startOffset, false, path -> Files.readAttributes(path, BasicFileAttributes.class));
     }
 
     private LogFileTailer(Path logFile, long startOffset, boolean skipFirstObservedFile) {
+        this(logFile, startOffset, skipFirstObservedFile,
+                path -> Files.readAttributes(path, BasicFileAttributes.class));
+    }
+
+    LogFileTailer(Path logFile, long startOffset, AttributesReader attributesReader) {
+        this(logFile, startOffset, false, attributesReader);
+    }
+
+    private LogFileTailer(Path logFile, long startOffset, boolean skipFirstObservedFile,
+                          AttributesReader attributesReader) {
         this.logFile = Objects.requireNonNull(logFile, "logFile");
         if (startOffset < 0) {
             throw new IllegalArgumentException("startOffset 不能为负数");
         }
         this.position = startOffset;
         this.skipFirstObservedFile = skipFirstObservedFile;
+        this.attributesReader = Objects.requireNonNull(attributesReader, "attributesReader");
     }
 
     /** Returns a tailer that starts after content present on its first file observation. */
@@ -56,21 +69,21 @@ public final class LogFileTailer {
             return List.of();
         }
 
-        BasicFileAttributes attributes = Files.readAttributes(logFile, BasicFileAttributes.class);
+        BasicFileAttributes attributes = attributesReader.read(logFile);
         long size = attributes.size();
-        Object currentFileKey = attributes.fileKey();
+        FileIdentity currentFileIdentity = FileIdentity.from(attributes);
         if (!observedFile) {
             observedFile = true;
-            fileKey = currentFileKey;
+            fileIdentity = currentFileIdentity;
             if (skipFirstObservedFile) {
                 position = size;
                 clearPendingLine();
                 return List.of();
             }
-        } else if (!Objects.equals(fileKey, currentFileKey) || size < position) {
+        } else if (!fileIdentity.matches(currentFileIdentity) || size < position) {
             position = 0;
             clearPendingLine();
-            fileKey = currentFileKey;
+            fileIdentity = currentFileIdentity;
         }
 
         List<String> lines = new ArrayList<>();
@@ -118,5 +131,23 @@ public final class LogFileTailer {
     private void clearPendingLine() {
         pendingLine.reset();
         lineTruncated = false;
+    }
+
+    @FunctionalInterface
+    interface AttributesReader {
+        BasicFileAttributes read(Path logFile) throws IOException;
+    }
+
+    private record FileIdentity(Object fileKey, FileTime creationTime) {
+        private static FileIdentity from(BasicFileAttributes attributes) {
+            return new FileIdentity(attributes.fileKey(), attributes.creationTime());
+        }
+
+        private boolean matches(FileIdentity other) {
+            if (fileKey != null || other.fileKey != null) {
+                return fileKey != null && fileKey.equals(other.fileKey);
+            }
+            return creationTime.equals(other.creationTime);
+        }
     }
 }
