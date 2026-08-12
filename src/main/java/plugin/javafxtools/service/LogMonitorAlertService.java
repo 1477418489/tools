@@ -15,6 +15,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Executors;
@@ -94,10 +95,18 @@ public final class LogMonitorAlertService implements AutoCloseable {
 
     public void accept(LogMonitorMatch match) {
         Objects.requireNonNull(match, "match");
+        acceptAll(List.of(match));
+    }
+
+    public void acceptAll(List<LogMonitorMatch> matches) {
+        List<LogMonitorMatch> snapshot = List.copyOf(Objects.requireNonNull(matches, "matches"));
+        if (snapshot.isEmpty()) {
+            return;
+        }
         if (closed.get()) {
             return;
         }
-        dispatchToFx(() -> apply(accumulator.onMatch(match, clock.instant())));
+        dispatchToFx(() -> apply(accumulator.onMatches(snapshot, clock.instant())));
     }
 
     public void setOwner(Stage owner) {

@@ -76,10 +76,29 @@ public final class LogFileTailer {
      * @param flushPartial whether to return an unterminated final line
      */
     public synchronized List<String> readAvailable(boolean flushPartial) throws IOException {
+        return readAvailable(flushPartial, Integer.MAX_VALUE, Integer.MAX_VALUE);
+    }
+
+    /**
+     * Reads a bounded batch without advancing past bytes that were not returned or buffered.
+     *
+     * @param flushPartial whether to return an unterminated final line after reaching EOF
+     * @param maxBytes maximum bytes to consume in this call
+     * @param maxLines maximum complete lines to return in this call
+     */
+    public synchronized List<String> readAvailable(boolean flushPartial, int maxBytes, int maxLines)
+            throws IOException {
+        if (maxBytes <= 0) {
+            throw new IllegalArgumentException("maxBytes must be positive");
+        }
+        if (maxLines <= 0) {
+            throw new IllegalArgumentException("maxLines must be positive");
+        }
         if (!Files.isRegularFile(logFile)) {
             return List.of();
         }
 
+        boolean restartFromBeginning = false;
         for (int attempt = 0; attempt < MAX_SNAPSHOT_RETRIES; attempt++) {
             BasicFileAttributes before = attributesReader.read(logFile);
             FileIdentity beforeIdentity = FileIdentity.from(before);
@@ -99,32 +118,61 @@ public final class LogFileTailer {
                     commit(after.size(), nextLine.clear(), nextObserved, beforeIdentity);
                     return List.of();
                 }
+                if (before.size() < nextPosition) {
+                    nextPosition = 0;
+                    nextLine.clear();
+                }
             } else if (!nextIdentity.matches(beforeIdentity) || before.size() < nextPosition) {
+                nextPosition = 0;
+                nextLine.clear();
+                nextIdentity = beforeIdentity;
+            }
+            if (restartFromBeginning) {
                 nextPosition = 0;
                 nextLine.clear();
                 nextIdentity = beforeIdentity;
             }
 
             List<String> lines = new ArrayList<>();
-            long readPosition;
+            long readPosition = nextPosition;
+            long consumedBytes = 0L;
+            boolean reachedEndOfFile = false;
             try (SeekableByteChannel channel = channelOpener.open(logFile)) {
                 channel.position(Math.min(nextPosition, channel.size()));
                 ByteBuffer buffer = ByteBuffer.allocate(READ_BUFFER_BYTES);
-                while (channel.read(buffer) > 0) {
+                readPosition = channel.position();
+                while (consumedBytes < maxBytes && lines.size() < maxLines) {
+                    buffer.clear();
+                    buffer.limit((int) Math.min(buffer.capacity(), maxBytes - consumedBytes));
+                    int bytesRead = channel.read(buffer);
+                    if (bytesRead < 0) {
+                        reachedEndOfFile = true;
+                        break;
+                    }
+                    if (bytesRead == 0) {
+                        break;
+                    }
                     buffer.flip();
                     while (buffer.hasRemaining()) {
                         acceptByte(buffer.get(), nextLine, lines);
+                        readPosition++;
+                        consumedBytes++;
+                        if (lines.size() >= maxLines || consumedBytes >= maxBytes) {
+                            break;
+                        }
                     }
-                    buffer.clear();
                 }
-                readPosition = channel.position();
+                if (!reachedEndOfFile && readPosition >= channel.size()) {
+                    reachedEndOfFile = true;
+                }
             }
 
             BasicFileAttributes after = attributesReader.read(logFile);
-            if (!beforeIdentity.matches(FileIdentity.from(after))) {
+            if (!beforeIdentity.matches(FileIdentity.from(after)) || after.size() < readPosition) {
+                restartFromBeginning = true;
                 continue;
             }
-            if (flushPartial && !nextLine.isEmpty()) {
+            if (flushPartial && reachedEndOfFile && !nextLine.isEmpty()) {
                 lines.add(finishLine(nextLine));
             }
             commit(readPosition, nextLine, nextObserved, nextIdentity);

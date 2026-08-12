@@ -4,30 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ee1c44d2-bcb9-434c-ac67-b5e91efd8462" name="更改" comment="init6">
+    <list default="true" id="ee1c44d2-bcb9-434c-ac67-b5e91efd8462" name="更改" comment="init7">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/AppLauncherController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/AppLauncherController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/JarLauncherController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/JarLauncherController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/MainController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/MainController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/WindowsPowerController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/WindowsPowerController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/AppLauncherExecutionService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/AppLauncherExecutionService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/AppLauncherRuntimeActionService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/AppLauncherRuntimeActionService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/AppProcessManager.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/AppProcessManager.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarCopyActionService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarCopyActionService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarFileService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarFileService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarLaunchService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarLaunchService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarProjectStatusModel.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarProjectStatusModel.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/WindowsPowerDiagnosticsService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/WindowsPowerDiagnosticsService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/WindowsPowerSchedulerService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/WindowsPowerSchedulerService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/css/modern-light.css" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/css/modern-light.css" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/app-launcher-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/app-launcher-view.fxml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/main-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/main-view.fxml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/windows-power-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/windows-power-view.fxml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/FxmlLayoutRegressionTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/FxmlLayoutRegressionTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/JarProjectStatusModelTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/JarProjectStatusModelTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/WindowsPowerDiagnosticsServiceTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/WindowsPowerDiagnosticsServiceTest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/WindowsPowerSchedulerServiceTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/WindowsPowerSchedulerServiceTest.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -126,7 +104,7 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-jdk-30f59d01ecdd-63390994e64e-intellij.indexing.shared.core-IU-262.8665.337" />
+        <option value="bundled-jdk-30f59d01ecdd-34e2839f716b-intellij.indexing.shared.core-IU-262.9437.185" />
       </set>
     </attachedChunks>
   </component>
@@ -205,7 +183,19 @@
       <map>
         <entry key="MAIN">
           <value>
-            <State />
+            <State>
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="feature/log-monitor" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+            </State>
           </value>
         </entry>
       </map>
@@ -220,7 +210,8 @@
     <MESSAGE value="init4" />
     <MESSAGE value="init5" />
     <MESSAGE value="init6" />
-    <option name="LAST_COMMIT_MESSAGE" value="init6" />
+    <MESSAGE value="init7" />
+    <option name="LAST_COMMIT_MESSAGE" value="init7" />
     <option name="NON_MODAL_COMMIT_POSTPONE_SLOW_CHECKS" value="false" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">

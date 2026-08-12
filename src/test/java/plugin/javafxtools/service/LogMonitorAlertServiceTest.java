@@ -58,6 +58,24 @@ class LogMonitorAlertServiceTest {
     }
 
     @Test
+    void dispatchesOneFxTaskForABatchOfMatches() {
+        Fixture fixture = new Fixture(true);
+        try (LogMonitorAlertService service = fixture.service()) {
+            service.acceptAll(List.of(
+                    match("429", "first", NOW),
+                    match("503", "second", NOW)));
+
+            assertEquals(1, fixture.dispatcher.pendingCount());
+            fixture.dispatcher.runAll();
+
+            assertEquals(1, fixture.presenter.showCount);
+            assertEquals(0, fixture.presenter.updateCount);
+            assertEquals(1, fixture.beeps.get());
+            assertEquals(2, fixture.presenter.snapshot.totalCount());
+        }
+    }
+
+    @Test
     void schedulesOneCooldownWakeupAndShowsThePendingSummary() {
         Fixture fixture = new Fixture(true);
         try (LogMonitorAlertService service = fixture.service()) {

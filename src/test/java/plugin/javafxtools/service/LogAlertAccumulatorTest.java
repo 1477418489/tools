@@ -103,6 +103,40 @@ class LogAlertAccumulatorTest {
     }
 
     @Test
+    void anotherOpenRuleDoesNotBypassPerRuleCooldown() {
+        LogAlertAccumulator accumulator = accumulator();
+        accumulator.onMatch(match("429", "HTTP 429", "first 429", NOW), NOW);
+        accumulator.onDialogClosed(NOW.plusSeconds(2));
+        accumulator.onMatch(match("503", "HTTP 503", "fresh 503", NOW.plusSeconds(10)),
+                NOW.plusSeconds(10));
+
+        LogAlertAccumulator.Change pending429 = accumulator.onMatch(
+                match("429", "HTTP 429", "cooling 429", NOW.plusSeconds(11)),
+                NOW.plusSeconds(11));
+        LogAlertAccumulator.Change due429 = accumulator.cooldownElapsed(NOW.plusSeconds(62));
+
+        assertEquals(LogAlertAccumulator.Action.NONE, pending429.action());
+        assertEquals(List.of("503"), pending429.snapshot().rules().stream()
+                .map(LogAlertAccumulator.RuleSummary::ruleId).toList());
+        assertEquals(Optional.of(NOW.plusSeconds(62)), pending429.nextWakeUp());
+        assertEquals(LogAlertAccumulator.Action.UPDATE, due429.action());
+        assertEquals(List.of("503", "429"), due429.snapshot().rules().stream()
+                .map(LogAlertAccumulator.RuleSummary::ruleId).toList());
+    }
+
+    @Test
+    void batchProducesOneShowActionWithAllMatches() {
+        LogAlertAccumulator accumulator = accumulator();
+
+        LogAlertAccumulator.Change change = accumulator.onMatches(List.of(
+                match("429", "HTTP 429", "first", NOW),
+                match("503", "HTTP 503", "second", NOW)), NOW);
+
+        assertEquals(LogAlertAccumulator.Action.SHOW, change.action());
+        assertEquals(2, change.snapshot().totalCount());
+    }
+
+    @Test
     void duePendingRulesAreMergedIntoOnePopup() {
         LogAlertAccumulator accumulator = accumulator();
         accumulator.onMatch(match("429", "HTTP 429", "first 429", NOW), NOW);

@@ -10,6 +10,7 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Clock;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -22,6 +23,9 @@ import java.util.concurrent.TimeUnit;
 /** Polls appended log lines and reports matching monitor rules. */
 public final class LogMonitorService implements AutoCloseable {
     private static final long DEFAULT_POLL_MILLIS = 500L;
+    static final int MAX_READ_BYTES_PER_POLL = 256 * 1024;
+    static final int MAX_LINES_PER_POLL = 200;
+    static final int MAX_MATCHES_PER_POLL = 200;
 
     public interface Listener {
         void onStatusChanged(LogMonitorStatus status, String detail);
@@ -38,10 +42,22 @@ public final class LogMonitorService implements AutoCloseable {
 
     enum CallbackKind { ACTIVE, STOPPED }
 
+    @FunctionalInterface
+    interface LogReader {
+        List<String> readAvailable(boolean flushPartial, int maxBytes, int maxLines)
+                throws IOException;
+    }
+
+    @FunctionalInterface
+    interface LogReaderFactory {
+        LogReader create(Path path);
+    }
+
     private final ScheduledExecutorService executor;
     private final long pollMillis;
     private final Clock clock;
     private final Observer observer;
+    private final LogReaderFactory readerFactory;
     private long generation;
     private Session session;
     private ScheduledFuture<?> pollTask;
@@ -56,12 +72,21 @@ public final class LogMonitorService implements AutoCloseable {
     }
 
     LogMonitorService(long pollMillis, Clock clock, Observer observer) {
+        this(pollMillis, clock, observer, path -> {
+            LogFileTailer tailer = LogFileTailer.followNewContent(path);
+            return tailer::readAvailable;
+        });
+    }
+
+    LogMonitorService(long pollMillis, Clock clock, Observer observer,
+                      LogReaderFactory readerFactory) {
         if (pollMillis <= 0) {
             throw new IllegalArgumentException("pollMillis must be positive");
         }
         this.pollMillis = pollMillis;
         this.clock = Objects.requireNonNull(clock, "clock");
         this.observer = Objects.requireNonNull(observer, "observer");
+        this.readerFactory = Objects.requireNonNull(readerFactory, "readerFactory");
         ThreadFactory factory = runnable -> {
             Thread thread = new Thread(runnable, "log-monitor-poller");
             thread.setDaemon(true);
@@ -86,7 +111,7 @@ public final class LogMonitorService implements AutoCloseable {
         List<LogMonitorRule> rules = List.copyOf(Objects.requireNonNull(config.rules(), "rules"));
         LogMonitorMatcher matcher = new LogMonitorMatcher(rules);
         Path path = Path.of(config.logFile());
-        Session next = new Session(++generation, listener, path, matcher, LogFileTailer.followNewContent(path));
+        Session next = new Session(++generation, listener, path, matcher, readerFactory.create(path));
         session = next;
         pollTask = executor.scheduleWithFixedDelay(() -> poll(next), 0L, pollMillis, TimeUnit.MILLISECONDS);
     }
@@ -129,6 +154,10 @@ public final class LogMonitorService implements AutoCloseable {
             if (!isCurrent(current)) {
                 return;
             }
+            if (current.hasPendingWork()) {
+                publishPendingMatches(current);
+                return;
+            }
             Path path = current.path;
             BasicFileAttributes attributes;
             try {
@@ -144,25 +173,57 @@ public final class LogMonitorService implements AutoCloseable {
                 publishReadError(current, message);
                 return;
             }
-            List<String> lines = current.tailer.readAvailable(false);
+            current.pendingLines.addAll(current.reader.readAvailable(
+                    false, MAX_READ_BYTES_PER_POLL, MAX_LINES_PER_POLL));
             current.lastError = null;
             publishStatus(current, LogMonitorStatus.RUNNING, path.toString());
-            List<LogMonitorMatch> matches = new ArrayList<>();
-            for (String line : lines) {
-                for (LogMonitorRule rule : current.matcher.matchingRules(line)) {
-                    matches.add(new LogMonitorMatch(rule.id(), rule.name(), rule.expression(), path, line, clock.instant()));
-                }
+            publishPendingMatches(current);
+        } catch (IOException | RuntimeException exception) {
+            String detail = exception.getMessage();
+            if (detail == null || detail.isBlank()) {
+                detail = exception.getClass().getSimpleName();
             }
-            if (!matches.isEmpty()) {
-                publishMatches(current, List.copyOf(matches));
-            }
-        } catch (IOException exception) {
-            String message = "Unable to read log file " + current.path + ": " + exception.getMessage();
+            String message = "Unable to read log file " + current.path + ": " + detail;
             publishStatus(current, LogMonitorStatus.ERROR, message);
             publishReadError(current, message);
         } finally {
             observer.onPollCompleted(current.generation);
         }
+    }
+
+    private void publishPendingMatches(Session current) {
+        List<LogMonitorMatch> matches = collectMatches(current);
+        if (!matches.isEmpty()) {
+            publishMatches(current, List.copyOf(matches));
+        }
+    }
+
+    private List<LogMonitorMatch> collectMatches(Session current) {
+        List<LogMonitorMatch> matches = new ArrayList<>(MAX_MATCHES_PER_POLL);
+        while (matches.size() < MAX_MATCHES_PER_POLL) {
+            if (current.nextRuleIndex >= current.matchingRules.size()) {
+                String nextLine = current.pendingLines.pollFirst();
+                if (nextLine == null) {
+                    break;
+                }
+                current.currentLine = nextLine;
+                current.currentMatchedAt = clock.instant();
+                current.matchingRules = current.matcher.matchingRules(nextLine);
+                current.nextRuleIndex = 0;
+                if (current.matchingRules.isEmpty()) {
+                    current.clearCurrentLine();
+                    continue;
+                }
+            }
+
+            LogMonitorRule rule = current.matchingRules.get(current.nextRuleIndex++);
+            matches.add(new LogMonitorMatch(rule.id(), rule.name(), rule.expression(),
+                    current.path, current.currentLine, current.currentMatchedAt));
+            if (current.nextRuleIndex >= current.matchingRules.size()) {
+                current.clearCurrentLine();
+            }
+        }
+        return matches;
     }
 
     private synchronized boolean isCurrent(Session candidate) {
@@ -194,7 +255,7 @@ public final class LogMonitorService implements AutoCloseable {
         observer.beforeCallback(current.generation, CallbackKind.ACTIVE);
         synchronized (this) {
             if (isCurrent(current)) {
-                callback.run();
+                runListenerCallback(callback);
             }
         }
     }
@@ -203,8 +264,16 @@ public final class LogMonitorService implements AutoCloseable {
         observer.beforeCallback(stoppedGeneration, CallbackKind.STOPPED);
         synchronized (this) {
             if (!closed && session == null && generation == stoppedGeneration) {
-                listener.onStatusChanged(LogMonitorStatus.STOPPED, "");
+                runListenerCallback(() -> listener.onStatusChanged(LogMonitorStatus.STOPPED, ""));
             }
+        }
+    }
+
+    private static void runListenerCallback(Runnable callback) {
+        try {
+            callback.run();
+        } catch (RuntimeException ignored) {
+            // A UI listener must not terminate the persistent polling task.
         }
     }
 
@@ -213,17 +282,34 @@ public final class LogMonitorService implements AutoCloseable {
         private final Listener listener;
         private final Path path;
         private final LogMonitorMatcher matcher;
-        private final LogFileTailer tailer;
+        private final LogReader reader;
+        private final ArrayDeque<String> pendingLines = new ArrayDeque<>();
+        private List<LogMonitorRule> matchingRules = List.of();
+        private int nextRuleIndex;
+        private String currentLine;
+        private java.time.Instant currentMatchedAt;
         private LogMonitorStatus status;
         private String detail;
         private String lastError;
 
-        private Session(long generation, Listener listener, Path path, LogMonitorMatcher matcher, LogFileTailer tailer) {
+        private Session(long generation, Listener listener, Path path, LogMonitorMatcher matcher,
+                        LogReader reader) {
             this.generation = generation;
             this.listener = listener;
             this.path = path;
             this.matcher = matcher;
-            this.tailer = tailer;
+            this.reader = reader;
+        }
+
+        private boolean hasPendingWork() {
+            return !pendingLines.isEmpty() || nextRuleIndex < matchingRules.size();
+        }
+
+        private void clearCurrentLine() {
+            matchingRules = List.of();
+            nextRuleIndex = 0;
+            currentLine = null;
+            currentMatchedAt = null;
         }
     }
 }

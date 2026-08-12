@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -133,6 +134,136 @@ class LogMonitorServiceTest {
             assertTrue(listener.awaitErrorCount(2));
             assertEquals(List.of(LogMonitorStatus.ERROR, LogMonitorStatus.WAITING_FOR_FILE, LogMonitorStatus.ERROR), listener.statuses());
             assertEquals(listener.errors().getFirst(), listener.errors().get(1));
+        }
+    }
+
+    @Test
+    void recoversAfterRuntimeReadFailureWithoutStoppingScheduler() throws Exception {
+        Path log = tempDirectory.resolve("application.log");
+        Files.writeString(log, "history\n", StandardCharsets.UTF_8);
+        AtomicInteger reads = new AtomicInteger();
+        RecordingListener listener = new RecordingListener(0, 1, 1);
+        LogMonitorService.LogReader reader = (flushPartial, maxBytes, maxLines) -> {
+            if (reads.getAndIncrement() == 0) {
+                throw new SecurityException("access denied");
+            }
+            return reads.get() == 2 ? List.of("ERROR recovered") : List.of();
+        };
+
+        try (LogMonitorService service = new LogMonitorService(
+                15, CLOCK, LogMonitorService.Observer.NONE, ignored -> reader)) {
+            service.start(config(log, rule("error", "Error", "ERROR")), listener);
+
+            assertTrue(listener.awaitErrors());
+            assertTrue(listener.awaitMatches());
+            assertTrue(service.isRunning());
+            assertEquals(List.of(LogMonitorStatus.ERROR, LogMonitorStatus.RUNNING),
+                    listener.statuses());
+            assertEquals(List.of("ERROR recovered"), listener.matches().stream()
+                    .map(LogMonitorMatch::line).toList());
+        }
+    }
+
+    @Test
+    void listenerFailureDoesNotStopLaterPolling() throws Exception {
+        Path log = tempDirectory.resolve("application.log");
+        Files.writeString(log, "history\n", StandardCharsets.UTF_8);
+        CountDownLatch matched = new CountDownLatch(1);
+        AtomicInteger reads = new AtomicInteger();
+        LogMonitorService.LogReader reader = (flushPartial, maxBytes, maxLines) ->
+                reads.getAndIncrement() == 0 ? List.of() : List.of("ERROR later");
+        LogMonitorService.Listener listener = new LogMonitorService.Listener() {
+            @Override public void onStatusChanged(LogMonitorStatus status, String detail) {
+                throw new IllegalStateException("broken UI listener");
+            }
+            @Override public void onMatches(List<LogMonitorMatch> matches) {
+                matched.countDown();
+            }
+            @Override public void onReadError(String message) { }
+        };
+
+        try (LogMonitorService service = new LogMonitorService(
+                15, CLOCK, LogMonitorService.Observer.NONE, ignored -> reader)) {
+            service.start(config(log, rule("error", "Error", "ERROR")), listener);
+
+            assertTrue(matched.await(2, TimeUnit.SECONDS));
+            assertTrue(service.isRunning());
+        }
+    }
+
+    @Test
+    void capsMatchBatchesAndDrainsPendingRulesBeforeReadingAgain() throws Exception {
+        Path log = tempDirectory.resolve("application.log");
+        Files.writeString(log, "history\n", StandardCharsets.UTF_8);
+        List<LogMonitorRule> rules = new ArrayList<>();
+        List<String> expressions = new ArrayList<>();
+        for (int index = 0; index <= LogMonitorService.MAX_MATCHES_PER_POLL; index++) {
+            String expression = "rule-" + index;
+            expressions.add(expression);
+            rules.add(rule(expression, expression, expression));
+        }
+        AtomicInteger reads = new AtomicInteger();
+        List<int[]> limits = new ArrayList<>();
+        LogMonitorService.LogReader reader = (flushPartial, maxBytes, maxLines) -> {
+            limits.add(new int[] {maxBytes, maxLines});
+            return reads.getAndIncrement() == 0 ? List.of(String.join(" ", expressions)) : List.of();
+        };
+        RecordingListener listener = new RecordingListener(0, rules.size(), 0);
+
+        try (LogMonitorService service = new LogMonitorService(
+                15, CLOCK, LogMonitorService.Observer.NONE, ignored -> reader)) {
+            service.start(new LogMonitorConfig(true, log.toString(), rules), listener);
+
+            assertTrue(listener.awaitMatchCount(rules.size()));
+            assertEquals(List.of(LogMonitorService.MAX_MATCHES_PER_POLL, 1),
+                    listener.batchSizes());
+            assertEquals(1, reads.get());
+            assertEquals(LogMonitorService.MAX_READ_BYTES_PER_POLL, limits.getFirst()[0]);
+            assertEquals(LogMonitorService.MAX_LINES_PER_POLL, limits.getFirst()[1]);
+        }
+    }
+
+    @Test
+    void drainsAlreadyReadMatchesAfterFileDisappears() throws Exception {
+        Path log = tempDirectory.resolve("application.log");
+        Files.writeString(log, "history\n", StandardCharsets.UTF_8);
+        List<LogMonitorRule> rules = new ArrayList<>();
+        List<String> expressions = new ArrayList<>();
+        for (int index = 0; index <= LogMonitorService.MAX_MATCHES_PER_POLL; index++) {
+            String expression = "pending-" + index;
+            expressions.add(expression);
+            rules.add(rule(expression, expression, expression));
+        }
+        CountDownLatch allMatches = new CountDownLatch(rules.size());
+        List<Integer> batchSizes = new ArrayList<>();
+        AtomicInteger reads = new AtomicInteger();
+        LogMonitorService.LogReader reader = (flushPartial, maxBytes, maxLines) ->
+                reads.getAndIncrement() == 0 ? List.of(String.join(" ", expressions)) : List.of();
+        LogMonitorService.Listener listener = new LogMonitorService.Listener() {
+            @Override public void onStatusChanged(LogMonitorStatus status, String detail) { }
+            @Override public synchronized void onMatches(List<LogMonitorMatch> matches) {
+                batchSizes.add(matches.size());
+                if (batchSizes.size() == 1) {
+                    try {
+                        Files.delete(log);
+                    } catch (Exception exception) {
+                        throw new IllegalStateException(exception);
+                    }
+                }
+                matches.forEach(ignored -> allMatches.countDown());
+            }
+            @Override public void onReadError(String message) { }
+        };
+
+        try (LogMonitorService service = new LogMonitorService(
+                15, CLOCK, LogMonitorService.Observer.NONE, ignored -> reader)) {
+            service.start(new LogMonitorConfig(true, log.toString(), rules), listener);
+
+            assertTrue(allMatches.await(2, TimeUnit.SECONDS));
+            synchronized (listener) {
+                assertEquals(List.of(LogMonitorService.MAX_MATCHES_PER_POLL, 1), batchSizes);
+            }
+            assertEquals(1, reads.get());
         }
     }
 
@@ -252,6 +383,7 @@ class LogMonitorServiceTest {
         synchronized List<String> errors() { return List.copyOf(errors); }
         synchronized List<LogMonitorMatch> matches() { return List.copyOf(matches); }
         synchronized List<LogMonitorMatch> lastBatch() { return batches.getLast(); }
+        synchronized List<Integer> batchSizes() { return batches.stream().map(List::size).toList(); }
         synchronized int callbackCount() { return statuses.size() + errors.size() + batches.size(); }
         boolean awaitStatuses() throws InterruptedException { return statusLatch.await(2, TimeUnit.SECONDS); }
         boolean awaitMatches() throws InterruptedException { return matchLatch.await(2, TimeUnit.SECONDS); }

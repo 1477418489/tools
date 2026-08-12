@@ -83,6 +83,15 @@ class LogFileTailerTest {
     }
 
     @Test
+    void resetsWhenInitialOffsetIsBeyondTruncatedFile() throws Exception {
+        Path log = tempDirectory.resolve("application.log");
+        Files.writeString(log, "new\n", StandardCharsets.UTF_8);
+        LogFileTailer tailer = new LogFileTailer(log, 100L);
+
+        assertEquals(List.of("new"), tailer.readAvailable(false));
+    }
+
+    @Test
     void resetsAfterReplacingSamePathWithoutWaiting() throws Exception {
         Path log = tempDirectory.resolve("application.log");
         Files.writeString(log, "before\n", StandardCharsets.UTF_8);
@@ -112,8 +121,10 @@ class LogFileTailerTest {
     void appendsWhenNullFileKeysHaveTheSameCreationTime() throws Exception {
         Path log = tempDirectory.resolve("application.log");
         Files.writeString(log, "before\n", StandardCharsets.UTF_8);
-        BasicFileAttributes attributes = attributes(7, 1);
-        LogFileTailer tailer = new LogFileTailer(log, 0L, ignored -> attributes);
+        BasicFileAttributes beforeAppend = attributes(7, 1);
+        BasicFileAttributes afterAppend = attributes(14, 1);
+        LogFileTailer tailer = new LogFileTailer(log, 0L,
+                reader(beforeAppend, beforeAppend, afterAppend, afterAppend));
         assertEquals(List.of("before"), tailer.readAvailable(false));
         append(log, "append\n");
 
@@ -131,6 +142,19 @@ class LogFileTailerTest {
                 opener(channel("old\n"), channel("new\n"), channel("new\n")));
 
         assertEquals(List.of("old"), tailer.readAvailable(false));
+        assertEquals(List.of("new"), tailer.readAvailable(false));
+    }
+
+    @Test
+    void retriesFromBeginningWhenFileShrinksBetweenAttributesAndOpen() throws Exception {
+        Path log = tempDirectory.resolve("application.log");
+        Files.writeString(log, "new\n", StandardCharsets.UTF_8);
+        BasicFileAttributes beforeTruncate = attributes(10, 1, "same");
+        BasicFileAttributes afterTruncate = attributes(6, 1, "same");
+        LogFileTailer tailer = new LogFileTailer(log, 2L,
+                reader(beforeTruncate, afterTruncate, afterTruncate, afterTruncate),
+                opener(channel("stale data"), channel("new\n")));
+
         assertEquals(List.of("new"), tailer.readAvailable(false));
     }
 
@@ -156,6 +180,44 @@ class LogFileTailerTest {
 
         assertThrows(IOException.class, () -> tailer.readAvailable(false));
         assertEquals(List.of("once"), tailer.readAvailable(false));
+    }
+
+    @Test
+    void boundedReadsResumeWithoutDroppingLinesOrFlushingPartialContent() throws Exception {
+        Path log = tempDirectory.resolve("application.log");
+        Files.writeString(log, "one\ntwo\nthree\npartial", StandardCharsets.UTF_8);
+        LogFileTailer tailer = new LogFileTailer(log, 0L);
+
+        assertEquals(List.of("one", "two"), tailer.readAvailable(false, 1_000, 2));
+        assertEquals(List.of("three"), tailer.readAvailable(false, 8, 2));
+        assertEquals(List.of(), tailer.readAvailable(false, 1_000, 2));
+
+        append(log, " line\n");
+        assertEquals(List.of("partial line"), tailer.readAvailable(false, 1_000, 2));
+    }
+
+    @Test
+    void boundedReadsRespectByteLimitAcrossOneLine() throws Exception {
+        Path log = tempDirectory.resolve("application.log");
+        Files.writeString(log, "abcdefghij\n", StandardCharsets.UTF_8);
+        LogFileTailer tailer = new LogFileTailer(log, 0L);
+
+        assertEquals(List.of(), tailer.readAvailable(false, 4, 10));
+        assertEquals(List.of(), tailer.readAvailable(false, 4, 10));
+        assertEquals(List.of("abcdefghij"), tailer.readAvailable(false, 4, 10));
+        assertEquals(List.of(), tailer.readAvailable(false, 4, 10));
+    }
+
+    @Test
+    void boundedReadsRejectNonPositiveLimits() throws Exception {
+        Path log = tempDirectory.resolve("application.log");
+        Files.writeString(log, "line\n", StandardCharsets.UTF_8);
+        LogFileTailer tailer = new LogFileTailer(log, 0L);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> tailer.readAvailable(false, 0, 1));
+        assertThrows(IllegalArgumentException.class,
+                () -> tailer.readAvailable(false, 1, 0));
     }
 
     @Test

@@ -504,9 +504,9 @@ public final class LogMonitorController extends BaseController {
     }
 
     private void acceptMatches(List<LogMonitorMatch> matches) {
+        alertService.acceptAll(matches);
         for (LogMonitorMatch match : matches) {
             recentMatches.add(0, match);
-            alertService.accept(match);
             info("命中规则 [" + match.ruleName() + "]: " + match.line());
         }
         if (recentMatches.size() > MAX_RECENT_MATCHES) {

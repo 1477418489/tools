@@ -74,25 +74,39 @@ public final class LogAlertAccumulator {
         Objects.requireNonNull(match, "match");
         Objects.requireNonNull(now, "now");
 
-        if (!active.isEmpty()) {
-            Bucket bucket = active.computeIfAbsent(match.ruleId(), ignored -> new Bucket(match));
-            mergePending(match.ruleId(), bucket);
-            blockedUntil.remove(match.ruleId());
-            bucket.add(match);
+        Bucket activeBucket = active.get(match.ruleId());
+        if (activeBucket != null) {
+            activeBucket.add(match);
             return change(Action.UPDATE);
         }
 
         Instant ruleBlockedUntil = blockedUntil.get(match.ruleId());
-        if (ruleBlockedUntil == null || !now.isBefore(ruleBlockedUntil)) {
-            blockedUntil.remove(match.ruleId());
-            Bucket bucket = active.computeIfAbsent(match.ruleId(), ignored -> new Bucket(match));
-            mergePending(match.ruleId(), bucket);
-            bucket.add(match);
-            return change(Action.SHOW);
+        if (ruleBlockedUntil != null && now.isBefore(ruleBlockedUntil)) {
+            pending.computeIfAbsent(match.ruleId(), ignored -> new Bucket(match)).add(match);
+            return change(Action.NONE);
         }
 
-        pending.computeIfAbsent(match.ruleId(), ignored -> new Bucket(match)).add(match);
-        return change(Action.NONE);
+        blockedUntil.remove(match.ruleId());
+        boolean dialogWasOpen = !active.isEmpty();
+        Bucket bucket = active.computeIfAbsent(match.ruleId(), ignored -> new Bucket(match));
+        mergePending(match.ruleId(), bucket);
+        bucket.add(match);
+        return change(dialogWasOpen ? Action.UPDATE : Action.SHOW);
+    }
+
+    public Change onMatches(List<LogMonitorMatch> matches, Instant now) {
+        Objects.requireNonNull(matches, "matches");
+        Objects.requireNonNull(now, "now");
+        Action aggregateAction = Action.NONE;
+        for (LogMonitorMatch match : matches) {
+            Action action = onMatch(Objects.requireNonNull(match, "match"), now).action();
+            if (action == Action.SHOW) {
+                aggregateAction = Action.SHOW;
+            } else if (action == Action.UPDATE && aggregateAction == Action.NONE) {
+                aggregateAction = Action.UPDATE;
+            }
+        }
+        return change(aggregateAction);
     }
 
     public Change onDialogClosed(Instant now) {
