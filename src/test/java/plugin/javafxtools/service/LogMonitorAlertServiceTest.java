@@ -76,6 +76,115 @@ class LogMonitorAlertServiceTest {
     }
 
     @Test
+    void highVolumeMatchesUseOneFxTaskAndPreserveEveryAlertCount() {
+        Fixture fixture = new Fixture(true);
+        try (LogMonitorAlertService service = fixture.service()) {
+            for (int index = 1; index <= 1_000; index++) {
+                service.accept(match("429", "line " + index, NOW.plusMillis(index)));
+            }
+
+            assertEquals(1, fixture.dispatcher.pendingCount());
+            fixture.dispatcher.runAll();
+
+            assertEquals(1, fixture.presenter.showCount);
+            assertEquals(1_000, fixture.presenter.snapshot.totalCount());
+            assertEquals(List.of("line 998", "line 999", "line 1000"),
+                    fixture.presenter.snapshot.rules().getFirst().recentLines());
+        }
+    }
+
+    @Test
+    void resetInvalidatesQueuedMatchesAndClosesTheCurrentDialog() {
+        Fixture fixture = new Fixture(true);
+        try (LogMonitorAlertService service = fixture.service()) {
+            service.accept(match("429", "stale", NOW));
+            service.reset();
+            service.accept(match("429", "fresh", NOW.plusSeconds(1)));
+
+            fixture.dispatcher.runAll();
+            assertEquals(1, fixture.presenter.showCount);
+            assertEquals(List.of("fresh"),
+                    fixture.presenter.snapshot.rules().getFirst().recentLines());
+
+            service.reset();
+            fixture.dispatcher.runAll();
+            assertEquals(1, fixture.presenter.closeCount);
+        }
+    }
+
+    @Test
+    void resetCancelsCooldownAndPreventsAStoppedSessionFromReopening() {
+        Fixture fixture = new Fixture(true);
+        try (LogMonitorAlertService service = fixture.service()) {
+            service.accept(match("429", "shown", NOW));
+            fixture.dispatcher.runAll();
+            fixture.clock.set(NOW.plusSeconds(2));
+            fixture.presenter.hide();
+            fixture.clock.set(NOW.plusSeconds(10));
+            service.accept(match("429", "pending", NOW.plusSeconds(10)));
+            fixture.dispatcher.runAll();
+
+            FakeTask stoppedTask = fixture.scheduler.current;
+            service.reset();
+            fixture.dispatcher.runAll();
+            fixture.scheduler.fireCurrent();
+
+            assertTrue(stoppedTask.cancelled);
+            assertEquals(0, fixture.dispatcher.pendingCount());
+            assertEquals(1, fixture.presenter.showCount);
+        }
+    }
+
+    @Test
+    void formattedAlertTextHasGlobalRuleAndCharacterBounds() {
+        List<LogAlertAccumulator.RuleSummary> rules = new ArrayList<>();
+        String oversizedLine = "x".repeat(10_000);
+        for (int index = 0; index < 100; index++) {
+            rules.add(new LogAlertAccumulator.RuleSummary(
+                    "rule-" + index, "Rule " + index, "ERROR", 10,
+                    NOW, NOW.plusSeconds(1),
+                    List.of(oversizedLine, oversizedLine, oversizedLine)));
+        }
+
+        String formatted = LogMonitorAlertService.format(
+                new LogAlertAccumulator.Snapshot(rules));
+
+        assertTrue(formatted.length() < 101_000);
+        assertTrue(formatted.contains("规则详情已省略"));
+        assertFalse(formatted.contains(oversizedLine));
+    }
+
+    @Test
+    void rejectedFxDispatchCanBeRetriedWithoutLosingCompressedMatches() {
+        Fixture fixture = new Fixture(true);
+        try (LogMonitorAlertService service = fixture.service()) {
+            fixture.dispatcher.rejectNext();
+            service.accept(match("429", "first", NOW));
+            service.accept(match("429", "second", NOW.plusSeconds(1)));
+
+            assertEquals(1, fixture.dispatcher.pendingCount());
+            fixture.dispatcher.runAll();
+
+            assertEquals(2, fixture.presenter.snapshot.totalCount());
+            assertEquals(List.of("first", "second"),
+                    fixture.presenter.snapshot.rules().getFirst().recentLines());
+        }
+    }
+
+    @Test
+    void closeOnFxThreadClosesDialogImmediately() {
+        Fixture fixture = new Fixture(true);
+        LogMonitorAlertService service = fixture.serviceOnFxThread();
+        service.accept(match("429", "shown", NOW));
+        fixture.dispatcher.runAll();
+
+        service.close();
+
+        assertEquals(1, fixture.presenter.closeCount);
+        assertEquals(0, fixture.dispatcher.pendingCount());
+    }
+
+    @Test
     void schedulesOneCooldownWakeupAndShowsThePendingSummary() {
         Fixture fixture = new Fixture(true);
         try (LogMonitorAlertService service = fixture.service()) {
@@ -169,16 +278,31 @@ class LogMonitorAlertServiceTest {
             return new LogMonitorAlertService(dispatcher, clock, () -> soundEnabled,
                     presenter, scheduler, beeps::incrementAndGet);
         }
+
+        private LogMonitorAlertService serviceOnFxThread() {
+            return new LogMonitorAlertService(dispatcher, () -> true,
+                    clock, () -> soundEnabled,
+                    presenter, scheduler, beeps::incrementAndGet);
+        }
     }
 
     private static final class RecordingDispatcher implements LogMonitorAlertService.FxDispatcher {
         private final ArrayDeque<Runnable> tasks = new ArrayDeque<>();
         private int totalDispatches;
+        private boolean rejectNext;
 
         @Override
         public void dispatch(Runnable task) {
+            if (rejectNext) {
+                rejectNext = false;
+                throw new IllegalStateException("JavaFX unavailable");
+            }
             tasks.addLast(task);
             totalDispatches++;
+        }
+
+        private void rejectNext() {
+            rejectNext = true;
         }
 
         private void runAll() {

@@ -1,19 +1,26 @@
 package plugin.javafxtools.controller;
 
 import javafx.application.Platform;
+import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.ReadOnlyStringWrapper;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.ListView;
+import javafx.scene.control.ChoiceDialog;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.Spinner;
+import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
+import javafx.scene.control.cell.CheckBoxListCell;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.stage.Window;
@@ -21,14 +28,20 @@ import javafx.util.StringConverter;
 import plugin.javafxtools.base.BaseController;
 import plugin.javafxtools.control.LogViewer;
 import plugin.javafxtools.model.LogMatchMode;
+import plugin.javafxtools.model.LogMonitorAutomation;
 import plugin.javafxtools.model.LogMonitorConfig;
 import plugin.javafxtools.model.LogMonitorMatch;
 import plugin.javafxtools.model.LogMonitorRule;
+import plugin.javafxtools.model.LogRemoteMatchAction;
 import plugin.javafxtools.service.LogMonitorAlertService;
+import plugin.javafxtools.service.LogMonitorAutomationService;
 import plugin.javafxtools.service.LogMonitorMatcher;
 import plugin.javafxtools.service.LogMonitorService;
 import plugin.javafxtools.service.LogMonitorStatus;
 import plugin.javafxtools.service.LogMonitorStore;
+import plugin.javafxtools.service.WindowsWindowPickerService;
+import plugin.javafxtools.util.FxTheme;
+import plugin.javafxtools.util.HttpUrlSupport;
 
 import java.io.File;
 import java.io.IOException;
@@ -38,7 +51,10 @@ import java.nio.file.Path;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
 
@@ -51,9 +67,16 @@ public final class LogMonitorController extends BaseController {
 
     private final ObservableList<LogMonitorRule> rules = FXCollections.observableArrayList();
     private final ObservableList<LogMonitorMatch> recentMatches = FXCollections.observableArrayList();
+    private final Map<String, BooleanProperty> automationRuleSelections = new HashMap<>();
     private final LogMonitorStore store = new LogMonitorStore();
     private final LogMonitorService monitorService = new LogMonitorService();
     private final LogMonitorAlertService alertService = new LogMonitorAlertService();
+    private final LogMonitorAutomationService automationService =
+            new LogMonitorAutomationService();
+    private final WindowsWindowPickerService windowPickerService =
+            new WindowsWindowPickerService();
+    private final LogMonitorFxDispatcher matchDispatcher =
+            new LogMonitorFxDispatcher(Platform::runLater, this::acceptMatches);
     private final LogMonitorService.Listener monitorListener = new MonitorListener();
 
     @FXML
@@ -105,18 +128,48 @@ public final class LogMonitorController extends BaseController {
     @FXML
     private Label matchCountLabel;
     @FXML
+    private CheckBox automationEnabledCheckBox;
+    @FXML
+    private ListView<LogMonitorRule> automationRuleList;
+    @FXML
+    private TextField automationTargetField;
+    @FXML
+    private Button automationTargetPickerButton;
+    @FXML
+    private CheckBox automationTypeTextCheckBox;
+    @FXML
+    private TextField automationTextField;
+    @FXML
+    private CheckBox automationPressEnterCheckBox;
+    @FXML
+    private Spinner<Integer> automationStartSpinner;
+    @FXML
+    private Spinner<Integer> automationEverySpinner;
+    @FXML
+    private Spinner<Integer> automationMaxSpinner;
+    @FXML
+    private CheckBox remoteCheckEnabledCheckBox;
+    @FXML
+    private TextField remoteUrlField;
+    @FXML
+    private TextField remoteKeywordField;
+    @FXML
+    private ComboBox<LogRemoteMatchAction> remoteMatchActionComboBox;
+    @FXML
     private LogViewer logViewer;
 
     private TextArea logArea;
     private Stage primaryStage;
     private LogMonitorConfig activeConfig;
     private volatile boolean cleanedUp;
+    private boolean windowPickerBusy;
 
     @FXML
     public void initialize() {
         logArea = logViewer.getTextArea();
         logViewer.setOnClear(this::handleClearLog);
         configureModeSelector();
+        configureAutomationEditor();
         configureTables();
         configureSelection();
         resetRuleEditor();
@@ -152,12 +205,17 @@ public final class LogMonitorController extends BaseController {
 
         LogMonitorConfig previousRunningConfig = activeConfig;
         boolean restart = monitorService.isRunning();
+        boolean candidatePersisted = false;
         if (restart) {
             monitorService.stop();
+            matchDispatcher.clear();
+            alertService.reset();
+            automationService.reset();
             activeConfig = null;
         }
         try {
             store.save(candidate);
+            candidatePersisted = true;
             if (restart) {
                 startService(candidate);
             }
@@ -174,6 +232,19 @@ public final class LogMonitorController extends BaseController {
                     info("已恢复保存前的监听配置");
                 } catch (RuntimeException restoreFailure) {
                     error("恢复原监听配置失败: " + restoreFailure.getMessage());
+                    if (candidatePersisted) {
+                        persistDisabledAfterFailedStart(candidate);
+                    }
+                    updateActionButtons();
+                    return;
+                }
+                if (candidatePersisted) {
+                    try {
+                        store.save(previousRunningConfig);
+                    } catch (IOException rollbackFailure) {
+                        error("监听已恢复，但无法回滚磁盘配置: "
+                                + rollbackFailure.getMessage());
+                    }
                 }
             }
         }
@@ -214,6 +285,9 @@ public final class LogMonitorController extends BaseController {
     private void stopMonitoring() {
         LogMonitorConfig runningConfig = activeConfig;
         monitorService.stop();
+        matchDispatcher.clear();
+        alertService.reset();
+        automationService.reset();
         activeConfig = null;
 
         LogMonitorConfig stoppedConfig;
@@ -280,6 +354,7 @@ public final class LogMonitorController extends BaseController {
             reportValidationError("请先选择要删除的规则");
             return;
         }
+        automationRuleSelections.remove(selected.id());
         rules.remove(selected);
         ruleTable.getSelectionModel().clearSelection();
         resetRuleEditor();
@@ -307,8 +382,10 @@ public final class LogMonitorController extends BaseController {
             return;
         }
         cleanedUp = true;
+        matchDispatcher.close();
         monitorService.close();
         alertService.close();
+        automationService.close();
         super.cleanup();
     }
 
@@ -348,6 +425,111 @@ public final class LogMonitorController extends BaseController {
                 cell -> new ReadOnlyStringWrapper(cell.getValue().expression()));
         matchLineColumn.setCellValueFactory(
                 cell -> new ReadOnlyStringWrapper(cell.getValue().line()));
+    }
+
+    @FXML
+    private void selectAutomationTargetWindow() {
+        if (windowPickerBusy || cleanedUp) {
+            return;
+        }
+        windowPickerBusy = true;
+        updateAutomationControlState();
+        info("正在读取当前可见窗口...");
+        Thread.ofVirtual().name("log-monitor-window-picker").start(() -> {
+            try {
+                List<WindowsWindowPickerService.WindowTarget> targets =
+                        windowPickerService.listVisibleWindows();
+                Platform.runLater(() -> finishWindowTargetLoad(targets, null));
+            } catch (IOException | RuntimeException exception) {
+                Platform.runLater(() -> finishWindowTargetLoad(List.of(), exception));
+            }
+        });
+    }
+
+    private void finishWindowTargetLoad(
+            List<WindowsWindowPickerService.WindowTarget> targets, Exception failure) {
+        if (cleanedUp) {
+            return;
+        }
+        windowPickerBusy = false;
+        updateAutomationControlState();
+        if (failure != null) {
+            String message = failure.getMessage();
+            error("读取当前窗口失败: "
+                    + (message == null || message.isBlank()
+                    ? failure.getClass().getSimpleName() : message));
+            return;
+        }
+        if (targets.isEmpty()) {
+            info("未找到可选择的窗口");
+            return;
+        }
+
+        ChoiceDialog<WindowsWindowPickerService.WindowTarget> dialog =
+                new ChoiceDialog<>(targets.getFirst(), targets);
+        FxTheme.apply(dialog);
+        dialog.setTitle("选择自动响应目标");
+        dialog.setHeaderText("当前可见窗口");
+        dialog.setContentText("目标窗口:");
+        dialog.getDialogPane().setPrefWidth(720);
+        Window owner = ownerWindow();
+        if (owner != null) {
+            dialog.initOwner(owner);
+        }
+        Optional<WindowsWindowPickerService.WindowTarget> selected = dialog.showAndWait();
+        selected.ifPresent(target -> {
+            automationTargetField.setText(target.selector());
+            info("已选择自动响应目标: " + target);
+        });
+    }
+
+    private void configureAutomationEditor() {
+        automationRuleList.setItems(rules);
+        automationRuleList.setCellFactory(CheckBoxListCell.forListView(
+                rule -> automationRuleSelections.computeIfAbsent(rule.id(),
+                        ignored -> new SimpleBooleanProperty()), new StringConverter<>() {
+            @Override
+            public String toString(LogMonitorRule rule) {
+                return rule == null ? "" : rule.name() + " (" + rule.expression() + ")";
+            }
+
+            @Override
+            public LogMonitorRule fromString(String value) {
+                return null;
+            }
+        }));
+        remoteMatchActionComboBox.setItems(
+                FXCollections.observableArrayList(LogRemoteMatchAction.values()));
+        remoteMatchActionComboBox.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(LogRemoteMatchAction action) {
+                if (action == null) {
+                    return "";
+                }
+                return action == LogRemoteMatchAction.CONTINUE_INPUT ? "继续输入" : "不再操作";
+            }
+
+            @Override
+            public LogRemoteMatchAction fromString(String value) {
+                return null;
+            }
+        });
+        automationStartSpinner.setValueFactory(
+                new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 1_000_000, 1));
+        automationEverySpinner.setValueFactory(
+                new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 1_000_000, 1));
+        automationMaxSpinner.setValueFactory(
+                new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 1_000_000, 1));
+        automationTargetField.setTooltip(new Tooltip(
+                "优先填写唯一的窗口标题关键字；进程名只能定位当前活动窗口"));
+        automationMaxSpinner.setTooltip(new Tooltip("0 表示不限制执行次数"));
+        automationEnabledCheckBox.selectedProperty().addListener(
+                (observable, oldValue, selected) -> updateAutomationControlState());
+        automationTypeTextCheckBox.selectedProperty().addListener(
+                (observable, oldValue, selected) -> updateAutomationControlState());
+        remoteCheckEnabledCheckBox.selectedProperty().addListener(
+                (observable, oldValue, selected) -> updateAutomationControlState());
+        updateAutomationControlState();
     }
 
     private void configureSelection() {
@@ -392,6 +574,7 @@ public final class LogMonitorController extends BaseController {
     private void applyConfig(LogMonitorConfig config) {
         logFileField.setText(config.logFile());
         rules.setAll(config.rules());
+        applyAutomation(config.automation());
     }
 
     private LogMonitorConfig createConfig(boolean enabled) {
@@ -421,7 +604,80 @@ public final class LogMonitorController extends BaseController {
         } catch (IllegalArgumentException exception) {
             throw new IllegalArgumentException("规则校验失败: " + exception.getMessage(), exception);
         }
-        return new LogMonitorConfig(enabled, path.toString(), snapshot);
+        LogMonitorAutomation automation = automationFromEditor(snapshot);
+        return new LogMonitorConfig(enabled, path.toString(), snapshot, automation);
+    }
+
+    private LogMonitorAutomation automationFromEditor(List<LogMonitorRule> snapshot) {
+        List<String> triggerRuleIds = snapshot.stream()
+                .filter(rule -> isAutomationRuleSelected(rule.id()))
+                .map(LogMonitorRule::id)
+                .toList();
+        LogRemoteMatchAction remoteAction = remoteMatchActionComboBox.getValue();
+        if (remoteAction == null) {
+            remoteAction = LogRemoteMatchAction.CONTINUE_INPUT;
+        }
+        LogMonitorAutomation automation = new LogMonitorAutomation(
+                automationEnabledCheckBox.isSelected(), triggerRuleIds,
+                textOf(automationTargetField).trim(), automationTypeTextCheckBox.isSelected(),
+                textOf(automationTextField), automationPressEnterCheckBox.isSelected(),
+                automationStartSpinner.getValue(), automationEverySpinner.getValue(),
+                automationMaxSpinner.getValue(), remoteCheckEnabledCheckBox.isSelected(),
+                textOf(remoteUrlField).trim(), textOf(remoteKeywordField), remoteAction);
+        automation.validate(snapshot);
+        if (automation.enabled() && automation.remoteCheckEnabled()) {
+            HttpUrlSupport.parse(automation.remoteUrl());
+        }
+        return automation;
+    }
+
+    private void applyAutomation(LogMonitorAutomation automation) {
+        automationEnabledCheckBox.setSelected(automation.enabled());
+        automationTargetField.setText(automation.targetWindow());
+        automationTypeTextCheckBox.setSelected(automation.typeText());
+        automationTextField.setText(automation.text());
+        automationPressEnterCheckBox.setSelected(automation.pressEnter());
+        automationStartSpinner.getValueFactory().setValue(automation.startAtMatch());
+        automationEverySpinner.getValueFactory().setValue(automation.everyMatches());
+        automationMaxSpinner.getValueFactory().setValue(automation.maxExecutions());
+        remoteCheckEnabledCheckBox.setSelected(automation.remoteCheckEnabled());
+        remoteUrlField.setText(automation.remoteUrl());
+        remoteKeywordField.setText(automation.remoteKeyword());
+        remoteMatchActionComboBox.setValue(automation.remoteMatchAction());
+        automationRuleSelections.keySet().retainAll(
+                rules.stream().map(LogMonitorRule::id).collect(java.util.stream.Collectors.toSet()));
+        for (LogMonitorRule rule : rules) {
+            automationRuleSelections.computeIfAbsent(rule.id(), ignored -> new SimpleBooleanProperty())
+                    .set(automation.triggerRuleIds().contains(rule.id()));
+        }
+        updateAutomationControlState();
+    }
+
+    private boolean isAutomationRuleSelected(String ruleId) {
+        BooleanProperty selected = automationRuleSelections.get(ruleId);
+        return selected != null && selected.get();
+    }
+
+    private void updateAutomationControlState() {
+        boolean enabled = automationEnabledCheckBox.isSelected();
+        automationRuleList.setDisable(!enabled);
+        automationTargetField.setDisable(!enabled);
+        automationTargetPickerButton.setDisable(!enabled || windowPickerBusy);
+        automationTypeTextCheckBox.setDisable(!enabled);
+        automationTextField.setDisable(!enabled || !automationTypeTextCheckBox.isSelected());
+        automationPressEnterCheckBox.setDisable(!enabled);
+        automationStartSpinner.setDisable(!enabled);
+        automationEverySpinner.setDisable(!enabled);
+        automationMaxSpinner.setDisable(!enabled);
+        remoteCheckEnabledCheckBox.setDisable(!enabled);
+        boolean remoteEnabled = enabled && remoteCheckEnabledCheckBox.isSelected();
+        remoteUrlField.setDisable(!remoteEnabled);
+        remoteKeywordField.setDisable(!remoteEnabled);
+        remoteMatchActionComboBox.setDisable(!remoteEnabled);
+    }
+
+    private static String textOf(TextField field) {
+        return field.getText() == null ? "" : field.getText();
     }
 
     private LogMonitorRule ruleFromEditor(String id) {
@@ -464,8 +720,28 @@ public final class LogMonitorController extends BaseController {
     }
 
     private void startService(LogMonitorConfig config) {
-        monitorService.start(config, monitorListener);
+        matchDispatcher.clear();
+        alertService.reset();
+        automationService.configure(config.automation(), this::acceptAutomationEvent);
+        try {
+            monitorService.start(config, monitorListener);
+        } catch (RuntimeException exception) {
+            automationService.reset();
+            throw exception;
+        }
         activeConfig = config;
+    }
+
+    private void acceptAutomationEvent(LogMonitorAutomationService.Event event) {
+        dispatchToFx(() -> {
+            String message = "自动响应（第 " + event.matchCount() + " 次命中）: "
+                    + event.message();
+            if (event.type() == LogMonitorAutomationService.EventType.ERROR) {
+                error(message);
+            } else {
+                info(message);
+            }
+        });
     }
 
     private void persistDisabledAfterFailedStart(LogMonitorConfig config) {
@@ -477,7 +753,7 @@ public final class LogMonitorController extends BaseController {
     }
 
     private static LogMonitorConfig withEnabled(LogMonitorConfig config, boolean enabled) {
-        return new LogMonitorConfig(enabled, config.logFile(), config.rules());
+        return new LogMonitorConfig(enabled, config.logFile(), config.rules(), config.automation());
     }
 
     private java.util.Optional<File> initialDirectory() {
@@ -503,10 +779,20 @@ public final class LogMonitorController extends BaseController {
         return logFileField.getScene() == null ? null : logFileField.getScene().getWindow();
     }
 
-    private void acceptMatches(List<LogMonitorMatch> matches) {
-        alertService.acceptAll(matches);
+    private void acceptMatches(List<LogMonitorMatch> matches, long droppedCount) {
+        if (cleanedUp) {
+            return;
+        }
+        if (droppedCount > 0) {
+            log("WARN", "高负载期间已省略 " + droppedCount
+                    + " 条界面命中明细，告警计数已保留");
+        }
+        List<LogMonitorMatch> newestFirst = new ArrayList<>(matches.size());
+        for (int index = matches.size() - 1; index >= 0; index--) {
+            newestFirst.add(matches.get(index));
+        }
+        recentMatches.addAll(0, newestFirst);
         for (LogMonitorMatch match : matches) {
-            recentMatches.add(0, match);
             info("命中规则 [" + match.ruleName() + "]: " + match.line());
         }
         if (recentMatches.size() > MAX_RECENT_MATCHES) {
@@ -587,8 +873,9 @@ public final class LogMonitorController extends BaseController {
 
         @Override
         public void onMatches(List<LogMonitorMatch> matches) {
-            List<LogMonitorMatch> snapshot = List.copyOf(matches);
-            dispatchToFx(() -> acceptMatches(snapshot));
+            alertService.acceptAll(matches);
+            automationService.acceptAll(matches);
+            matchDispatcher.submit(matches);
         }
 
         @Override

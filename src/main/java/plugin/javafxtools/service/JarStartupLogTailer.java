@@ -25,4 +25,14 @@ public final class JarStartupLogTailer {
     public synchronized List<String> readAvailable(boolean flushPartial) throws IOException {
         return delegate.readAvailable(flushPartial);
     }
+
+    /**
+     * Reads a bounded batch of newly appended lines. The tailer keeps its file
+     * position, so callers can safely use this overload to apply backpressure.
+     */
+    public synchronized List<String> readAvailable(boolean flushPartial,
+                                                    int maxBytes,
+                                                    int maxLines) throws IOException {
+        return delegate.readAvailable(flushPartial, maxBytes, maxLines);
+    }
 }

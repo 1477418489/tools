@@ -16,6 +16,7 @@ if not defined RUNTIME_IMAGE set "RUNTIME_IMAGE=%PROJECT_DIR%\target\app"
 if not defined ICON_PATH set "ICON_PATH=%PROJECT_DIR%\target\classes\favicon.ico"
 if not defined OUTPUT_DIR set "OUTPUT_DIR=%PROJECT_DIR%\dist"
 if not defined PACKAGE_TYPE set "PACKAGE_TYPE=app-image"
+if not defined JVM_MAX_HEAP set "JVM_MAX_HEAP=512m"
 
 powershell.exe -NoProfile -NonInteractive -Command "$name=$env:APP_NAME; $invalid=[string]::IsNullOrWhiteSpace($name) -or $name -ne $name.Trim() -or $name.EndsWith('.') -or $name.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0 -or $name -match '^(?i:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$'; if($invalid){exit 1}"
 if errorlevel 1 (
@@ -97,6 +98,7 @@ echo [INFO] Project: %PROJECT_DIR%
 echo [INFO] JDK: %JAVA_HOME%
 echo [INFO] Maven: %MAVEN_CMD%
 echo [INFO] Output: %OUTPUT_DIR%
+echo [INFO] JVM max heap: %JVM_MAX_HEAP%
 echo.
 
 pushd "%PROJECT_DIR%" >nul
@@ -152,15 +154,15 @@ echo.
 
 if exist "%ICON_PATH%" (
     if /i "%PACKAGE_TYPE%"=="exe" (
-        jpackage.exe --name "%APP_NAME%" --app-version "%APP_VERSION%" --type "%PACKAGE_TYPE%" -m "%MAIN_MODULE%/%MAIN_CLASS%" --runtime-image "%RUNTIME_IMAGE%" --dest "%OUTPUT_DIR%" --icon "%ICON_PATH%" --win-dir-chooser --win-menu --win-shortcut
+        jpackage.exe --name "%APP_NAME%" --app-version "%APP_VERSION%" --type "%PACKAGE_TYPE%" -m "%MAIN_MODULE%/%MAIN_CLASS%" --runtime-image "%RUNTIME_IMAGE%" --dest "%OUTPUT_DIR%" --icon "%ICON_PATH%" --java-options "-Xmx%JVM_MAX_HEAP%" --win-dir-chooser --win-menu --win-shortcut
     ) else (
-        jpackage.exe --name "%APP_NAME%" --app-version "%APP_VERSION%" --type "%PACKAGE_TYPE%" -m "%MAIN_MODULE%/%MAIN_CLASS%" --runtime-image "%RUNTIME_IMAGE%" --dest "%OUTPUT_DIR%" --icon "%ICON_PATH%"
+        jpackage.exe --name "%APP_NAME%" --app-version "%APP_VERSION%" --type "%PACKAGE_TYPE%" -m "%MAIN_MODULE%/%MAIN_CLASS%" --runtime-image "%RUNTIME_IMAGE%" --dest "%OUTPUT_DIR%" --icon "%ICON_PATH%" --java-options "-Xmx%JVM_MAX_HEAP%"
     )
 ) else (
     if /i "%PACKAGE_TYPE%"=="exe" (
-        jpackage.exe --name "%APP_NAME%" --app-version "%APP_VERSION%" --type "%PACKAGE_TYPE%" -m "%MAIN_MODULE%/%MAIN_CLASS%" --runtime-image "%RUNTIME_IMAGE%" --dest "%OUTPUT_DIR%" --win-dir-chooser --win-menu --win-shortcut
+        jpackage.exe --name "%APP_NAME%" --app-version "%APP_VERSION%" --type "%PACKAGE_TYPE%" -m "%MAIN_MODULE%/%MAIN_CLASS%" --runtime-image "%RUNTIME_IMAGE%" --dest "%OUTPUT_DIR%" --java-options "-Xmx%JVM_MAX_HEAP%" --win-dir-chooser --win-menu --win-shortcut
     ) else (
-        jpackage.exe --name "%APP_NAME%" --app-version "%APP_VERSION%" --type "%PACKAGE_TYPE%" -m "%MAIN_MODULE%/%MAIN_CLASS%" --runtime-image "%RUNTIME_IMAGE%" --dest "%OUTPUT_DIR%"
+        jpackage.exe --name "%APP_NAME%" --app-version "%APP_VERSION%" --type "%PACKAGE_TYPE%" -m "%MAIN_MODULE%/%MAIN_CLASS%" --runtime-image "%RUNTIME_IMAGE%" --dest "%OUTPUT_DIR%" --java-options "-Xmx%JVM_MAX_HEAP%"
     )
 )
 

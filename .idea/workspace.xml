@@ -4,8 +4,25 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ee1c44d2-bcb9-434c-ac67-b5e91efd8462" name="更改" comment="init7">
+    <list default="true" id="ee1c44d2-bcb9-434c-ac67-b5e91efd8462" name="更改" comment="init8">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/build-exe.bat" beforeDir="false" afterPath="$PROJECT_DIR$/build-exe.bat" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/JarLauncherController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/JarLauncherController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/LogMonitorController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/controller/LogMonitorController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/model/LogMonitorConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/model/LogMonitorConfig.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarLaunchService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarLaunchService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarLauncherUiSupport.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarLauncherUiSupport.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarStartupLogTailer.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/JarStartupLogTailer.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/LogAlertAccumulator.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/LogAlertAccumulator.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/LogMonitorAlertService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/LogMonitorAlertService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/LogMonitorStore.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/plugin/javafxtools/service/LogMonitorStore.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/log-monitor-view.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/plugin/javafxtools/log-monitor-view.fxml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/LogMonitorFxmlTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/LogMonitorFxmlTest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/JarStartupLogTailerTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/JarStartupLogTailerTest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/LogAlertAccumulatorTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/LogAlertAccumulatorTest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/LogMonitorAlertServiceTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/LogMonitorAlertServiceTest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/LogMonitorStoreTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/plugin/javafxtools/service/LogMonitorStoreTest.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -46,6 +63,9 @@
       </MavenGeneralSettings>
     </option>
   </component>
+  <component name="MavenRunner">
+    <option name="skipTests" value="true" />
+  </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 8
 }</component>
@@ -75,7 +95,7 @@
     &quot;project.structure.side.proportion&quot;: &quot;0.2&quot;,
     &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;,
-    &quot;应用程序.ToolsApplication.executor&quot;: &quot;Run&quot;
+    &quot;应用程序.ToolsApplication.executor&quot;: &quot;Debug&quot;
   }
 }</component>
   <component name="RebelAgentSelection">
@@ -211,7 +231,8 @@
     <MESSAGE value="init5" />
     <MESSAGE value="init6" />
     <MESSAGE value="init7" />
-    <option name="LAST_COMMIT_MESSAGE" value="init7" />
+    <MESSAGE value="init8" />
+    <option name="LAST_COMMIT_MESSAGE" value="init8" />
     <option name="NON_MODAL_COMMIT_POSTPONE_SLOW_CHECKS" value="false" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">

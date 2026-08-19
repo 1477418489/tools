@@ -42,6 +42,17 @@ class JarStartupLogTailerTest {
         assertEquals(List.of(), tailer.readAvailable(true));
     }
 
+    @Test
+    void boundedReadsResumeWithoutLoadingTheWholeBacklog() throws Exception {
+        Path log = tempDirectory.resolve("application.log");
+        Files.writeString(log, "one\ntwo\nthree\n", StandardCharsets.UTF_8);
+        JarStartupLogTailer tailer = new JarStartupLogTailer(log, 0);
+
+        assertEquals(List.of("one"), tailer.readAvailable(false, 1_024, 1));
+        assertEquals(List.of("two", "three"), tailer.readAvailable(false, 1_024, 10));
+        assertEquals(List.of(), tailer.readAvailable(false, 1_024, 10));
+    }
+
     private void append(Path log, String value) throws Exception {
         Files.writeString(log, value, StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND);

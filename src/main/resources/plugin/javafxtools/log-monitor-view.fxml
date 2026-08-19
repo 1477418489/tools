@@ -28,6 +28,53 @@
                 styleClass="danger-button"/>
     </HBox>
 
+    <TitledPane text="自动响应" expanded="true" animated="false"
+                styleClass="log-monitor-automation-pane">
+        <content>
+            <VBox spacing="8">
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <CheckBox fx:id="automationEnabledCheckBox" text="启用自动响应"/>
+                    <Label text="触发规则（可多选）" styleClass="field-label"/>
+                    <ListView fx:id="automationRuleList" prefWidth="250" prefHeight="78"
+                              fixedCellSize="30"/>
+                    <Label text="目标 PID / 窗口" styleClass="field-label"/>
+                    <TextField fx:id="automationTargetField" promptText="例如 pid:6720 或唯一窗口标题"
+                               maxWidth="Infinity" HBox.hgrow="ALWAYS"/>
+                    <Button fx:id="automationTargetPickerButton" text="选择窗口"
+                            minWidth="84" prefWidth="84"
+                            onAction="#selectAutomationTargetWindow"/>
+                </HBox>
+
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <CheckBox fx:id="automationTypeTextCheckBox" text="输入文本"/>
+                    <TextField fx:id="automationTextField" promptText="例如 继续执行 或 继续"
+                               maxWidth="Infinity" HBox.hgrow="ALWAYS"/>
+                    <CheckBox fx:id="automationPressEnterCheckBox" text="输入后按回车"/>
+                </HBox>
+
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <Label text="第" styleClass="field-label"/>
+                    <Spinner fx:id="automationStartSpinner" prefWidth="86"/>
+                    <Label text="次命中起，每" styleClass="field-label"/>
+                    <Spinner fx:id="automationEverySpinner" prefWidth="86"/>
+                    <Label text="次执行，最多" styleClass="field-label"/>
+                    <Spinner fx:id="automationMaxSpinner" prefWidth="86"/>
+                    <Label text="次（0 不限）" styleClass="field-label"/>
+                </HBox>
+
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <CheckBox fx:id="remoteCheckEnabledCheckBox" text="先请求网址"/>
+                    <TextField fx:id="remoteUrlField" promptText="https://chybenzun.top"
+                               maxWidth="Infinity" HBox.hgrow="ALWAYS"/>
+                    <Label text="响应包含" styleClass="field-label"/>
+                    <TextField fx:id="remoteKeywordField" promptText="特定字符" prefWidth="130"/>
+                    <Label text="时" styleClass="field-label"/>
+                    <ComboBox fx:id="remoteMatchActionComboBox" prefWidth="112"/>
+                </HBox>
+            </VBox>
+        </content>
+    </TitledPane>
+
     <SplitPane dividerPositions="0.49" VBox.vgrow="ALWAYS"
                styleClass="log-monitor-workspace">
         <items>

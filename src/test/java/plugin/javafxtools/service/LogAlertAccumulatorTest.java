@@ -137,6 +137,50 @@ class LogAlertAccumulatorTest {
     }
 
     @Test
+    void compressedSummariesPreserveCountsWithoutReplayingEveryMatch() {
+        LogAlertAccumulator accumulator = accumulator();
+
+        LogAlertAccumulator.Change first = accumulator.onSummaries(List.of(
+                new LogAlertAccumulator.MatchSummary(
+                        "429", "HTTP 429", "429", 1_000,
+                        NOW, NOW.plusSeconds(10), List.of("line 998", "line 999", "line 1000"))),
+                NOW.plusSeconds(10));
+        LogAlertAccumulator.Change second = accumulator.onSummaries(List.of(
+                new LogAlertAccumulator.MatchSummary(
+                        "429", "HTTP 429", "429", 250,
+                        NOW.plusSeconds(11), NOW.plusSeconds(20),
+                        List.of("line 1249", "line 1250"))),
+                NOW.plusSeconds(20));
+
+        assertEquals(LogAlertAccumulator.Action.SHOW, first.action());
+        assertEquals(LogAlertAccumulator.Action.UPDATE, second.action());
+        assertEquals(1_250, second.snapshot().totalCount());
+        assertEquals(List.of("line 1000", "line 1249", "line 1250"),
+                second.snapshot().rules().getFirst().recentLines());
+    }
+
+    @Test
+    void resetClearsActivePendingAndCooldownState() {
+        LogAlertAccumulator accumulator = accumulator();
+        accumulator.onMatch(match("429", "HTTP 429", "shown", NOW), NOW);
+        accumulator.onDialogClosed(NOW.plusSeconds(1));
+        accumulator.onMatch(match("429", "HTTP 429", "pending", NOW.plusSeconds(2)),
+                NOW.plusSeconds(2));
+
+        accumulator.reset();
+        LogAlertAccumulator.Change elapsed = accumulator.cooldownElapsed(NOW.plusSeconds(120));
+        LogAlertAccumulator.Change fresh = accumulator.onMatch(
+                match("429", "HTTP 429", "fresh", NOW.plusSeconds(121)),
+                NOW.plusSeconds(121));
+
+        assertEquals(LogAlertAccumulator.Action.NONE, elapsed.action());
+        assertEquals(0, elapsed.snapshot().totalCount());
+        assertEquals(LogAlertAccumulator.Action.SHOW, fresh.action());
+        assertEquals(1, fresh.snapshot().totalCount());
+        assertEquals(List.of("fresh"), fresh.snapshot().rules().getFirst().recentLines());
+    }
+
+    @Test
     void duePendingRulesAreMergedIntoOnePopup() {
         LogAlertAccumulator accumulator = accumulator();
         accumulator.onMatch(match("429", "HTTP 429", "first 429", NOW), NOW);

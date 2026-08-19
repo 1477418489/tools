@@ -18,6 +18,8 @@ import java.util.function.IntPredicate;
 public class JarLaunchService {
     private static final int PORT_READY_CHECK_ATTEMPTS = 60;
     private static final int PORT_READY_CHECK_DELAY_MS = 500;
+    private static final int STARTUP_LOG_MAX_READ_BYTES = 64 * 1024;
+    private static final int STARTUP_LOG_MAX_LINES = 100;
 
     private final ExecutorService backgroundExecutor;
     private final ExecutorService startupMonitorExecutor;
@@ -354,7 +356,8 @@ public class JarLaunchService {
                                  JarStartupLogTailer logTailer,
                                  boolean flushPartial) {
         try {
-            List<String> lines = logTailer.readAvailable(flushPartial);
+            List<String> lines = logTailer.readAvailable(
+                    flushPartial, STARTUP_LOG_MAX_READ_BYTES, STARTUP_LOG_MAX_LINES);
             if (lines.isEmpty()) {
                 return;
             }

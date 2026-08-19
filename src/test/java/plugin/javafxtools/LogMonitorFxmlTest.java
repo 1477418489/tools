@@ -43,7 +43,14 @@ class LogMonitorFxmlTest {
                 "ruleNameColumn", "ruleExpressionColumn", "ruleModeColumn",
                 "ruleCaseColumn", "ruleEnabledColumn", "matchTable",
                 "matchTimeColumn", "matchRuleColumn", "matchExpressionColumn",
-                "matchLineColumn", "matchCountLabel", "logViewer");
+                "matchLineColumn", "matchCountLabel", "automationEnabledCheckBox",
+                "automationRuleList", "automationTargetField",
+                "automationTargetPickerButton",
+                "automationTypeTextCheckBox", "automationTextField",
+                "automationPressEnterCheckBox", "automationStartSpinner",
+                "automationEverySpinner", "automationMaxSpinner",
+                "remoteCheckEnabledCheckBox", "remoteUrlField", "remoteKeywordField",
+                "remoteMatchActionComboBox", "logViewer");
         for (String id : requiredIds) {
             assertTrue(findById(document, id) != null, () -> "Missing fx:id=" + id);
         }
@@ -53,6 +60,7 @@ class LogMonitorFxmlTest {
                 "saveConfigButton", "#saveConfig",
                 "startMonitorButton", "#startMonitoring",
                 "stopMonitorButton", "#stopMonitoring",
+                "automationTargetPickerButton", "#selectAutomationTargetWindow",
                 "addRuleButton", "#addRule",
                 "updateRuleButton", "#updateRule",
                 "deleteRuleButton", "#deleteRule");

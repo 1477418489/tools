@@ -454,6 +454,9 @@ public class JarLauncherController {
         projectStatusModel.invalidateBatch();
         activeProjectOperations.clear();
         portQueryInProgress.set(false);
+        if (uiSupport != null) {
+            uiSupport.shutdown();
+        }
         javaProcessExecutor.shutdownNow();
         backgroundExecutor.shutdownNow();
         try {

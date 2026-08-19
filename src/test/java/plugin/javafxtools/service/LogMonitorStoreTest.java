@@ -3,8 +3,10 @@ package plugin.javafxtools.service;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import plugin.javafxtools.model.LogMatchMode;
+import plugin.javafxtools.model.LogMonitorAutomation;
 import plugin.javafxtools.model.LogMonitorConfig;
 import plugin.javafxtools.model.LogMonitorRule;
+import plugin.javafxtools.model.LogRemoteMatchAction;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -15,6 +17,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -42,6 +45,106 @@ class LogMonitorStoreTest {
         assertTrue(Files.readString(tempDirectory.resolve("log-monitor.json"), StandardCharsets.UTF_8)
                 .contains("D:/logs/\u6d4b\u8bd5.log"));
         assertEquals(config, store.load());
+    }
+
+    @Test
+    void automationConfigurationRoundTrips() throws Exception {
+        LogMonitorRule rule = new LogMonitorRule("429", "HTTP 429", "429",
+                LogMatchMode.WHOLE_TOKEN, true, true);
+        LogMonitorAutomation automation = new LogMonitorAutomation(
+                true, rule.id(), "Codex", true, "继续执行", true,
+                2, 3, 4, true, "https://chybenzun.top", "继续",
+                LogRemoteMatchAction.NO_ACTION);
+        LogMonitorConfig config = new LogMonitorConfig(false, "D:/logs/codex.log",
+                List.of(rule), automation);
+        LogMonitorStore store = new LogMonitorStore(tempDirectory.resolve("log-monitor.json"));
+
+        store.save(config);
+
+        String savedJson = Files.readString(tempDirectory.resolve("log-monitor.json"),
+                StandardCharsets.UTF_8);
+        assertTrue(savedJson.contains("\"triggerRuleIds\""));
+        assertFalse(savedJson.contains("\"triggerRuleId\":"));
+        assertEquals(config, store.load());
+    }
+
+    @Test
+    void automationConfigurationRoundTripsMultipleTriggerRules() throws Exception {
+        List<LogMonitorRule> rules = List.of(
+                new LogMonitorRule("429", "HTTP 429", "429",
+                        LogMatchMode.WHOLE_TOKEN, true, true),
+                new LogMonitorRule("503", "HTTP 503", "503",
+                        LogMatchMode.WHOLE_TOKEN, true, true));
+        LogMonitorAutomation automation = new LogMonitorAutomation(
+                true, List.of("429", "503"), "Codex", true, "继续执行", true,
+                1, 1, 4, false, "https://example.com", "allow",
+                LogRemoteMatchAction.CONTINUE_INPUT);
+        LogMonitorConfig config = new LogMonitorConfig(false, "D:/logs/codex.log",
+                rules, automation);
+        LogMonitorStore store = new LogMonitorStore(tempDirectory.resolve("log-monitor.json"));
+
+        store.save(config);
+
+        assertEquals(config, store.load());
+    }
+
+    @Test
+    void legacyConfigurationLoadsWithAutomationDisabled() throws Exception {
+        Path file = write(configJson(ruleJson()));
+
+        LogMonitorConfig loaded = new LogMonitorStore(file).load();
+
+        assertFalse(loaded.automation().enabled());
+        assertEquals("id", loaded.automation().triggerRuleId());
+    }
+
+    @Test
+    void legacyConfigurationWithLongRuleIdStillMigrates() throws Exception {
+        String longId = "x".repeat(300);
+        Path file = write(configJson(ruleJson().replace("\"id\":\"id\"",
+                "\"id\":\"" + longId + "\"")));
+
+        LogMonitorConfig loaded = new LogMonitorStore(file).load();
+
+        assertFalse(loaded.automation().enabled());
+        assertEquals(longId, loaded.automation().triggerRuleId());
+    }
+
+    @Test
+    void enabledAutomationMustReferenceAnEnabledRuleAndValidHttpUrl() throws Exception {
+        String valid = automationConfigJson("id", "https://example.com", "CONTINUE_INPUT");
+        write(valid);
+        assertEquals("id", new LogMonitorStore(tempDirectory.resolve("log-monitor.json"))
+                .load().automation().triggerRuleId());
+
+        assertRejected(automationConfigJson("missing", "https://example.com", "CONTINUE_INPUT"));
+        assertRejected(automationConfigJson("id", "file:///tmp/check", "CONTINUE_INPUT"));
+        assertRejected(automationConfigJson("id", "https://example.com", "UNKNOWN"));
+        assertRejected(automationConfigJson("id", "https://example.com", "CONTINUE_INPUT")
+                .replace("\"startAtMatch\":1", "\"startAtMatch\":1.5"));
+    }
+
+    @Test
+    void disabledAutomationDoesNotValidateDormantRemoteUrl() throws Exception {
+        String json = automationConfigJson("id", "not a url", "CONTINUE_INPUT")
+                .replace("\"automation\":{\"enabled\":true",
+                        "\"automation\":{\"enabled\":false");
+
+        LogMonitorConfig loaded = new LogMonitorStore(write(json)).load();
+
+        assertFalse(loaded.automation().enabled());
+    }
+
+    @Test
+    void disabledLegacyAutomationMayHaveNoTriggerRule() throws Exception {
+        String json = automationConfigJson("", "not a url", "CONTINUE_INPUT")
+                .replace("\"automation\":{\"enabled\":true",
+                        "\"automation\":{\"enabled\":false");
+
+        LogMonitorAutomation loaded = new LogMonitorStore(write(json)).load().automation();
+
+        assertFalse(loaded.enabled());
+        assertTrue(loaded.triggerRuleIds().isEmpty());
     }
 
     @Test
@@ -149,5 +252,17 @@ class LogMonitorStoreTest {
 
     private static String ruleJson() {
         return "{\"id\":\"id\",\"name\":\"name\",\"expression\":\"error\",\"mode\":\"CONTAINS\",\"caseSensitive\":true,\"enabled\":true}";
+    }
+
+    private static String automationConfigJson(String ruleId, String url, String action) {
+        return "{\"enabled\":true,\"logFile\":\"a.log\",\"rules\":[" + ruleJson()
+                + "],\"automation\":{"
+                + "\"enabled\":true,\"triggerRuleId\":\"" + ruleId
+                + "\",\"targetWindow\":\"Codex\",\"typeText\":true,"
+                + "\"text\":\"continue\",\"pressEnter\":true,"
+                + "\"startAtMatch\":1,\"everyMatches\":1,\"maxExecutions\":1,"
+                + "\"remoteCheckEnabled\":true,\"remoteUrl\":\"" + url
+                + "\",\"remoteKeyword\":\"allow\",\"remoteMatchAction\":\""
+                + action + "\"}}";
     }
 }

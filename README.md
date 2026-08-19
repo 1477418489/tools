@@ -102,7 +102,19 @@
 - BIOS / 电源检测页只读展示品牌型号、序列号、UUID、主板、CPU、内存、Windows、BIOS 发布日期、UEFI、睡眠与唤醒能力
 - 来电自启与 RTC 冷启动明确标记为需要在固件中确认，不读取或修改 BIOS 设置变量
 
-### 15. 主界面
+### 15. 日志监控与自动响应
+- **文件**：`log-monitor-view.fxml`
+- 持续监听指定日志文件，支持普通文本、完整词元和正则规则，并聚合显示命中提醒
+- 可为一条或多条日志规则配置自动响应，任意选中规则命中后按 PID、唯一窗口标题或进程名定位 Windows 程序并输入自定义文本和回车键
+- 可按起始命中次数、执行间隔和最大次数限制动作；最大次数为 `0` 时不限制
+- 可在输入前请求 HTTP/HTTPS 地址，根据响应正文是否包含指定字符决定继续输入或不再操作
+- 找不到窗口、匹配到多个窗口、网址请求失败或窗口无法安全获得焦点时均不会发送输入
+- 可通过“选择窗口”读取当前可见程序，根据窗口标题、进程名和 PID 选择目标；系统会保存 PID 与标题进行双重校验，PID 变化时可按唯一标题重新获取
+- 也可手动填写 `pid:进程ID` 绑定目标主窗口；进程重启后 PID 会变化，需要重新选择或同步更新配置
+- Codex 运行在 Windows Terminal 多标签页中时，PID 只能定位到 Terminal 窗口，不能区分同一窗口内的标签页，此时仍应填写唯一的标签页标题
+- Windows 不允许低权限进程向管理员进程注入键盘输入；目标程序以管理员身份运行时，FxTools 也必须以管理员身份运行
+
+### 16. 主界面
 - **文件**：`main-view.fxml`
 - 采用 TabPane 管理各个功能模块
 - 备忘提醒和域名保活随应用启动，其余模块首次进入时加载
@@ -140,6 +152,7 @@
 | jar-launcher-view.fxml | JAR应用启动器       |
 | keepalive-manager-view.fxml | 域名保活管理  |
 | windows-power-view.fxml | Windows电源计划    |
+| log-monitor-view.fxml | 日志监控与自动响应    |
 
 ---
 
@@ -172,7 +185,7 @@
 1. 执行 `mvn clean test` 运行测试。
 2. 运行仓库根目录 `build-exe.bat` 构建 Windows 应用。
 3. 脚本会先执行 `mvn clean javafx:jlink` 生成 jlink 运行时，再执行 `jpackage` 输出 Windows 应用包。
-4. 如需调整应用名、版本、主模块、主类或输出目录，可在执行前设置 `APP_NAME`、`APP_VERSION`、`MAIN_MODULE`、`MAIN_CLASS`、`OUTPUT_DIR` 等环境变量。
+4. 如需调整应用名、版本、主模块、主类、输出目录或最大堆内存，可在执行前设置 `APP_NAME`、`APP_VERSION`、`MAIN_MODULE`、`MAIN_CLASS`、`OUTPUT_DIR`、`JVM_MAX_HEAP` 等环境变量；最大堆内存默认 `512m`。
 5. 执行前请确保 Maven 可用，并且 `JAVA_HOME` 指向包含 `jpackage.exe` 的完整 JDK，或已将 `jpackage.exe` 加入 `PATH`。
 
 ## 性能优化说明
