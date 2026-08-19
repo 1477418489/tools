@@ -1,201 +1,73 @@
 @echo off
 chcp 65001 >nul
-setlocal enabledelayedexpansion
+setlocal
 
-set "PACKAGING_JAVA_HOME=D:\tools\jdk\jdk-25.0.2"
-
-rem Single Windows packaging entry: build a jlink runtime, then package it with jpackage.
 set "PROJECT_DIR=%~dp0"
 set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"
+if not defined CONFIGURATION set "CONFIGURATION=Release"
+if not defined RUNTIME_ID set "RUNTIME_ID=win-x64"
+if not defined OUTPUT_DIR set "OUTPUT_DIR=%PROJECT_DIR%\dist\FxTools"
 
-if not defined APP_NAME set "APP_NAME=FxTools"
-if not defined APP_VERSION set "APP_VERSION=1.0.0"
-if not defined MAIN_MODULE set "MAIN_MODULE=plugin.javafxtools"
-if not defined MAIN_CLASS set "MAIN_CLASS=plugin.javafxtools.ToolsApplication"
-if not defined RUNTIME_IMAGE set "RUNTIME_IMAGE=%PROJECT_DIR%\target\app"
-if not defined ICON_PATH set "ICON_PATH=%PROJECT_DIR%\target\classes\favicon.ico"
-if not defined OUTPUT_DIR set "OUTPUT_DIR=%PROJECT_DIR%\dist"
-if not defined PACKAGE_TYPE set "PACKAGE_TYPE=app-image"
-if not defined JVM_MAX_HEAP set "JVM_MAX_HEAP=512m"
+echo =====================================
+echo        FxTools WinUI 3 Builder
+echo =====================================
+echo [INFO] Configuration: %CONFIGURATION%
+echo [INFO] Runtime:       %RUNTIME_ID%
+echo [INFO] Output:        %OUTPUT_DIR%
+echo.
 
-powershell.exe -NoProfile -NonInteractive -Command "$name=$env:APP_NAME; $invalid=[string]::IsNullOrWhiteSpace($name) -or $name -ne $name.Trim() -or $name.EndsWith('.') -or $name.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0 -or $name -match '^(?i:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$'; if($invalid){exit 1}"
+where dotnet.exe >nul 2>nul
 if errorlevel 1 (
-    echo [ERROR] APP_NAME must be a valid Windows file name without path components.
+    echo [ERROR] dotnet.exe not found. Install the .NET 10 SDK.
     exit /b 1
 )
-
-set "APP_IMAGE_DIR=%OUTPUT_DIR%\%APP_NAME%"
-
-echo =====================================
-echo        JavaFX Tools Packager
-echo =====================================
-echo.
-
-set "PACKAGING_JDK="
-
-if defined PACKAGING_JAVA_HOME (
-    if exist "%PACKAGING_JAVA_HOME%\bin\jpackage.exe" (
-        set "PACKAGING_JDK=%PACKAGING_JAVA_HOME%"
-    ) else (
-        echo [ERROR] PACKAGING_JAVA_HOME does not provide jpackage.exe: %PACKAGING_JAVA_HOME%
-        exit /b 1
-    )
-)
-
-if not defined PACKAGING_JDK if defined JAVA_HOME (
-    if exist "%JAVA_HOME%\bin\jpackage.exe" (
-        set "PACKAGING_JDK=%JAVA_HOME%"
-    ) else (
-        echo [WARN] Ignoring JAVA_HOME without jpackage.exe: %JAVA_HOME%
-    )
-)
-
-if not defined PACKAGING_JDK (
-    for /d %%J in ("%ProgramFiles%\Java\jdk-23*" "%ProgramFiles%\Java\jdk-24*" "%ProgramFiles%\Java\jdk-25*" "%ProgramFiles%\Eclipse Adoptium\jdk-23*" "%ProgramFiles%\Eclipse Adoptium\jdk-24*" "%ProgramFiles%\Eclipse Adoptium\jdk-25*") do (
-        if not defined PACKAGING_JDK if exist "%%~fJ\bin\jpackage.exe" set "PACKAGING_JDK=%%~fJ"
-    )
-)
-
-if not defined PACKAGING_JDK (
-    for /f "delims=" %%J in ('where jpackage.exe 2^>nul') do (
-        if not defined PACKAGING_JDK (
-            for %%D in ("%%~dpJ..") do set "PACKAGING_JDK=%%~fD"
-        )
-    )
-)
-
-if not defined PACKAGING_JDK (
-    echo [ERROR] jpackage.exe not found. Set PACKAGING_JAVA_HOME or JAVA_HOME to a full JDK 23+.
-    if defined JAVA_HOME echo [ERROR] Current JAVA_HOME=%JAVA_HOME%
-    exit /b 1
-)
-
-set "JAVA_HOME=%PACKAGING_JDK%"
-set "PATH=%JAVA_HOME%\bin;%PATH%"
-
-if exist "%PROJECT_DIR%\mvnw.cmd" (
-    set "MAVEN_CMD=%PROJECT_DIR%\mvnw.cmd"
-) else (
-    for /f "delims=" %%M in ('where mvn.cmd 2^>nul') do (
-        if not defined MAVEN_CMD set "MAVEN_CMD=%%M"
-    )
-)
-
-if not defined MAVEN_CMD (
-    echo [ERROR] Maven not found. Install Maven or add mvn.cmd to PATH.
-    exit /b 1
-)
-
-if not exist "%OUTPUT_DIR%" (
-    mkdir "%OUTPUT_DIR%"
-    if errorlevel 1 (
-        echo [ERROR] Failed to create output directory: %OUTPUT_DIR%
-        exit /b 1
-    )
-)
-
-echo [INFO] Project: %PROJECT_DIR%
-echo [INFO] JDK: %JAVA_HOME%
-echo [INFO] Maven: %MAVEN_CMD%
-echo [INFO] Output: %OUTPUT_DIR%
-echo [INFO] JVM max heap: %JVM_MAX_HEAP%
-echo.
 
 pushd "%PROJECT_DIR%" >nul
-echo [INFO] Building jlink runtime...
-call "%MAVEN_CMD%" -q clean javafx:jlink
-set "BUILD_EXIT=%ERRORLEVEL%"
-popd >nul
 
-if not "%BUILD_EXIT%"=="0" (
-    echo [ERROR] Maven jlink build failed.
-    exit /b %BUILD_EXIT%
+echo [INFO] Running Core tests...
+dotnet test "tests\FxTools.Core.Tests\FxTools.Core.Tests.csproj" -c "%CONFIGURATION%"
+if errorlevel 1 goto :build_failed
+
+if exist "%OUTPUT_DIR%" (
+    echo [INFO] Removing previous output...
+    rmdir /s /q "%OUTPUT_DIR%"
+    if errorlevel 1 goto :build_failed
 )
 
-if not exist "%RUNTIME_IMAGE%" (
-    echo [ERROR] Runtime image not found: %RUNTIME_IMAGE%
-    exit /b 2
+echo [INFO] Publishing self-contained x64 application...
+dotnet publish "src\FxTools.App\FxTools.App.csproj" ^
+    -c "%CONFIGURATION%" ^
+    -r "%RUNTIME_ID%" ^
+    --self-contained true ^
+    -p:WindowsAppSDKSelfContained=true ^
+    -p:PublishSingleFile=false ^
+    -o "%OUTPUT_DIR%"
+if errorlevel 1 goto :build_failed
+
+if not exist "%OUTPUT_DIR%\FxTools.exe" (
+    echo [ERROR] Publish completed without FxTools.exe.
+    goto :build_failed
 )
 
-if /i "%PACKAGE_TYPE%"=="auto" (
-    set "PACKAGE_TYPE=app-image"
-    where candle.exe >nul 2>nul
-    if not errorlevel 1 (
-        where light.exe >nul 2>nul
-        if not errorlevel 1 set "PACKAGE_TYPE=exe"
-    )
-)
+set "HASH_TARGET=%OUTPUT_DIR%\FxTools.exe"
+set "HASH_VALUE="
+for /f "skip=1 delims=" %%H in ('certutil -hashfile "%HASH_TARGET%" SHA256 2^>nul') do if not defined HASH_VALUE set "HASH_VALUE=%%H"
+if not defined HASH_VALUE goto :build_failed
+set "HASH_VALUE=%HASH_VALUE: =%"
+> "%HASH_TARGET%.sha256.txt" echo %HASH_VALUE%
 
-if exist "%APP_IMAGE_DIR%" (
-    echo [INFO] Removing old app image: %APP_IMAGE_DIR%
-    rmdir /s /q "%APP_IMAGE_DIR%"
-    if errorlevel 1 (
-        echo [ERROR] Failed to remove old app image: %APP_IMAGE_DIR%
-        exit /b 3
-    )
-)
-
-for %%F in ("%OUTPUT_DIR%\%APP_NAME%.exe" "%OUTPUT_DIR%\%APP_NAME%-*.exe" "%OUTPUT_DIR%\%APP_NAME%.msi" "%OUTPUT_DIR%\%APP_NAME%-*.msi") do (
-    if exist "%%~fF" del /f /q "%%~fF"
-)
-
-for %%F in ("%OUTPUT_DIR%\%APP_NAME%.exe.sha256.txt" "%OUTPUT_DIR%\%APP_NAME%-*.exe.sha256.txt" "%OUTPUT_DIR%\%APP_NAME%.msi.sha256.txt" "%OUTPUT_DIR%\%APP_NAME%-*.msi.sha256.txt") do (
-    if exist "%%~fF" del /f /q "%%~fF"
-)
-
-echo [INFO] Package type: %PACKAGE_TYPE%
-if not exist "%ICON_PATH%" (
-    echo [WARN] Icon not found: %ICON_PATH%
-)
-
-echo.
-echo [INFO] Running jpackage...
-echo.
-
-if exist "%ICON_PATH%" (
-    if /i "%PACKAGE_TYPE%"=="exe" (
-        jpackage.exe --name "%APP_NAME%" --app-version "%APP_VERSION%" --type "%PACKAGE_TYPE%" -m "%MAIN_MODULE%/%MAIN_CLASS%" --runtime-image "%RUNTIME_IMAGE%" --dest "%OUTPUT_DIR%" --icon "%ICON_PATH%" --java-options "-Xmx%JVM_MAX_HEAP%" --win-dir-chooser --win-menu --win-shortcut
-    ) else (
-        jpackage.exe --name "%APP_NAME%" --app-version "%APP_VERSION%" --type "%PACKAGE_TYPE%" -m "%MAIN_MODULE%/%MAIN_CLASS%" --runtime-image "%RUNTIME_IMAGE%" --dest "%OUTPUT_DIR%" --icon "%ICON_PATH%" --java-options "-Xmx%JVM_MAX_HEAP%"
-    )
-) else (
-    if /i "%PACKAGE_TYPE%"=="exe" (
-        jpackage.exe --name "%APP_NAME%" --app-version "%APP_VERSION%" --type "%PACKAGE_TYPE%" -m "%MAIN_MODULE%/%MAIN_CLASS%" --runtime-image "%RUNTIME_IMAGE%" --dest "%OUTPUT_DIR%" --java-options "-Xmx%JVM_MAX_HEAP%" --win-dir-chooser --win-menu --win-shortcut
-    ) else (
-        jpackage.exe --name "%APP_NAME%" --app-version "%APP_VERSION%" --type "%PACKAGE_TYPE%" -m "%MAIN_MODULE%/%MAIN_CLASS%" --runtime-image "%RUNTIME_IMAGE%" --dest "%OUTPUT_DIR%" --java-options "-Xmx%JVM_MAX_HEAP%"
-    )
-)
-
-if errorlevel 1 (
-    echo [ERROR] jpackage failed.
-    exit /b 4
-)
-
-set "HASH_TARGET="
-if exist "%APP_IMAGE_DIR%\%APP_NAME%.exe" set "HASH_TARGET=%APP_IMAGE_DIR%\%APP_NAME%.exe"
-
-if not defined HASH_TARGET (
-    for %%F in ("%OUTPUT_DIR%\%APP_NAME%.exe" "%OUTPUT_DIR%\%APP_NAME%-*.exe" "%OUTPUT_DIR%\%APP_NAME%.msi" "%OUTPUT_DIR%\%APP_NAME%-*.msi") do (
-        if not defined HASH_TARGET (
-            if exist "%%~fF" set "HASH_TARGET=%%~fF"
-        )
-    )
-)
-
-if defined HASH_TARGET (
-    for /f "skip=1 tokens=1" %%H in ('certutil -hashfile "!HASH_TARGET!" SHA256') do (
-        echo %%H>"!HASH_TARGET!.sha256.txt"
-        echo [INFO] SHA-256 saved: !HASH_TARGET!.sha256.txt
-        goto after_hash
-    )
-) else (
-    echo [WARN] No package file found for SHA-256 generation.
-)
-
-:after_hash
 echo.
 echo =====================================
 echo Build finished.
-echo Output: %OUTPUT_DIR%
+echo Entry: %OUTPUT_DIR%\FxTools.exe
 echo =====================================
+popd >nul
 endlocal
+exit /b 0
+
+:build_failed
+set "BUILD_EXIT=%ERRORLEVEL%"
+if "%BUILD_EXIT%"=="0" set "BUILD_EXIT=2"
+echo [ERROR] Build failed with exit code %BUILD_EXIT%.
+popd >nul
+endlocal & exit /b %BUILD_EXIT%

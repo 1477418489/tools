@@ -1,0 +1,36 @@
+<Page
+    x:Class="FxTools.App.Pages.KeepAlivePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Loaded="Page_Loaded">
+    <Grid Padding="28" RowSpacing="12">
+        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+        <Grid>
+            <StackPanel Spacing="4"><TextBlock Style="{StaticResource PageTitleStyle}" Text="域名保活" /><TextBlock Foreground="{ThemeResource AppMutedBrush}" Text="按随机间隔使用 HTTP 或 Ping 独立探测多个目标。" /></StackPanel>
+            <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+                <Button Click="New_Click"><StackPanel Orientation="Horizontal" Spacing="7"><SymbolIcon Symbol="Add" /><TextBlock Text="新建" /></StackPanel></Button>
+                <Button Click="Save_Click"><StackPanel Orientation="Horizontal" Spacing="7"><SymbolIcon Symbol="Save" /><TextBlock Text="保存" /></StackPanel></Button>
+                <Button Click="Delete_Click" ToolTipService.ToolTip="删除所选"><SymbolIcon Symbol="Delete" /></Button>
+                <Button Click="Test_Click" ToolTipService.ToolTip="立即探测"><SymbolIcon Symbol="Play" /></Button>
+            </StackPanel>
+        </Grid>
+        <Grid Grid.Row="1" ColumnSpacing="8">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="150" /><ColumnDefinition Width="100" /><ColumnDefinition Width="100" /><ColumnDefinition Width="130" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+            <TextBox x:Name="DomainBox" Header="域名或 URL" PlaceholderText="https://example.com" />
+            <ComboBox x:Name="MethodBox" Grid.Column="1" Header="方式" SelectedIndex="0" />
+            <NumberBox x:Name="MinBox" Grid.Column="2" Header="最小间隔" Value="5" Minimum="1" Maximum="1000" />
+            <NumberBox x:Name="MaxBox" Grid.Column="3" Header="最大间隔" Value="10" Minimum="1" Maximum="1000" />
+            <ComboBox x:Name="UnitBox" Grid.Column="4" Header="单位" SelectedIndex="0" />
+            <CheckBox x:Name="EnabledCheck" Grid.Column="5" VerticalAlignment="Bottom" Content="启用" IsChecked="True" />
+        </Grid>
+        <Grid Grid.Row="2" ColumnSpacing="14">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="420" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+            <ListView x:Name="ConfigList" SelectionMode="Single" SelectionChanged="ConfigList_SelectionChanged">
+                <ListView.ItemTemplate><DataTemplate><Grid Padding="7" ColumnSpacing="10"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="70" /><ColumnDefinition Width="110" /><ColumnDefinition Width="60" /></Grid.ColumnDefinitions><TextBlock Text="{Binding Domain}" TextTrimming="CharacterEllipsis" /><TextBlock Grid.Column="1" Text="{Binding Method}" /><TextBlock Grid.Column="2" Text="{Binding Interval}" /><TextBlock Grid.Column="3" Text="{Binding State}" /></Grid></DataTemplate></ListView.ItemTemplate>
+            </ListView>
+            <TextBox x:Name="LogBox" Grid.Column="1" Header="运行记录" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto" Style="{StaticResource MonospaceTextBoxStyle}" />
+        </Grid>
+        <Grid Grid.Row="3"><TextBlock x:Name="StatusText" Foreground="{ThemeResource AppMutedBrush}" Text="正在加载配置" /><TextBlock x:Name="ActiveText" HorizontalAlignment="Right" Foreground="{ThemeResource AppMutedBrush}" Text="运行中 0 项" /></Grid>
+    </Grid>
+</Page>

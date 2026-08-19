@@ -37,3 +37,16 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+### .NET / WinUI ###
+**/bin/
+**/obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+TestResults/
+artifacts/
+AppPackages/
+BundleArtifacts/
+Generated Files/

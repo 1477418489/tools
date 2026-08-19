@@ -1,0 +1,146 @@
+<Page
+    x:Class="FxTools.App.Pages.FileAnalysisPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Unloaded="Page_Unloaded">
+    <ScrollViewer>
+        <Grid Padding="28" RowSpacing="16" MaxWidth="1180" HorizontalAlignment="Stretch">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <StackPanel Spacing="4">
+                <TextBlock Style="{StaticResource PageTitleStyle}" Text="文件分析" />
+                <TextBlock Foreground="{ThemeResource AppMutedBrush}"
+                           Text="流式计算哈希，检测文本编码、文件属性和占用线索。" />
+            </StackPanel>
+
+            <Grid Grid.Row="1" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="PathBox" Header="文件" IsReadOnly="True" PlaceholderText="请选择文件" />
+                <Button Grid.Column="1" VerticalAlignment="Bottom" Click="Choose_Click">
+                    <StackPanel Orientation="Horizontal" Spacing="7">
+                        <SymbolIcon Symbol="OpenFile" />
+                        <TextBlock Text="选择" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="AnalyzeButton" Grid.Column="2" VerticalAlignment="Bottom"
+                        Click="Analyze_Click" IsEnabled="False">
+                    <StackPanel Orientation="Horizontal" Spacing="7">
+                        <SymbolIcon Symbol="Find" />
+                        <TextBlock Text="分析" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="CancelButton" Grid.Column="3" VerticalAlignment="Bottom"
+                        Click="Cancel_Click" IsEnabled="False" ToolTipService.ToolTip="取消分析">
+                    <SymbolIcon Symbol="Cancel" />
+                </Button>
+            </Grid>
+
+            <Border Grid.Row="2" Style="{StaticResource SurfaceBorderStyle}">
+                <Grid RowSpacing="14" ColumnSpacing="24">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="文件名" />
+                        <TextBlock x:Name="NameText" Text="--" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="大小" />
+                        <TextBlock x:Name="SizeText" Text="--" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="类型" />
+                        <TextBlock x:Name="TypeText" Text="--" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="1">
+                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="文本编码" />
+                        <TextBlock x:Name="EncodingText" Text="--" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Grid.Column="1">
+                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="修改时间" />
+                        <TextBlock x:Name="ModifiedText" Text="--" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Grid.Column="2">
+                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="访问" />
+                        <TextBlock x:Name="AccessText" Text="--" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="2" Grid.ColumnSpan="2">
+                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="编码判断" />
+                        <TextBlock x:Name="EncodingDetailText" Text="等待分析" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="2" Grid.Column="2">
+                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="占用探测" />
+                        <TextBlock x:Name="LockText" Text="未检测" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <StackPanel Grid.Row="3" Spacing="10">
+                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="文件哈希" />
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="88" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock VerticalAlignment="Center" Text="SHA-256" />
+                    <TextBox x:Name="Sha256Box" Grid.Column="1" IsReadOnly="True"
+                             Style="{StaticResource MonospaceTextBoxStyle}" />
+                    <Button Grid.Column="2" Click="CopySha256_Click" ToolTipService.ToolTip="复制 SHA-256">
+                        <SymbolIcon Symbol="Copy" />
+                    </Button>
+                </Grid>
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="88" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock VerticalAlignment="Center" Text="SHA-1" />
+                    <TextBox x:Name="Sha1Box" Grid.Column="1" IsReadOnly="True"
+                             Style="{StaticResource MonospaceTextBoxStyle}" />
+                    <Button Grid.Column="2" Click="CopySha1_Click" ToolTipService.ToolTip="复制 SHA-1">
+                        <SymbolIcon Symbol="Copy" />
+                    </Button>
+                </Grid>
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="88" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock VerticalAlignment="Center" Text="MD5" />
+                    <TextBox x:Name="Md5Box" Grid.Column="1" IsReadOnly="True"
+                             Style="{StaticResource MonospaceTextBoxStyle}" />
+                    <Button Grid.Column="2" Click="CopyMd5_Click" ToolTipService.ToolTip="复制 MD5">
+                        <SymbolIcon Symbol="Copy" />
+                    </Button>
+                </Grid>
+            </StackPanel>
+
+            <Grid Grid.Row="4">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <ProgressRing x:Name="Progress" Width="18" Height="18" IsActive="False" />
+                    <TextBlock x:Name="StatusText" Foreground="{ThemeResource AppMutedBrush}" Text="请选择文件" />
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </ScrollViewer>
+</Page>

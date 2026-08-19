@@ -1,206 +1,89 @@
-# JavaFX Tools 多功能工具箱
+# FxTools
 
-本项目是一个基于 JavaFX 的 Windows 本地开发工具箱，集成进程与端口查看、开发环境体检、网络诊断、网络质量监控、文件分析、Base64 编解码、HTTP/WebSocket 调试、应用与 JAR 管理、备忘提醒、域名保活和电源计划。界面采用浅色分组工作区与按需加载机制，长期驻留时减少无效轮询和后台占用。
+FxTools 是面向 Windows 的本地开发与运维工具箱，使用 C#、.NET 10、WinUI 3 和 Windows App SDK 开发。应用不依赖 JRE，配置继续保存在 `%LOCALAPPDATA%\FxTools`，并兼容 JavaFX 版本生成的 JSON 数据。
 
----
+## 功能
 
-## 主要功能模块
+| 分组 | 模块 | 主要能力 |
+|---|---|---|
+| 启动与运行 | 应用启动项 | 路径管理、批量启动、安全停止、运行状态与启动间隔 |
+| 启动与运行 | JAR 启动 | 项目配置、部署文件复制、端口归属、启停、目录与日志 |
+| 启动与运行 | Windows 电源 | 关机、重启、休眠、定时唤醒和只读固件诊断 |
+| 网络与接口 | HTTP 请求 | 多方法、请求头/正文、模板、超时、定时发送和响应保存 |
+| 网络与接口 | WebSocket | 连接、收发、断开和有界消息历史 |
+| 网络与接口 | 网络诊断 | DNS、IP、公网出口和归属信息 |
+| 网络与接口 | 网络质量 | HTTP、TCP、TLS、STUN、HTTP 代理、趋势和统计 |
+| 网络与接口 | 域名保活 | HTTP/Ping、多目标、随机间隔和独立状态 |
+| 系统与开发 | 进程与端口 | Windows IP Helper 快照、筛选、详情复制和安全终止 |
+| 系统与开发 | 环境体检 | Java、Maven、Git、Node、npm、Python 和 Docker |
+| 系统与开发 | 文件分析 | 流式哈希、编码/类型、元数据、占用探测和取消 |
+| 系统与开发 | 日志监控 | tail、多规则匹配、多选触发、远程判断和窗口自动输入 |
+| 数据与效率 | 数据格式化 | JSON/XML 格式化 |
+| 数据与效率 | 字符串处理 | 空白移除和大小写转换 |
+| 数据与效率 | Base64 | 标准、URL、MIME 变体和多字符编码 |
+| 数据与效率 | 备忘提醒 | 周期/定时、暂停、恢复、完成、稍后 5 分钟和声音 |
+| 设置 | 桌面集成 | 托盘、关闭行为、开机启动、数据目录和 ZIP 备份 |
 
-### 1. HTTP 请求调度器
-- **文件**：`http-request-view.fxml`
-- 支持 GET/POST/PUT/DELETE/PATCH/HEAD/OPTIONS 多种请求方式
-- 支持自定义请求头、请求参数、超时时间
-- 支持立即发送单次请求、定时重复请求以及请求模板的保存/载入/删除
-- 最新响应在页面内独立显示状态码、耗时、正文和响应头
-- 响应正文支持 JSON 格式化、复制、保存和独立清空
+## 日志自动响应安全
 
-### 2. WebSocket 客户端
-- **文件**：`websocket-view.fxml`
-- 支持输入服务器地址并连接/断开
-- 支持发送消息与消息记录显示
-- 支持消息记录一键清除
+- 自动响应规则可多选，例如同时选择 `429`、`503`。
+- 目标窗口必须由 PID 与完整标题共同唯一确定。
+- 发送前重新检查 PID、标题和前台窗口；任一条件变化都会拒绝输入。
+- 不会退回到同标题的其他进程，也不会在前台激活失败时发送按键。
+- Windows 禁止低权限进程向管理员进程注入输入。目标程序已提升时，FxTools 也需要以管理员身份运行。
 
-### 3. 网络工具与网络质量
-- **文件**：`network-tools-view.fxml`、`network-quality-view.fxml`
-- 支持主机名/IP 查询，查询日志可一键清空
-- 网络质量页直接监控 HTTP/HTTPS 服务地址，记录状态码、RTT、失败率、连续失败和趋势
-- TCP、TLS、STUN 作为高级探测协议，并可按系统路由或显式 HTTP CONNECT/SOCKS5 代理监控
+## 开发环境
 
-### 4. 进程与端口中心
-- **文件**：`process-port-view.fxml`
-- 按需读取 Windows 进程和 TCP 监听端口快照，不执行后台轮询
-- 支持按进程名、PID、用户、命令行和端口联合筛选
-- 展示工作集、累计 CPU 时间、监听端口和命令行，并支持复制所选详情
-- 终止进程前二次确认，禁止终止系统关键进程和 FxTools 自身
-- 系统权限不足时降级使用 Java `ProcessHandle`，并明确标记部分数据受限
+- Windows 10 19041 或更高版本，推荐 Windows 11 x64
+- .NET SDK 10.0.400 或兼容的 10.0 补丁版本
+- Windows App SDK 1.8
+- Windows SDK 10.0.26100
+- Visual Studio 2022/2026 的 WinUI 应用开发组件仅在需要设计器和 IDE 调试时使用；命令行构建不要求打开 Visual Studio
 
-### 5. 开发环境体检
-- **文件**：`dev-environment-view.fxml`
-- 并行检查 Java/JDK、Maven、Git、Node.js、npm、Python 和 Docker CLI
-- 展示实际版本与可执行文件路径，检测 `JAVA_HOME` 与 `javac` 路径不一致
-- 每项命令均有超时和输出上限，体检仅在进入页面或手动刷新时执行
-- 支持一键复制完整体检报告
+## 构建和运行
 
-### 6. 文件分析
-- **文件**：`file-analysis-view.fxml`
-- 流式计算 SHA-256、SHA-1 和 MD5，不将整个文件载入内存
-- 识别 BOM、UTF-8、UTF-16、GB18030/GBK 文本特征和二进制内容
-- 展示文件类型、大小、修改时间、读写权限和临时独占锁探测结果
-- 大文件分析支持取消；SHA-1 和 MD5 仅作为文件比对摘要
+```powershell
+dotnet restore FxTools.slnx
+dotnet test tests\FxTools.Core.Tests\FxTools.Core.Tests.csproj -c Debug
+dotnet build FxTools.slnx -c Debug
+dotnet run --project src\FxTools.App\FxTools.App.csproj
+```
 
-### 7. 数据格式化
-- **文件**：`data-format-view.fxml`
-- 支持 JSON、XML 格式化
-- 输入数据、格式化结果分区显示
-- 支持清空日志
+生成可在未安装 .NET/Windows App SDK 运行时的 x64 机器上运行的自包含目录：
 
-### 8. 字符串工具
-- **文件**：`strData-format-view.fxml`
-- 支持去除空白字符、大小写转换
-- 输入数据、格式化结果分区显示
-- 支持清空日志
+```powershell
+.\build-exe.bat
+```
 
-### 9. Base64 编解码
-- **文件**：`base64-view.fxml`
-- 支持标准、URL 安全和 MIME Base64 变体
-- 支持 UTF-8、GB18030/GBK、UTF-16 LE/BE 字符编码
-- 支持结果复制、结果转输入、剪贴板粘贴和输入大小限制
-- Base64 是可逆编码而非加密，不用于保护敏感信息
+入口位于 `dist\FxTools\FxTools.exe`，同目录会生成 SHA-256 文件。WinUI 3 不适合强制压成单文件，发布目录中的 DLL 和运行时文件必须与 EXE 一起分发。
 
-### 10. 启动项工具
-- **文件**：`app-launcher-view.fxml`
-- 可批量管理常用程序路径
-- 支持启动选中、启动全部、结束进程、移除、清除全部
-- 列表直接显示每个应用的运行状态；页面或窗口不可见时暂停自动状态轮询
+## 数据兼容
 
-### 11. 备忘提醒
-- **文件**：`memo-reminder-view.fxml`
-- 支持按固定间隔重复提醒，也可指定日期和具体时间创建一次性闹钟
-- 到时主动恢复主窗口并置顶弹框提醒，可勾选“已处理”完成提醒或进入下个周期
-- 未处理可一键稍后 5 分钟再次提醒
-- 提醒任务支持暂停/恢复/删除，并自动持久化到系统用户数据目录
-- 可在设置中关闭提醒声音，关闭主窗口后仍可驻留托盘等待提醒
-
-### 12. JAR 应用启动器
-- **文件**：`jar-launcher-view.fxml`
-- 支持维护 JAR 项目、复制构建产物、端口查询以及启动/停止应用
-- 项目列表持续显示运行、停止、检查中、端口冲突和异常状态
-- 启停操作会校验端口进程是否属于目标 JAR，不会终止无关监听进程
-- Java 进程输出写入目标 JAR 目录下的 `jar-launcher-<端口>.log`
-- 可从项目操作区直接打开目标目录和当前端口日志
-
-### 13. 域名保活
-- **文件**：`keepalive-manager-view.fxml`
-- 支持 HTTP/Ping 探测、随机访问间隔和多域名独立配置
-
-### 14. Windows 电源计划
-- **文件**：`windows-power-view.fxml`
-- 支持创建一次性定时关机、重启和休眠任务，关机或重启触发后保留 60 秒系统倒计时
-- 支持创建和取消 Windows 定时唤醒任务，并读取任务计划程序中的现有状态
-- 电源计划由 Windows 任务计划程序持久化，应用退出后仍然有效
-- 定时唤醒用于从睡眠或休眠恢复，依赖设备固件和系统唤醒计时器，不保证完全关机或断电后的冷启动
-- BIOS / 电源检测页只读展示品牌型号、序列号、UUID、主板、CPU、内存、Windows、BIOS 发布日期、UEFI、睡眠与唤醒能力
-- 来电自启与 RTC 冷启动明确标记为需要在固件中确认，不读取或修改 BIOS 设置变量
-
-### 15. 日志监控与自动响应
-- **文件**：`log-monitor-view.fxml`
-- 持续监听指定日志文件，支持普通文本、完整词元和正则规则，并聚合显示命中提醒
-- 可为一条或多条日志规则配置自动响应，任意选中规则命中后按 PID、唯一窗口标题或进程名定位 Windows 程序并输入自定义文本和回车键
-- 可按起始命中次数、执行间隔和最大次数限制动作；最大次数为 `0` 时不限制
-- 可在输入前请求 HTTP/HTTPS 地址，根据响应正文是否包含指定字符决定继续输入或不再操作
-- 找不到窗口、匹配到多个窗口、网址请求失败或窗口无法安全获得焦点时均不会发送输入
-- 可通过“选择窗口”读取当前可见程序，根据窗口标题、进程名和 PID 选择目标；系统会保存 PID 与标题进行双重校验，PID 变化时可按唯一标题重新获取
-- 也可手动填写 `pid:进程ID` 绑定目标主窗口；进程重启后 PID 会变化，需要重新选择或同步更新配置
-- Codex 运行在 Windows Terminal 多标签页中时，PID 只能定位到 Terminal 窗口，不能区分同一窗口内的标签页，此时仍应填写唯一的标签页标题
-- Windows 不允许低权限进程向管理员进程注入键盘输入；目标程序以管理员身份运行时，FxTools 也必须以管理员身份运行
-
-### 16. 主界面
-- **文件**：`main-view.fxml`
-- 采用 TabPane 管理各个功能模块
-- 备忘提醒和域名保活随应用启动，其余模块首次进入时加载
-- 普通执行日志通过底部紧凑入口打开独立窗口，WebSocket 消息流保留内嵌显示
-- 设置菜单提供关闭到托盘、提醒声音、Windows 登录启动、打开数据目录和 ZIP 数据备份
-
----
-
-## 常用操作说明
-
-- **日志查看**：点击页面底部日志入口打开完整窗口，可搜索、复制、保存、清空并调整字号和换行。
-- **模板管理**：HTTP请求支持保存、载入、删除请求模板，便于复用常用配置。
-- **数据备份**：通过“设置 -> 导出数据备份”将当前全部配置导出为 ZIP 文件。
-- **批量/定时操作**：HTTP请求/应用启动项等支持批量执行与定时调度。
-- **数据格式化**：支持多类型数据和字符串格式化，适合开发调试场景。
-
----
-
-## FXML 文件结构说明
-
-| FXML文件               | 作用/模块名         |
-|------------------------|---------------------|
-| main-view.fxml         | 主界面Tab管理       |
-| http-request-view.fxml | HTTP请求调度器      |
-| websocket-view.fxml    | WebSocket客户端     |
-| network-tools-view.fxml| 网络工具            |
-| process-port-view.fxml | 进程与端口中心      |
-| dev-environment-view.fxml | 开发环境体检     |
-| file-analysis-view.fxml | 文件分析           |
-| data-format-view.fxml  | 数据格式化          |
-| strData-format-view.fxml| 字符串工具         |
-| base64-view.fxml       | Base64 编解码       |
-| app-launcher-view.fxml | 启动项工具          |
-| memo-reminder-view.fxml| 备忘提醒            |
-| jar-launcher-view.fxml | JAR应用启动器       |
-| keepalive-manager-view.fxml | 域名保活管理  |
-| windows-power-view.fxml | Windows电源计划    |
-| log-monitor-view.fxml | 日志监控与自动响应    |
-
----
-
-## 运行要求
-
-- JDK 23
-- JavaFX 23.0.1
-- Maven 3.9+
-- Jackson、Gson、Java-WebSocket 等依赖由 Maven 自动管理
-
-运行数据统一保存在 `%LOCALAPPDATA%\FxTools`；非 Windows 系统保存在用户目录下的 `.fxtools`。主界面“设置 -> 打开数据目录”可直接访问该位置。
-
-当前格式的数据文件包括：
+数据目录为 `%LOCALAPPDATA%\FxTools`。主要文件：
 
 | 文件 | 内容 |
-|------|------|
-| `settings.json` | 托盘、提醒声音和开机启动设置 |
+|---|---|
+| `settings.json` | 托盘、提醒声音和开机启动 |
 | `app_launcher_paths.json` | 应用启动项 |
-| `app_launcher_settings.json` | 启动项批量启动间隔 |
-| `network_quality_targets.json` | 网络质量监控目标 |
-| `network_quality_settings.json` | 网络质量出口、代理和探测参数（不含密码） |
-| `http_templates.json` | HTTP 请求模板 |
+| `app_launcher_settings.json` | 批量启动间隔 |
 | `jar_launcher_projects.json` | JAR 项目 |
+| `http_templates.json` | HTTP 请求模板 |
+| `network_quality_targets.json` | 网络质量目标 |
+| `network_quality_settings.json` | 网络质量和代理设置 |
+| `keepAlive.json` | 域名保活 |
+| `log-monitor.json` | 日志规则和自动响应 |
 | `memo_reminders.json` | 备忘提醒 |
-| `keepAlive.json` | 域名保活配置 |
 
----
+JSON 使用 UTF-8 原子写入。现有文件格式无效时应用会报告错误并拒绝覆盖，设置页可将整个数据目录导出为 ZIP 快照。
 
-## 运行步骤
-1. 执行 `mvn clean test` 运行测试。
-2. 运行仓库根目录 `build-exe.bat` 构建 Windows 应用。
-3. 脚本会先执行 `mvn clean javafx:jlink` 生成 jlink 运行时，再执行 `jpackage` 输出 Windows 应用包。
-4. 如需调整应用名、版本、主模块、主类、输出目录或最大堆内存，可在执行前设置 `APP_NAME`、`APP_VERSION`、`MAIN_MODULE`、`MAIN_CLASS`、`OUTPUT_DIR`、`JVM_MAX_HEAP` 等环境变量；最大堆内存默认 `512m`。
-5. 执行前请确保 Maven 可用，并且 `JAVA_HOME` 指向包含 `jpackage.exe` 的完整 JDK，或已将 `jpackage.exe` 加入 `PATH`。
+## 资源边界
 
-## 性能优化说明
-- 所有日志缓冲区均有行数、字符数和积压数量上限，批量刷新以避免高频 UI 更新。
-- 普通日志默认仅显示紧凑入口，完整内容按需打开，不长期占用主工作区。
-- 非常驻功能页首次访问时才创建；退出时只清理已经加载的模块。
-- 启动项状态轮询每轮只读取一次系统进程快照，窗口隐藏、最小化或切换页面后暂停轮询。
-- 批量启动按列表顺序执行，并使用用户配置的相邻启动间隔处理前后依赖关系。
-- WebSocket 消息和域名保活日志采用有界批量刷新，空闲时不会持续唤醒日志线程。
-- 电源计划只在页面加载或用户操作时访问 Windows 任务计划程序，不增加常驻轮询任务。
-- 进程、端口和开发环境均采用用户触发的有界快照，不新增常驻系统轮询。
-- 文件哈希采用固定缓冲区流式处理，Base64 输入设有字符上限，耗时操作均在后台执行并可在模块关闭时取消。
+- UI 日志最多 800 行、1,000,000 字符。
+- 日志监控每轮最多读取 256 KiB/200 行，单行最多 32 KiB。
+- 自动响应只有一个消费者，队列最多 32 项。
+- HTTP 响应正文最多保留 200,000 字符。
+- Base64 输入最多 1,000,000 字符。
+- JAR 日志达到 50 MiB 时轮转。
+- 提醒使用一个应用级调度循环，不为每条提醒创建线程。
 
-## 贡献/反馈
-
-如有建议、bug或需求，欢迎提交 issue 或 PR ～
-
----
+需求、架构、迁移记录和功能验证证据见 [docs/winui](docs/winui/)。

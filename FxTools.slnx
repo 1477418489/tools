@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FxTools.App/FxTools.App.csproj" />
+    <Project Path="src/FxTools.Core/FxTools.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FxTools.Core.Tests/FxTools.Core.Tests.csproj" />
+  </Folder>
+</Solution>

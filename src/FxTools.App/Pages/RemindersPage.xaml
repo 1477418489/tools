@@ -1,0 +1,144 @@
+<Page
+    x:Class="FxTools.App.Pages.RemindersPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Loaded="Page_Loaded">
+    <Grid Padding="28" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <StackPanel Spacing="4">
+                <TextBlock Style="{StaticResource PageTitleStyle}" Text="备忘提醒" />
+                <TextBlock Foreground="{ThemeResource AppMutedBrush}" Text="周期提醒与指定时间闹钟" />
+            </StackPanel>
+            <TextBlock x:Name="CountText" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                       Foreground="{ThemeResource AppMutedBrush}" Text="0 条" />
+        </Grid>
+
+        <Border Grid.Row="1" Style="{StaticResource SurfaceBorderStyle}">
+            <Grid RowSpacing="12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource SectionTitleStyle}" Text="新建提醒" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
+                        <RadioButton x:Name="IntervalModeButton" GroupName="ScheduleMode" Content="按间隔"
+                                     IsChecked="True" Checked="ScheduleMode_SelectionChanged" />
+                        <RadioButton x:Name="AtTimeModeButton" GroupName="ScheduleMode" Content="指定时间"
+                                     Checked="ScheduleMode_SelectionChanged" />
+                    </StackPanel>
+                </Grid>
+
+                <TextBox x:Name="ContentBox" Grid.Row="1" Header="备忘内容" MaxLength="10000"
+                         PlaceholderText="输入需要提醒的事项" TextWrapping="Wrap" AcceptsReturn="True"
+                         MinHeight="72" />
+
+                <Grid Grid.Row="2" ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel x:Name="IntervalOptions" Orientation="Horizontal" Spacing="10">
+                        <NumberBox x:Name="IntervalBox" Header="提醒间隔" Value="30" Minimum="1"
+                                   Maximum="1000000" Width="130" SpinButtonPlacementMode="Compact" />
+                        <ComboBox x:Name="UnitBox" Header="时间单位" Width="130" SelectedIndex="0" />
+                        <NumberBox x:Name="TimesBox" Header="提醒次数（0 为不限）" Value="1" Minimum="0"
+                                   Maximum="1000000" Width="170" SpinButtonPlacementMode="Compact" />
+                    </StackPanel>
+                    <StackPanel x:Name="AtTimeOptions" Orientation="Horizontal" Spacing="10"
+                                Visibility="Collapsed">
+                        <DatePicker x:Name="DateBox" Header="提醒日期" Width="190" />
+                        <TimePicker x:Name="TimeBox" Header="提醒时间" Width="170" ClockIdentifier="24HourClock" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Click="Add_Click" VerticalAlignment="Bottom">
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                            <SymbolIcon Symbol="Add" />
+                            <TextBlock Text="新增" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="2" Style="{StaticResource SurfaceBorderStyle}" Padding="0">
+            <Grid RowSpacing="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid Padding="16,12" ColumnSpacing="8">
+                    <TextBlock Style="{StaticResource SectionTitleStyle}" Text="提醒列表" VerticalAlignment="Center" />
+                    <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8">
+                        <Button x:Name="PauseButton" Click="Pause_Click" IsEnabled="False">
+                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                <SymbolIcon Symbol="Pause" />
+                                <TextBlock Text="暂停" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="ResumeButton" Click="Resume_Click" IsEnabled="False">
+                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                <SymbolIcon Symbol="Play" />
+                                <TextBlock Text="恢复" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="DeleteButton" Click="Delete_Click" IsEnabled="False"
+                                ToolTipService.ToolTip="删除所选提醒">
+                            <SymbolIcon Symbol="Delete" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+                <Grid Grid.Row="1" Padding="23,8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="130" />
+                        <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="190" />
+                        <ColumnDefinition Width="80" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource FieldLabelStyle}" Text="内容" />
+                    <TextBlock Grid.Column="1" Style="{StaticResource FieldLabelStyle}" Text="计划" />
+                    <TextBlock Grid.Column="2" Style="{StaticResource FieldLabelStyle}" Text="剩余次数" />
+                    <TextBlock Grid.Column="3" Style="{StaticResource FieldLabelStyle}" Text="下次提醒" />
+                    <TextBlock Grid.Column="4" Style="{StaticResource FieldLabelStyle}" Text="状态" />
+                </Grid>
+                <ListView x:Name="ReminderList" Grid.Row="2" SelectionMode="Single"
+                          SelectionChanged="ReminderList_SelectionChanged">
+                    <ListView.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Padding="7" ColumnSpacing="10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="130" />
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="190" />
+                                    <ColumnDefinition Width="80" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding Content}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="1" Text="{Binding Schedule}" />
+                                <TextBlock Grid.Column="2" Text="{Binding Remaining}" />
+                                <TextBlock Grid.Column="3" Text="{Binding NextTime}" />
+                                <TextBlock Grid.Column="4" Text="{Binding State}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </Grid>
+        </Border>
+
+        <TextBlock x:Name="StatusText" Grid.Row="3" Foreground="{ThemeResource AppMutedBrush}"
+                   Text="正在加载提醒" />
+    </Grid>
+</Page>

@@ -1,0 +1,71 @@
+<Window
+    x:Class="FxTools.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="FxTools">
+
+    <NavigationView
+        x:Name="Navigation"
+        IsBackButtonVisible="Collapsed"
+        IsSettingsVisible="True"
+        IsTitleBarAutoPaddingEnabled="True"
+        PaneDisplayMode="Left"
+        OpenPaneLength="236"
+        CompactPaneLength="52"
+        SelectionChanged="Navigation_SelectionChanged">
+
+        <NavigationView.AutoSuggestBox>
+            <AutoSuggestBox x:Name="ToolSearch" PlaceholderText="搜索工具"
+                            TextChanged="ToolSearch_TextChanged"
+                            SuggestionChosen="ToolSearch_SuggestionChosen"
+                            QuerySubmitted="ToolSearch_QuerySubmitted" />
+        </NavigationView.AutoSuggestBox>
+
+        <NavigationView.PaneHeader>
+            <Grid Height="56" Padding="8,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="36" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Image Width="28" Height="28" Source="Assets/AppIcon.png" />
+                <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                    <TextBlock FontSize="18" FontWeight="SemiBold" Text="FxTools" />
+                    <TextBlock FontSize="11" Foreground="{ThemeResource AppMutedBrush}" Text="Windows 工作台" />
+                </StackPanel>
+            </Grid>
+        </NavigationView.PaneHeader>
+
+        <NavigationView.MenuItems>
+            <NavigationViewItemHeader Content="启动与运行" />
+            <NavigationViewItem Content="启动项" Icon="Play" Tag="app-launcher" />
+            <NavigationViewItem Content="JAR 启动" Icon="Library" Tag="jar-launcher" />
+            <NavigationViewItem Content="电源计划" Icon="Repair" Tag="windows-power" />
+
+            <NavigationViewItemHeader Content="网络与接口" />
+            <NavigationViewItem Content="HTTP 请求" Icon="Globe" Tag="http-request" />
+            <NavigationViewItem Content="WebSocket" Icon="Message" Tag="websocket" />
+            <NavigationViewItem Content="网络诊断" Icon="World" Tag="network-tools" />
+            <NavigationViewItem Content="网络质量" Icon="View" Tag="network-quality" />
+            <NavigationViewItem Content="域名保活" Icon="Sync" Tag="keep-alive" />
+
+            <NavigationViewItemHeader Content="系统与开发" />
+            <NavigationViewItem Content="进程与端口" Icon="AllApps" Tag="process-port" />
+            <NavigationViewItem Content="环境体检" Icon="Repair" Tag="dev-environment" />
+            <NavigationViewItem Content="文件分析" Icon="Document" Tag="file-analysis" />
+            <NavigationViewItem Content="日志监控" Icon="View" Tag="log-monitor" />
+
+            <NavigationViewItemHeader Content="数据与效率" />
+            <NavigationViewItem Content="数据格式化" Icon="Page" Tag="data-format" />
+            <NavigationViewItem Content="字符串处理" Icon="Font" Tag="string-tools" />
+            <NavigationViewItem Content="Base64 编解码" Icon="Switch" Tag="base64" />
+            <NavigationViewItem Content="备忘提醒" Icon="Clock" Tag="reminders" />
+        </NavigationView.MenuItems>
+
+        <Grid Background="{ThemeResource AppSurfaceBrush}">
+            <ContentPresenter x:Name="PageHost" />
+        </Grid>
+    </NavigationView>
+</Window>

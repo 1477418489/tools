@@ -1,0 +1,100 @@
+<Page
+    x:Class="FxTools.App.Pages.HttpRequestPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Loaded="Page_Loaded"
+    Unloaded="Page_Unloaded">
+    <Grid Padding="28" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="2*" />
+            <RowDefinition Height="3*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid>
+            <StackPanel Spacing="4">
+                <TextBlock Style="{StaticResource PageTitleStyle}" Text="HTTP 请求" />
+                <TextBlock Foreground="{ThemeResource AppMutedBrush}" Text="发送一次或按固定间隔执行请求，并保存常用模板。" />
+            </StackPanel>
+            <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+                <ComboBox x:Name="TemplateBox" Width="190" PlaceholderText="请求模板"
+                          SelectionChanged="TemplateBox_SelectionChanged" />
+                <Button Click="SaveTemplate_Click" ToolTipService.ToolTip="保存当前模板"><SymbolIcon Symbol="Save" /></Button>
+                <Button Click="DeleteTemplate_Click" ToolTipService.ToolTip="删除所选模板"><SymbolIcon Symbol="Delete" /></Button>
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="1" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="130" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="110" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ComboBox x:Name="MethodBox" Header="方法" SelectedIndex="0" />
+            <TextBox x:Name="UrlBox" Grid.Column="1" Header="地址" PlaceholderText="https://api.example.com/path" />
+            <NumberBox x:Name="TimeoutBox" Grid.Column="2" Header="超时（秒）" Value="30"
+                       Minimum="0.25" Maximum="300" SpinButtonPlacementMode="Compact" />
+            <Button x:Name="SendButton" Grid.Column="3" VerticalAlignment="Bottom" Click="Send_Click">
+                <StackPanel Orientation="Horizontal" Spacing="7"><SymbolIcon Symbol="Send" /><TextBlock Text="发送" /></StackPanel>
+            </Button>
+            <Button x:Name="CancelButton" Grid.Column="4" VerticalAlignment="Bottom" Click="Cancel_Click"
+                    IsEnabled="False" ToolTipService.ToolTip="取消请求"><SymbolIcon Symbol="Cancel" /></Button>
+            <Button Grid.Column="5" VerticalAlignment="Bottom" Click="SaveResponse_Click"
+                    ToolTipService.ToolTip="保存响应体"><SymbolIcon Symbol="Download" /></Button>
+        </Grid>
+
+        <Grid Grid.Row="2" ColumnSpacing="10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="170" />
+                <ColumnDefinition Width="130" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <ComboBox x:Name="ResponseFormatBox" Header="响应显示" SelectedIndex="0" />
+            <NumberBox x:Name="IntervalBox" Grid.Column="1" Header="间隔（秒）" Value="60"
+                       Minimum="1" Maximum="86400" SpinButtonPlacementMode="Compact" />
+            <Button x:Name="StartScheduleButton" Grid.Column="2" VerticalAlignment="Bottom" Click="StartSchedule_Click">
+                <StackPanel Orientation="Horizontal" Spacing="7"><SymbolIcon Symbol="Play" /><TextBlock Text="定时发送" /></StackPanel>
+            </Button>
+            <Button x:Name="StopScheduleButton" Grid.Column="3" VerticalAlignment="Bottom" Click="StopSchedule_Click"
+                    IsEnabled="False" ToolTipService.ToolTip="停止定时发送"><SymbolIcon Symbol="Stop" /></Button>
+        </Grid>
+
+        <Grid Grid.Row="3" ColumnSpacing="12">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+            <TextBox x:Name="ContentBox" Header="参数 / 请求体" AcceptsReturn="True" TextWrapping="NoWrap"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                     Style="{StaticResource MonospaceTextBoxStyle}" />
+            <TextBox x:Name="HeadersBox" Grid.Column="1" Header="请求头（每行 名称: 值）" AcceptsReturn="True"
+                     TextWrapping="NoWrap" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     Style="{StaticResource MonospaceTextBoxStyle}" />
+        </Grid>
+
+        <TabView Grid.Row="4" IsAddTabButtonVisible="False">
+            <TabViewItem Header="响应体" IsClosable="False">
+                <TextBox x:Name="ResponseBodyBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                         Style="{StaticResource MonospaceTextBoxStyle}" />
+            </TabViewItem>
+            <TabViewItem Header="响应头" IsClosable="False">
+                <TextBox x:Name="ResponseHeadersBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                         Style="{StaticResource MonospaceTextBoxStyle}" />
+            </TabViewItem>
+        </TabView>
+
+        <Grid Grid.Row="5">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <ProgressRing x:Name="Progress" Width="18" Height="18" IsActive="False" />
+                <TextBlock x:Name="StatusText" Foreground="{ThemeResource AppMutedBrush}" Text="等待请求" />
+            </StackPanel>
+            <TextBlock x:Name="MetricsText" HorizontalAlignment="Right" Foreground="{ThemeResource AppMutedBrush}" />
+        </Grid>
+    </Grid>
+</Page>

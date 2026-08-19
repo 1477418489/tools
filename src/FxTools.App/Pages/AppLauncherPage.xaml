@@ -1,0 +1,34 @@
+<Page
+    x:Class="FxTools.App.Pages.AppLauncherPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Loaded="Page_Loaded"
+    Unloaded="Page_Unloaded">
+    <Grid Padding="28" RowSpacing="12">
+        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+        <Grid>
+            <StackPanel Spacing="4"><TextBlock Style="{StaticResource PageTitleStyle}" Text="应用启动项" /><TextBlock Foreground="{ThemeResource AppMutedBrush}" Text="管理常用程序和脚本，顺序批量启动并安全停止唯一进程。" /></StackPanel>
+            <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+                <Button Click="Add_Click"><StackPanel Orientation="Horizontal" Spacing="7"><SymbolIcon Symbol="Add" /><TextBlock Text="添加" /></StackPanel></Button>
+                <Button Click="Remove_Click" ToolTipService.ToolTip="移除所选"><SymbolIcon Symbol="Delete" /></Button>
+                <Button x:Name="RefreshButton" Click="Refresh_Click" ToolTipService.ToolTip="刷新状态"><SymbolIcon Symbol="Refresh" /></Button>
+            </StackPanel>
+        </Grid>
+        <Grid Grid.Row="1" ColumnSpacing="8">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="220" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+            <TextBox x:Name="PathBox" Header="所选启动路径" IsReadOnly="True" />
+            <TextBox x:Name="ProcessNameBox" Grid.Column="1" Header="进程名" LostFocus="ProcessNameBox_LostFocus" />
+            <NumberBox x:Name="DelayBox" Grid.Column="2" Header="批量间隔（秒）" Value="1" Minimum="0" Maximum="60" ValueChanged="DelayBox_ValueChanged" />
+        </Grid>
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8">
+            <Button x:Name="LaunchSelectedButton" Click="LaunchSelected_Click" IsEnabled="False"><StackPanel Orientation="Horizontal" Spacing="7"><SymbolIcon Symbol="Play" /><TextBlock Text="启动所选" /></StackPanel></Button>
+            <Button x:Name="LaunchAllButton" Click="LaunchAll_Click"><StackPanel Orientation="Horizontal" Spacing="7"><SymbolIcon Symbol="Forward" /><TextBlock Text="全部启动" /></StackPanel></Button>
+            <Button x:Name="StopButton" Click="Stop_Click" IsEnabled="False"><StackPanel Orientation="Horizontal" Spacing="7"><SymbolIcon Symbol="Stop" /><TextBlock Text="停止所选" /></StackPanel></Button>
+            <Button x:Name="CancelButton" Click="Cancel_Click" IsEnabled="False" ToolTipService.ToolTip="取消批量启动"><SymbolIcon Symbol="Cancel" /></Button>
+        </StackPanel>
+        <ListView x:Name="AppList" Grid.Row="3" SelectionMode="Single" SelectionChanged="AppList_SelectionChanged">
+            <ListView.ItemTemplate><DataTemplate><Grid Padding="7" ColumnSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="105" /><ColumnDefinition Width="180" /><ColumnDefinition Width="*" /><ColumnDefinition Width="160" /></Grid.ColumnDefinitions><TextBlock Text="{Binding State}" FontWeight="SemiBold" /><TextBlock Grid.Column="1" Text="{Binding ProcessName}" /><TextBlock Grid.Column="2" Text="{Binding Path}" FontFamily="Cascadia Mono,Consolas" TextTrimming="CharacterEllipsis" /><TextBlock Grid.Column="3" Text="{Binding Detail}" TextTrimming="CharacterEllipsis" /></Grid></DataTemplate></ListView.ItemTemplate>
+        </ListView>
+        <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="8"><ProgressRing x:Name="Progress" Width="18" Height="18" IsActive="False" /><TextBlock x:Name="StatusText" Foreground="{ThemeResource AppMutedBrush}" Text="正在加载" /></StackPanel>
+    </Grid>
+</Page>
